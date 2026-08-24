@@ -47,6 +47,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,docs,simulation]"
 python scripts/export_schemas.py --check
+python scripts/build_public_demo.py --check
 pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 ruff check .
 python -m aegis_ot demo --output-dir results/demo
@@ -81,7 +82,7 @@ its working directory. Use `.venv\Scripts\aegis-ot.exe` and a suitable temporary
 directory on Windows. When the environment is activated, the same entry point
 can be invoked as `aegis-ot physical-experiment`.
 
-The current local M3 implementation has 264 passing tests and 91.57 percent
+The current local implementation has 289 passing tests and 91.35 percent
 branch-aware coverage. Ruff, strict mypy, schema-drift, bounded formal-model,
 and Compose-configuration checks are also clean locally. These are local
 implementation-verification results; they are not an observed remote CI run,
@@ -92,8 +93,9 @@ Run the same local verification path with:
 
 ```bash
 .venv/bin/python scripts/export_schemas.py --check
+.venv/bin/python scripts/build_public_demo.py --check
 .venv/bin/ruff check .
-.venv/bin/mypy src
+.venv/bin/mypy src scripts/build_public_demo.py
 .venv/bin/python -m pytest \
   --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 docker compose config --quiet
@@ -119,6 +121,45 @@ curl http://127.0.0.1:8181/health
 ```
 
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
+
+## Public demonstration
+
+After Compose starts the public demo service, open
+`http://127.0.0.1:8080/demo` in a browser. The repository root redirects to the
+same page. The demonstration is a self-contained, read-only explorer of the
+retained M2 and M3 evidence: it shows the seven-stage transaction path, all five
+registered M3 conditions, exact trial denominators and Wilson intervals, the M2
+baseline comparison, and hashes binding the displayed summary to its source
+artifacts.
+
+The Compose-published application exposes only the read-only demonstration,
+health, and packaged-evidence routes. It does not publish `/v1/decisions` or
+`/v1/state`; requests to those paths have no public route. The page fetches only
+packaged local assets and the read-only `/health` and `/v1/demo/evidence`
+endpoints. It does not open a device socket, rerun an experiment, or issue a
+control command. A running page therefore demonstrates the presentation and API
+path, not physical validity, independent replication, production readiness, or
+operational effectiveness.
+
+The mutable research API is a separate local interface. Start it only for
+deliberate local experimentation, bind it to loopback, and never expose it as a
+public service:
+
+```bash
+.venv/bin/uvicorn aegis_ot.api:control_app --host 127.0.0.1 --port 8081
+```
+
+When started with that command, the loopback-bound application provides
+`/v1/decisions` and `/v1/state`; it is not the application launched by the
+default Compose configuration.
+
+If a retained source manifest or summary changes, rebuild and verify the
+packaged display data before committing it:
+
+```bash
+.venv/bin/python scripts/build_public_demo.py
+.venv/bin/python scripts/build_public_demo.py --check
+```
 
 ## Trust-boundary schemas
 
@@ -147,10 +188,10 @@ command transactionally, and returns a signed acknowledgment. The parent
 accepts completion only after acknowledgment verification and state readback.
 
 The controlled experiment starts one fresh child process per master seed and
-runs five fixed conformance conditions: unknown identity, stale state, wrong
-permit audience, nominal permitted execution, and permit replay. The seeds vary
-session identifiers and process instances, not the deterministic power-flow
-physics.
+runs five fixed conformance conditions: unknown identity, stale state, a permit
+whose audience field is altered after signing, nominal permitted execution, and
+permit replay. The seeds vary session identifiers and process instances, not
+the deterministic power-flow physics.
 
 The primary controlled run executed on 2026-08-24 from clean commit
 `168b8bd61a13f70e0871d36e56acbe76a8ebb659`. It retained 30 sessions, 150
@@ -166,10 +207,11 @@ same timing-independent deterministic outcome hash:
 ```
 
 The primary-package observations were balanced at 30 per condition. Unknown
-identity and stale state were denied before dispatch; wrong-audience permits
-were rejected by the virtual device; all 30 nominal commands were applied,
-acknowledged, and read back; and all 30 replay attempts were rejected without a
-second modeled effect. Across the 120 non-nominal trials, 0 modeled effects and
+identity and stale state were denied before dispatch; all 30 altered-audience
+permit artifacts returned `permit_wrong_audience` from the virtual device; all
+30 nominal commands were applied, acknowledged, and read back; and all 30 replay
+attempts were rejected without a second modeled effect. Across the 120
+non-nominal trials, 0 modeled effects and
 0 unauthorized device applications were observed under the registered
 end-to-end metric (two-sided 95 percent Wilson upper bound, 3.102 percent). That
 denominator includes 60 gateway-denied trials that never reached the device; it

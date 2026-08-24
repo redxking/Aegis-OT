@@ -43,6 +43,9 @@ aegis-ot = "aegis_ot.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+aegis_ot = ["web_demo/*.css", "web_demo/*.html", "web_demo/*.js", "web_demo/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers --strict-config"

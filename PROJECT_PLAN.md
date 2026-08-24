@@ -7,7 +7,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.5, revision log, experiment and formal manifests, and reproducible outcome hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | Current combined local suite: 264 tests pass with 91.57 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
+| WP1 Executable assurance kernel | Initial implementation complete | Current combined local suite: 289 tests pass with 91.35 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
 | WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate has a verified 30-session result and a local outcome reproduction under matching recorded conditions; HELICS/OpenPLC, segmented deployment, and external validation are not implemented |
@@ -54,7 +54,7 @@ Implemented and locally verified:
   concurrent compare-and-swap behavior, restart-epoch invalidation, and explicit
   unknown-effect handling.
 - Generated public schemas for the M3 trust-boundary messages.
-- A local suite of 264 passing tests at 91.57 percent branch-aware coverage,
+- A local suite of 289 passing tests at 91.35 percent branch-aware coverage,
   together with clean ruff, strict mypy, schema-drift, formal, and Compose
   configuration checks.
 - A retained primary controlled run and separate local reproduction, each
@@ -93,3 +93,21 @@ Evidence boundary and remaining M3 gates:
 WP4 therefore remains in progress. Passing tests establish local implementation
 behavior under the tested conditions; they do not satisfy the WP4 exit gate or
 establish operational effectiveness.
+
+## Read-only public demonstration increment
+
+The local Compose service now publishes a packaged evidence explorer rather
+than the mutable research decision API. The explorer presents the retained M2
+and M3 records with exact conditional denominators, Wilson intervals, execution
+and retention commits, and an explicit current-checkout mismatch. Its builder
+recomputes M2 from raw trials, invokes the offline verifier on both retained M3
+packages, checks historical Git bindings, and rejects pairwise reproduction
+drift across the registered equivalence contract before regenerating the
+packaged projection. The mutable decision and
+state routes remain available only through a separately launched research
+application documented for loopback-only use.
+
+This increment improves public traceability and removes a default exposed
+mutation surface. It does not add HELICS, an independently operated observer,
+a virtual PLC separate from the simulator process, segmented deployment, or
+external validation, so it does not advance the WP4 exit gate by itself.

@@ -16,6 +16,10 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The public-demo builder verifies retained evidence against historical
+          # execution and retention commits, so a shallow checkout is insufficient.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -23,8 +27,9 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev,simulation]"
       - run: ruff check .
-      - run: mypy src
+      - run: mypy src scripts/build_public_demo.py
       - run: python scripts/export_schemas.py --check
+      - run: python scripts/build_public_demo.py --check
       - run: pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 
   formal:

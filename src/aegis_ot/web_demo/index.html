@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aegis-OT evidence-backed public research demonstration">
+    <meta name="theme-color" content="#07131f">
+    <title>Aegis-OT | Evidence-backed research demonstration</title>
+    <link rel="stylesheet" href="/demo/app.css">
+    <script src="/demo/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Aegis-OT demonstration home">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>
+          <strong>Aegis-OT</strong>
+          <small>Runtime assurance research</small>
+        </span>
+      </a>
+      <nav aria-label="Demonstration sections">
+        <a href="#transaction">Transaction</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#boundaries">Boundaries</a>
+        <a href="/openapi.json">OpenAPI</a>
+      </nav>
+      <div class="live-status" id="live-status" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="live-status-copy">Checking demo service</span>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Assured agentic AI for critical infrastructure</p>
+          <h1 id="hero-title">The agent proposes.<br>The gateway decides.</h1>
+          <p class="hero-question" id="project-question">
+            Loading the controlled research question…
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#transaction">Explore a transaction</a>
+            <a class="button secondary" href="#evidence">Inspect retained evidence</a>
+          </div>
+          <p class="hero-note" id="hero-note">
+            Recorded evidence explorer. This page does not issue control commands.
+          </p>
+        </div>
+
+        <div class="assurance-card" aria-label="Current assurance milestone">
+          <div class="assurance-card-header">
+            <span class="label">Current evidence state</span>
+            <span class="mode-pill" id="project-mode">SYNTHETIC · LOCAL</span>
+          </div>
+          <p class="milestone" id="project-milestone">Loading retained milestone…</p>
+          <dl class="assurance-stats">
+            <div>
+              <dt>M3 sessions</dt>
+              <dd id="hero-sessions">—</dd>
+            </div>
+            <div>
+              <dt>Registered trials</dt>
+              <dd id="hero-trials">—</dd>
+            </div>
+            <div>
+              <dt>Evidence events</dt>
+              <dd id="hero-events">—</dd>
+            </div>
+          </dl>
+          <div class="hash-block">
+            <span>Deterministic outcome SHA-256</span>
+            <code id="hero-hash">Loading…</code>
+          </div>
+          <p class="status-copy" id="project-status">Loading completion boundary…</p>
+        </div>
+      </section>
+
+      <section class="principle-band" aria-label="Core system principle">
+        <p><strong>A proposal is data, not authorization.</strong></p>
+        <p>
+          Consequential action requires identity, delegated authority, current state,
+          modeled safety, a one-time permit, device acknowledgment, and readback.
+        </p>
+      </section>
+
+      <section class="section transaction-section" id="transaction" aria-labelledby="transaction-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Recorded transaction explorer</p>
+            <h2 id="transaction-title">Follow the enforced action path</h2>
+          </div>
+          <p>
+            Select one of the five retained M3 conditions. The path shows where the
+            recorded transaction stopped or completed; it does not rerun the experiment.
+          </p>
+        </div>
+
+        <div class="condition-tabs" id="condition-tabs" role="tablist" aria-label="M3 conditions">
+          <span class="loading-copy">Loading recorded conditions…</span>
+        </div>
+
+        <div class="transaction-panel" id="condition-panel" role="tabpanel" tabindex="0">
+          <div class="path-grid" id="path-grid" aria-label="Selected transaction stages"></div>
+
+          <article class="disposition-card" aria-live="polite">
+            <div>
+              <span class="label">Recorded disposition</span>
+              <h3 id="condition-title">Select a condition</h3>
+              <p id="condition-disposition">The retained condition summary will appear here.</p>
+            </div>
+            <dl class="condition-counts">
+              <div>
+                <dt>Trials</dt>
+                <dd id="condition-trials">—</dd>
+              </div>
+              <div>
+                <dt>Modeled effects</dt>
+                <dd id="condition-effects">—</dd>
+              </div>
+              <div>
+                <dt>Device applied</dt>
+                <dd id="condition-applied">—</dd>
+              </div>
+              <div>
+                <dt>Unknown effects</dt>
+                <dd id="condition-unknown">—</dd>
+              </div>
+            </dl>
+            <p class="evidence-note" id="condition-note"></p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section evidence-section" id="evidence" aria-labelledby="evidence-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Measured under fixed conditions</p>
+            <h2 id="evidence-title">What the retained evidence supports</h2>
+          </div>
+          <p>
+            Intervals describe repeated observations in the registered local design.
+            They do not estimate operational incident prevalence or field reliability.
+          </p>
+        </div>
+
+        <div class="metric-grid" id="metric-grid" aria-live="polite">
+          <p class="loading-copy">Loading registered metrics…</p>
+        </div>
+
+        <div class="evidence-split">
+          <article class="physical-card">
+            <span class="label">Fixed nominal post-state</span>
+            <h3>Closed-loop process result</h3>
+            <dl class="physical-stats">
+              <div>
+                <dt>Minimum voltage</dt>
+                <dd><span id="nominal-voltage">—</span> <small>pu</small></dd>
+              </div>
+              <div>
+                <dt>Maximum line loading</dt>
+                <dd><span id="nominal-loading">—</span> <small>%</small></dd>
+              </div>
+              <div>
+                <dt>Priority load served</dt>
+                <dd><span id="nominal-load">—</span> <small>%</small></dd>
+              </div>
+              <div>
+                <dt>Host latency median</dt>
+                <dd><span id="nominal-latency">—</span> <small>ms</small></dd>
+              </div>
+            </dl>
+            <p>
+              One model, operating point, command, and host. Host timing is not an OT
+              performance bound and is excluded from the deterministic outcome hash.
+            </p>
+          </article>
+
+          <article class="finding-card">
+            <span class="label">M3 finding</span>
+            <h3>Bounded control-path conformance</h3>
+            <p id="m3-finding">Loading finding…</p>
+            <div class="warning-block">
+              <strong>Validity boundary</strong>
+              <p id="m3-limitation">Loading limitation…</p>
+            </div>
+          </article>
+        </div>
+
+        <article class="baseline-card" aria-labelledby="baseline-title">
+          <div class="baseline-intro">
+            <div>
+              <span class="label">M2 comparison and ablations</span>
+              <h3 id="baseline-title">A separately implemented rule oracle exposed a negative finding</h3>
+            </div>
+            <p id="m2-finding">Loading M2 finding…</p>
+          </div>
+          <div class="chart-legend" aria-label="Baseline chart legend">
+            <span><i class="unsafe-swatch" aria-hidden="true"></i>Unsafe escape</span>
+            <span><i class="unauthorized-swatch" aria-hidden="true"></i>Unauthorized execution</span>
+            <span><i class="false-block-swatch" aria-hidden="true"></i>False block</span>
+            <span><i class="mission-swatch" aria-hidden="true"></i>Mission success</span>
+          </div>
+          <div class="baseline-chart" id="baseline-chart" aria-label="M2 baseline outcome rates"></div>
+          <p class="chart-note" id="m2-limitation"></p>
+        </article>
+      </section>
+
+      <section class="section boundaries-section" id="boundaries" aria-labelledby="boundaries-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Evidence discipline</p>
+            <h2 id="boundaries-title">What this demonstration does not claim</h2>
+          </div>
+          <p id="claim-boundary">Loading claim boundary…</p>
+        </div>
+
+        <div class="boundary-grid">
+          <article>
+            <span aria-hidden="true">01</span>
+            <h3>No production OT</h3>
+            <p>Only synthetic data, a packaged benchmark model, loopback networking, and research credentials are used.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">02</span>
+            <h3>No physical validation</h3>
+            <p>A balanced steady-state model cannot establish transient, protection, hardware, or field behavior.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">03</span>
+            <h3>No independent replication</h3>
+            <p>The second run reproduced the local outcome hash under matching recorded conditions.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">04</span>
+            <h3>No production readiness</h3>
+            <p>HELICS, OpenPLC or hardware, segmented identity and policy services, and external validation remain gated work.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section provenance-section" id="provenance" aria-labelledby="provenance-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Reproducibility</p>
+            <h2 id="provenance-title">Trace the page to committed evidence</h2>
+          </div>
+          <p>
+            The packaged summary is generated from retained raw trials, manifests, and
+            the M3 summary. Source hashes and commit bindings are exposed below so drift
+            in retained evidence is detectable in CI.
+          </p>
+        </div>
+        <div class="provenance-list" id="provenance-list">
+          <p class="loading-copy">Loading source bindings…</p>
+        </div>
+        <details class="hash-details">
+          <summary>Experiment identifiers, commits, and hashes</summary>
+          <dl>
+            <div><dt>M2 experiment</dt><dd><code id="m2-experiment">—</code></dd></div>
+            <div><dt>M2 outcome</dt><dd><code id="m2-hash">—</code></dd></div>
+            <div><dt>M2 evidence commit</dt><dd><code id="m2-commit">—</code></dd></div>
+            <div><dt>M2 retention commit</dt><dd><code id="m2-retention">—</code></dd></div>
+            <div><dt>M3 experiment</dt><dd><code id="m3-experiment">—</code></dd></div>
+            <div><dt>M3 local reproduction</dt><dd><code id="m3-reproduction">—</code></dd></div>
+            <div><dt>M3 model digest</dt><dd><code id="m3-model">—</code></dd></div>
+            <div><dt>M3 evidence commit</dt><dd><code id="m3-commit">—</code></dd></div>
+            <div><dt>M3 retention commit</dt><dd><code id="m3-retention">—</code></dd></div>
+            <div>
+              <dt>M3 verification status</dt>
+              <dd id="m3-verification-status">—</dd>
+            </div>
+            <div>
+              <dt>M3 verification boundary</dt>
+              <dd id="m3-verification-boundary">—</dd>
+            </div>
+          </dl>
+        </details>
+      </section>
+
+      <section class="section next-section" aria-labelledby="next-title">
+        <div>
+          <p class="eyebrow">Completion remains gated</p>
+          <h2 id="next-title">The next evidence must be harder to earn</h2>
+          <p>
+            A running demonstration is a milestone, not the final result. The remaining
+            gates preserve the distinction between local conformance and operational assurance.
+          </p>
+        </div>
+        <ol id="next-gates"></ol>
+      </section>
+    </main>
+
+    <footer>
+      <div>
+        <strong>Aegis-OT</strong>
+        <p>Defensive critical-infrastructure runtime-assurance research.</p>
+      </div>
+      <div>
+        <span>Principal investigator and author</span>
+        <strong>Angelis Pseftis</strong>
+      </div>
+      <div>
+        <a href="/openapi.json">OpenAPI schema</a>
+        <a href="/v1/demo/evidence">Machine-readable evidence summary</a>
+      </div>
+    </footer>
+
+    <noscript>
+      <div class="noscript-note">
+        JavaScript is required only to render the packaged evidence explorer. The
+        machine-readable evidence summary and OpenAPI schema remain available without it.
+      </div>
+    </noscript>
+  </body>
+</html>

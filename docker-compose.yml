@@ -10,7 +10,10 @@ services:
       - "127.0.0.1:8181:8181"
 
   gateway:
-    build: .
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
     command: ["uvicorn", "aegis_ot.api:app", "--host", "0.0.0.0", "--port", "8080"]
     read_only: true
     cap_drop: ["ALL"]

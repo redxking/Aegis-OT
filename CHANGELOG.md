@@ -38,6 +38,21 @@ All notable changes are recorded here. Dates describe actual repository activity
   `150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005`.
 - Added the evidence-derived M3 conformance and host-latency figure, including
   explicit fixed-condition, single-host, and non-field-validation boundaries.
+- Added a packaged, read-only public evidence explorer with a seven-stage
+  transaction view, exact M2 and M3 numerators and denominators, Wilson
+  intervals, retained-artifact hashes, and explicit claim boundaries.
+- Split the Compose-published public application from the separately launched
+  mutable research API documented for loopback-only use; the public OpenAPI
+  surface contains only health and packaged evidence reads, and the container
+  no longer initializes mutable control state.
+- Added a fail-closed public-evidence builder that recomputes the retained M2
+  projection, runs both M3 package verifiers, binds historical source and raw
+  package bytes to their recorded Git commits, and rejects registered
+  reproduction drift.
+- Added API-boundary, evidence-tamper, and static frontend-contract tests for
+  the public demonstration; manually verified the browser, isolated wheel, and
+  container surfaces; and constrained the container install to the checked-in
+  dependency lock file.
 
 ### Fixed
 

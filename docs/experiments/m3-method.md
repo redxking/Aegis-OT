@@ -60,7 +60,7 @@ environment and is not independent replication.
 |---|---:|---|---:|---:|
 | Unknown identity | 30 | Gateway denied; not dispatched | 0 | 0 |
 | Stale state | 30 | Gateway denied; not dispatched | 0 | 0 |
-| Wrong-audience permit | 30 | Signed device rejection | 0 | 0 |
+| Audience-tampered permit artifact | 30 | Signed device rejection | 0 | 0 |
 | Nominal permitted execution | 30 | Applied, signed acknowledgment, and readback matched | 30 | 0 |
 | Permit replay | 30 | Signed device replay rejection | 0 additional | 0 |
 
@@ -79,7 +79,7 @@ the offline verifier. Zero observed events do not establish an impossible event 
 field failure rate.
 
 Exactly 90 trials in each retained package contain signed device acknowledgments: 30
-wrong-audience rejections, 30 nominal applications, and 30 replay rejections. The 60
+audience-tamper rejections, 30 nominal applications, and 30 replay rejections. The 60
 gateway-denied trials per package contain no device acknowledgment and are counted as
 acknowledgment verified under the preregistered not-applicable convention because
 dispatch did not occur. The distinction is material and must be retained in downstream

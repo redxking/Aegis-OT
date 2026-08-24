@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from threading import Event
 
 from fastapi.testclient import TestClient
 
 import aegis_ot.api as api_module
-from aegis_ot.api import app
+from aegis_ot.api import control_app, public_app
 from aegis_ot.experiment import (
     BASELINES,
     derive_master_seeds,
@@ -19,13 +21,48 @@ from aegis_ot.experiment import (
 
 
 def test_api_health() -> None:
-    response = TestClient(app).get("/health")
+    response = TestClient(public_app).get("/health")
     assert response.status_code == 200
     assert response.json()["mode"] == "synthetic-local"
+    assert response.json()["public_demo"] == "/demo"
+
+
+def test_public_app_does_not_initialize_mutable_control_state(monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "_lab", None)
+    response = TestClient(public_app).get("/health")
+
+    assert response.status_code == 200
+    assert api_module._lab is None
+
+
+def test_local_control_lab_initializes_once_under_concurrency(monkeypatch) -> None:
+    built_lab = api_module.build_local_lab(datetime.now(UTC))
+    build_started = Event()
+    allow_build_to_finish = Event()
+    build_calls = []
+
+    def controlled_build(_now):  # noqa: ANN001, ANN202
+        build_calls.append(True)
+        build_started.set()
+        assert allow_build_to_finish.wait(timeout=2)
+        return built_lab
+
+    monkeypatch.setattr(api_module, "_lab", None)
+    monkeypatch.setattr(api_module, "build_local_lab", controlled_build)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(api_module._local_control_lab) for _ in range(8)]
+        assert build_started.wait(timeout=2)
+        allow_build_to_finish.set()
+        results = [future.result(timeout=2) for future in futures]
+
+    assert build_calls == [True]
+    assert all(result is built_lab for result in results)
 
 
 def test_api_rejects_invalid_payload() -> None:
-    response = TestClient(app).post("/v1/decisions", json={"proposal": {}, "state": {}})
+    response = TestClient(control_app).post(
+        "/v1/decisions", json={"proposal": {}, "state": {}}
+    )
     assert response.status_code == 422
 
 
@@ -35,7 +72,7 @@ def test_api_rejects_operation_inconsistent_parameters(proposal, state) -> None:
         "state": state.model_dump(mode="json"),
     }
     payload["proposal"]["parameters"] = {"shell_command": 1.0}
-    response = TestClient(app).post("/v1/decisions", json=payload)
+    response = TestClient(control_app).post("/v1/decisions", json=payload)
     assert response.status_code == 422
 
 
@@ -50,7 +87,7 @@ def test_api_state_and_valid_decision(proposal, state, monkeypatch) -> None:
         }
     )
     monkeypatch.setattr(api_module, "_lab", current_lab)
-    client = TestClient(app)
+    client = TestClient(control_app)
     state_response = client.get("/v1/state")
     assert state_response.status_code == 200
     assert state_response.json()["version"] == 1

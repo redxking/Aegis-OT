@@ -1,0 +1,741 @@
+{
+  "architecture": [
+    {
+      "label": "Identity",
+      "responsibility": "Authenticate the workload and bind it to an actor.",
+      "stage_id": "identity"
+    },
+    {
+      "label": "Delegation",
+      "responsibility": "Validate the complete attenuated grant chain.",
+      "stage_id": "delegation"
+    },
+    {
+      "label": "Policy + state",
+      "responsibility": "Evaluate scope, risk, approval, and observation freshness.",
+      "stage_id": "policy_state"
+    },
+    {
+      "label": "Safety",
+      "responsibility": "Evaluate the modeled candidate transition.",
+      "stage_id": "safety"
+    },
+    {
+      "label": "Signed permit",
+      "responsibility": "Bind one command to one decision and expected state change.",
+      "stage_id": "permit"
+    },
+    {
+      "label": "Virtual device",
+      "responsibility": "Revalidate and consume the permit over Modbus loopback.",
+      "stage_id": "device"
+    },
+    {
+      "label": "Plant + readback",
+      "responsibility": "Apply the command transactionally and return resulting state.",
+      "stage_id": "plant"
+    }
+  ],
+  "generated_from": [
+    {
+      "path": "results/m2-independent-oracle/manifest.json",
+      "sha256": "e2ff37455876a290c50102783600e6fede68aa41939c828e6ffc0bc0a20c2f5f"
+    },
+    {
+      "path": "results/m2-independent-oracle/trials.jsonl",
+      "sha256": "7426b3ae83aa790f7416262fc7b7a3331704d2632d10e8134921e7fb92cdcb22"
+    },
+    {
+      "path": "results/m3-physical-modbus/manifest.json",
+      "sha256": "ec11bdcb042d36fec9cbc93a946d44cfebca7be9c15de73091c7f86caf556fb7"
+    },
+    {
+      "path": "results/m3-physical-modbus/summary.json",
+      "sha256": "744a8d483cc6f1eeef9c1a4a0baf01f5765f52642530210e2c28229a5a362dbd"
+    },
+    {
+      "path": "results/m3-physical-modbus-reproduction/manifest.json",
+      "sha256": "7e8f3fe21db6ff63e250726ed3f32fc7bd42a963e85d98867c6124b0171f25c0"
+    }
+  ],
+  "m2": {
+    "baselines": [
+      {
+        "baseline_id": "B0_DIRECT",
+        "display_id": "B0",
+        "kernel_oracle_disagreements": 270,
+        "label": "Direct access",
+        "mean_decision_latency_ms": 0.44397463796296294,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.16666666666666666,
+            "numerator": 180,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.14562964774949985,
+              "method": "wilson-score",
+              "upper": 0.19006655196644626
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 1.0,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.9915356811370294,
+              "method": "wilson-score",
+              "upper": 1.0
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 1.0,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.9915356811370294,
+              "method": "wilson-score",
+              "upper": 1.0
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B1_IDENTITY",
+        "display_id": "B1",
+        "kernel_oracle_disagreements": 270,
+        "label": "Identity only",
+        "mean_decision_latency_ms": 0.4475507287037037,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.25,
+            "numerator": 270,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.22509186432547254,
+              "method": "wilson-score",
+              "upper": 0.2766802854614872
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.8,
+            "numerator": 360,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.7605725078479408,
+              "method": "wilson-score",
+              "upper": 0.8343489008342768
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 1.0,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.9915356811370294,
+              "method": "wilson-score",
+              "upper": 1.0
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B2_STATIC_POLICY",
+        "display_id": "B2",
+        "kernel_oracle_disagreements": 270,
+        "label": "Static policy",
+        "mean_decision_latency_ms": 0.4527891287037037,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.5,
+            "numerator": 90,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.42772362432714783,
+              "method": "wilson-score",
+              "upper": 0.5722763756728522
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.4166666666666667,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.3876098710653612,
+              "method": "wilson-score",
+              "upper": 0.4463141788636255
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.4,
+            "numerator": 180,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.3557670244583916,
+              "method": "wilson-score",
+              "upper": 0.4459258393142026
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 0.8,
+            "numerator": 360,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.7605725078479408,
+              "method": "wilson-score",
+              "upper": 0.8343489008342768
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B3_ASSURED",
+        "display_id": "B3",
+        "kernel_oracle_disagreements": 270,
+        "label": "Assured path",
+        "mean_decision_latency_ms": 0.9351867018518518,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.75,
+            "numerator": 810,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.7233197145385128,
+              "method": "wilson-score",
+              "upper": 0.7749081356745275
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.008464318862970662
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 0.6,
+            "numerator": 270,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.5540741606857974,
+              "method": "wilson-score",
+              "upper": 0.6442329755416084
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B4_CONTEXTUAL_ABAC",
+        "display_id": "B4",
+        "kernel_oracle_disagreements": 270,
+        "label": "Contextual ABAC",
+        "mean_decision_latency_ms": 0.43543735185185184,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.5,
+            "numerator": 540,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.4702329898464795,
+              "method": "wilson-score",
+              "upper": 0.5297670101535206
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.2,
+            "numerator": 90,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.16565109916572324,
+              "method": "wilson-score",
+              "upper": 0.23942749215205916
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 1.0,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.9915356811370294,
+              "method": "wilson-score",
+              "upper": 1.0
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B5_RISK_AWARE",
+        "display_id": "B5",
+        "kernel_oracle_disagreements": 270,
+        "label": "Risk-aware policy",
+        "mean_decision_latency_ms": 0.4362929398148148,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.4166666666666667,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.3876098710653612,
+              "method": "wilson-score",
+              "upper": 0.4463141788636255
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.4,
+            "numerator": 180,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.3557670244583916,
+              "method": "wilson-score",
+              "upper": 0.4459258393142026
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 1.0,
+            "numerator": 450,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.9915356811370294,
+              "method": "wilson-score",
+              "upper": 1.0
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B6_SAFETY_NO_DELEGATION",
+        "display_id": "B6",
+        "kernel_oracle_disagreements": 270,
+        "label": "Safety without delegation",
+        "mean_decision_latency_ms": 0.4351780027777778,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.6666666666666666,
+            "numerator": 720,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.638005127610067,
+              "method": "wilson-score",
+              "upper": 0.6941467725319598
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.2,
+            "numerator": 90,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.16565109916572324,
+              "method": "wilson-score",
+              "upper": 0.23942749215205916
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 0.6,
+            "numerator": 270,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.5540741606857974,
+              "method": "wilson-score",
+              "upper": 0.6442329755416084
+            }
+          }
+        },
+        "trials": 1080
+      },
+      {
+        "baseline_id": "B7_DELEGATION_NO_FRESHNESS",
+        "display_id": "B7",
+        "kernel_oracle_disagreements": 270,
+        "label": "Delegation without freshness",
+        "mean_decision_latency_ms": 0.4341270657407407,
+        "metrics": {
+          "false_block": {
+            "denominator": 180,
+            "estimate": 0.0,
+            "numerator": 0,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.0,
+              "method": "wilson-score",
+              "upper": 0.02089549792161305
+            }
+          },
+          "mission_success": {
+            "denominator": 1080,
+            "estimate": 0.6666666666666666,
+            "numerator": 720,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.638005127610067,
+              "method": "wilson-score",
+              "upper": 0.6941467725319598
+            }
+          },
+          "unauthorized_execution": {
+            "denominator": 450,
+            "estimate": 0.2,
+            "numerator": 90,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.16565109916572324,
+              "method": "wilson-score",
+              "upper": 0.23942749215205916
+            }
+          },
+          "unsafe_action_escape": {
+            "denominator": 450,
+            "estimate": 0.6,
+            "numerator": 270,
+            "wilson_ci95": {
+              "confidence_level": 0.95,
+              "lower": 0.5540741606857974,
+              "method": "wilson-score",
+              "upper": 0.6442329755416084
+            }
+          }
+        },
+        "trials": 1080
+      }
+    ],
+    "deterministic_outcome_sha256": "b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90",
+    "evidence_commit": "cd20986ac31eb224d6678875e63f8e8a907d1b76",
+    "experiment_id": "8d61b4b6-b22a-4677-9932-5855870c11d4",
+    "finding": "The assured path prevented authorization-invalid execution in the reviewed catalog, while a separately implemented reference oracle exposed a 60 percent conditional unsafe-escape rate caused by guardband differences.",
+    "limitation": "M2 uses balanced synthetic scenarios and separately implemented rules, not a physical simulator or operational incident distribution.",
+    "master_seed_count": 30,
+    "raw_trials_sha256": "7426b3ae83aa790f7416262fc7b7a3331704d2632d10e8134921e7fb92cdcb22",
+    "recorded_commit_bound": true,
+    "retention_commit": "bc6130f150b4ebc9ac944433b67aa8dfdee78dfb",
+    "trial_records": 8640
+  },
+  "m3": {
+    "conditions": [
+      {
+        "condition_id": "unknown_identity",
+        "device_applied": 0,
+        "disposition": "Denied by the gateway before dispatch",
+        "evidence_note": "No permit or device command was issued.",
+        "label": "Unknown identity",
+        "modeled_effects": 0,
+        "path": [
+          "deny",
+          "not_reached",
+          "not_reached",
+          "not_reached",
+          "not_reached",
+          "not_reached",
+          "not_reached"
+        ],
+        "terminal_completions": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      {
+        "condition_id": "stale_state",
+        "device_applied": 0,
+        "disposition": "Denied before dispatch because the observation was stale",
+        "evidence_note": "The denominator records a gateway no-dispatch case.",
+        "label": "Stale state",
+        "modeled_effects": 0,
+        "path": [
+          "pass",
+          "pass",
+          "deny",
+          "not_reached",
+          "not_reached",
+          "not_reached",
+          "not_reached"
+        ],
+        "terminal_completions": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      {
+        "condition_id": "wrong_audience_permit",
+        "device_applied": 0,
+        "disposition": "Rejected by device audience validation after the permit audience was altered",
+        "evidence_note": "The test altered the audience after signing. The device checked audience before cryptographic signature and returned permit_wrong_audience. The alteration also invalidated the signature, so a validly signed wrong-audience case was not exercised.",
+        "label": "Tampered permit audience",
+        "modeled_effects": 0,
+        "path": [
+          "pass",
+          "pass",
+          "pass",
+          "pass",
+          "tampered",
+          "deny",
+          "no_effect"
+        ],
+        "terminal_completions": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      {
+        "condition_id": "nominal_permitted_execution",
+        "device_applied": 30,
+        "disposition": "Applied, acknowledged, and read back",
+        "evidence_note": "The same fixed command and operating point were repeated 30 times.",
+        "label": "Nominal permitted execution",
+        "modeled_effects": 30,
+        "path": [
+          "pass",
+          "pass",
+          "pass",
+          "pass",
+          "pass",
+          "pass",
+          "effect"
+        ],
+        "terminal_completions": 30,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      {
+        "condition_id": "permit_replay",
+        "device_applied": 0,
+        "disposition": "Rejected by the virtual device without a second effect",
+        "evidence_note": "The replay reused the nominal permit; earlier authorization was not rerun.",
+        "label": "Permit replay",
+        "modeled_effects": 0,
+        "path": [
+          "reused",
+          "reused",
+          "reused",
+          "reused",
+          "reused",
+          "deny",
+          "no_effect"
+        ],
+        "terminal_completions": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      }
+    ],
+    "deterministic_outcome_sha256": "150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005",
+    "evidence_commit": "168b8bd61a13f70e0871d36e56acbe76a8ebb659",
+    "evidence_events": 270,
+    "experiment_id": "m3-physical-modbus-v1-20260824T183511767906Z",
+    "finding": "All 30 nominal commands completed with signed acknowledgment and readback; the four registered non-nominal conditions produced no modeled effect.",
+    "limitation": "One deterministic pandapower model, one operating point, a PyModbus research virtual device, and one host were used. Candidate, commit, and readback share the same process and model.",
+    "metrics": [
+      {
+        "denominator": 120,
+        "estimate": 0.0,
+        "interpretation": "Registered end-to-end metric over 120 fixed non-nominal trials; 60 were denied before device dispatch.",
+        "label": "Non-nominal modeled effects",
+        "metric_id": "non_nominal_effect",
+        "numerator": 0,
+        "wilson_ci95": {
+          "confidence_level": 0.95,
+          "lower": 0.0,
+          "method": "wilson-score",
+          "upper": 0.031019166418703486
+        }
+      },
+      {
+        "denominator": 30,
+        "estimate": 1.0,
+        "interpretation": "Repeated fixed-condition completion, not a field reliability estimate.",
+        "label": "Nominal closed-loop completions",
+        "metric_id": "nominal_completion",
+        "numerator": 30,
+        "wilson_ci95": {
+          "confidence_level": 0.95,
+          "lower": 0.8864866068260312,
+          "method": "wilson-score",
+          "upper": 1.0
+        }
+      },
+      {
+        "denominator": 30,
+        "estimate": 0.0,
+        "interpretation": "Thirty reuses of the already issued nominal permit.",
+        "label": "Replay second effects",
+        "metric_id": "replay_second_effect",
+        "numerator": 0,
+        "wilson_ci95": {
+          "confidence_level": 0.95,
+          "lower": 0.0,
+          "method": "wilson-score",
+          "upper": 0.11351339317396876
+        }
+      },
+      {
+        "denominator": 150,
+        "estimate": 0.0,
+        "interpretation": "Fail-fast conformance-completeness check, not an ambiguity-rate estimate.",
+        "label": "Unknown-effect outcomes",
+        "metric_id": "unknown_effect",
+        "numerator": 0,
+        "wilson_ci95": {
+          "confidence_level": 0.95,
+          "lower": 0.0,
+          "method": "wilson-score",
+          "upper": 0.0249702443680766
+        }
+      },
+      {
+        "denominator": 150,
+        "estimate": 1.0,
+        "interpretation": "Proposal, decision, and terminal hash only; stronger package checks are separate.",
+        "label": "Narrow trace indicator complete",
+        "metric_id": "trace_complete",
+        "numerator": 150,
+        "wilson_ci95": {
+          "confidence_level": 0.95,
+          "lower": 0.9750297556319235,
+          "method": "wilson-score",
+          "upper": 1.0
+        }
+      }
+    ],
+    "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+    "nominal_state": {
+      "host_latency_mean_ms": 180.55116113333332,
+      "host_latency_median_ms": 180.11754200000001,
+      "maximum_line_loading_pct": 54.60778755493034,
+      "minimum_voltage_pu": 0.9528655131773979,
+      "priority_load_served_pct": 100.0
+    },
+    "reproduction_experiment_id": "m3-physical-modbus-v1-20260824T183813360253Z",
+    "retention_commit": "0c48c39ae5eb575791e2bf58bfa49a8d61538524",
+    "sessions": 30,
+    "trial_records": 150,
+    "verification": {
+      "boundary": "Project-controlled internal consistency and recorded-Git provenance only; not external custody, authenticity, model validity, or independent replication.",
+      "current_checkout_binding_status": "mismatch",
+      "internal_checks": [
+        "manifest",
+        "artifact_hashes",
+        "record_counts",
+        "event_chains",
+        "trial_semantics",
+        "deterministic_outcome",
+        "summary",
+        "configuration_bindings"
+      ],
+      "primary_internal_checks_passed": true,
+      "recorded_commit_bound": true,
+      "reproduction_internal_checks_passed": true
+    }
+  },
+  "next_gates": [
+    "Independently operated measurement or consequence path",
+    "HELICS coordination and OpenPLC or justified virtual-PLC integration",
+    "Segmented multi-node trust-boundary deployment",
+    "Operate-through-compromise experiments",
+    "Fleet-scale and economic evaluation",
+    "Independent review, replication, and public-release authorization"
+  ],
+  "project": {
+    "claim_boundary": "Recorded local synthetic evidence only. This page issues no control commands and does not establish physical accuracy, field effectiveness, independent replication, or production readiness.",
+    "milestone": "Bounded M3 physical process-boundary evidence retained",
+    "mode": "synthetic-local",
+    "name": "Aegis-OT",
+    "overall_status": "Research prototype; WP4 through WP8 remain incomplete.",
+    "question": "Can an AI agent be trusted to act on critical infrastructure when the agent, its credentials, its observations, or part of the surrounding system may be compromised?",
+    "study_title": "Assured Agentic AI for Critical Infrastructure: Identity-Bound Runtime Authorization and Operate-Through-Compromise Resilience"
+  },
+  "schema_version": "public-demo-v2"
+}

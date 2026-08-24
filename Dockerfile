@@ -5,9 +5,9 @@ FROM ${PYTHON_IMAGE}
 # only with another version-and-digest-pinned official image.
 
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE ./
+COPY pyproject.toml requirements.lock README.md LICENSE ./
 COPY src ./src
-RUN python -m pip install --no-cache-dir .
+RUN python -m pip install --no-cache-dir --constraint requirements.lock .
 
 USER 65532:65532
 CMD ["python", "-m", "aegis_ot"]

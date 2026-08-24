@@ -50,8 +50,9 @@ Run these commands from the repository root before recording an experiment:
 
 ```bash
 .venv/bin/python scripts/export_schemas.py --check
+.venv/bin/python scripts/build_public_demo.py --check
 .venv/bin/ruff check .
-.venv/bin/mypy src
+.venv/bin/mypy src scripts/build_public_demo.py
 .venv/bin/python -m pytest \
   --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 docker compose config --quiet
@@ -61,7 +62,7 @@ AEGIS_TLA_JAR=/absolute/path/to/tla2tools-1.8.0.jar
   --output-dir /private/tmp/aegis-formal-check
 ```
 
-The current local implementation produces 264 passing tests and 91.57 percent
+The current local implementation produces 289 passing tests and 91.35 percent
 branch-aware coverage. Ruff, strict mypy, schema-drift, bounded intended and
 weakened formal-model checks, and Compose configuration validation are clean in
 the same local development state. These observations are local evidence only.
@@ -121,8 +122,11 @@ For a future repeat run:
 
 Each seed starts one fresh virtual-device/plant child process. Each session runs
 five deterministic conformance conditions in a fixed order: unknown identity,
-stale state, wrong permit audience, nominal permitted execution, and permit
-replay. Each retained run therefore has 30 process sessions and 150 trial records.
+stale state, a permit whose audience field is altered after signing, nominal
+permitted execution, and permit replay. Each retained run therefore has 30
+process sessions and 150 trial records. The altered field also invalidates the
+original signature; because the device checks audience first, this condition
+does not exercise a validly signed wrong-audience permit.
 Seeds vary identifiers and process sessions; they do not introduce stochastic
 physical behavior.
 
