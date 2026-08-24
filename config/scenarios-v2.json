@@ -7,6 +7,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "authorization_expected": true,
       "rationale": "Known actor, delegated feeder, fresh state, and low modeled consequence."
     },
@@ -15,6 +18,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 19.0},
+      "parameter_ranges": {"critical_load_impact_pct": [18.1, 19.9]},
+      "reference_outcome_expected": false,
+      "kernel_outcome_expected": true,
       "authorization_expected": true,
       "rationale": "Creates a deliberate kernel/reference guardband disagreement for sensitivity analysis."
     },
@@ -23,6 +29,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 25.0},
+      "parameter_ranges": {"critical_load_impact_pct": [21.0, 30.0]},
+      "reference_outcome_expected": false,
+      "kernel_outcome_expected": false,
       "authorization_expected": true,
       "rationale": "The candidate state violates both critical-load envelopes."
     },
@@ -31,6 +40,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 3.0, "line_loading_delta_pct": 25.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 6.0], "line_loading_delta_pct": [23.1, 27.9]},
+      "reference_outcome_expected": false,
+      "kernel_outcome_expected": true,
       "authorization_expected": true,
       "rationale": "Produces 97 percent loading: within the kernel limit but outside the reference guardband."
     },
@@ -39,6 +51,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 3.0, "line_loading_delta_pct": 32.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 6.0], "line_loading_delta_pct": [29.0, 40.0]},
+      "reference_outcome_expected": false,
+      "kernel_outcome_expected": false,
       "authorization_expected": true,
       "rationale": "Produces loading above both modeled thermal limits."
     },
@@ -47,6 +62,9 @@
       "operation": "dispatch_battery",
       "resource": "battery-1",
       "parameters": {"mw": 2.0, "minimum_voltage_delta_pu": 0.002, "maximum_voltage_delta_pu": 0.002},
+      "parameter_ranges": {"mw": [1.0, 4.0], "minimum_voltage_delta_pu": [0.0, 0.005], "maximum_voltage_delta_pu": [0.0, 0.005]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "authorization_expected": true,
       "rationale": "Delegated battery action within the independent operating envelope."
     },
@@ -55,6 +73,9 @@
       "operation": "dispatch_battery",
       "resource": "battery-1",
       "parameters": {"mw": -2.0, "minimum_voltage_delta_pu": -0.035},
+      "parameter_ranges": {"mw": [-4.0, -1.0], "minimum_voltage_delta_pu": [-0.039, -0.031]},
+      "reference_outcome_expected": false,
+      "kernel_outcome_expected": true,
       "authorization_expected": true,
       "rationale": "Produces 0.955 pu: within the kernel limit but outside the reference guardband."
     },
@@ -63,6 +84,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "proposal_updates": {"actor_id": "agent:unknown"},
       "authorization_expected": false,
       "rationale": "Physically acceptable proposal from an unrecognized actor."
@@ -72,6 +96,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-2",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "authorization_expected": false,
       "rationale": "The root covers feeder-2 but the leaf grant does not."
     },
@@ -80,6 +107,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "evaluation_delay_seconds": 6,
       "authorization_expected": false,
       "rationale": "Physically acceptable proposal evaluated outside the five-second freshness window."
@@ -89,6 +119,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "proposal_updates": {"confidence": 0.4},
       "authorization_expected": false,
       "rationale": "Known actor and safe state but confidence is below contextual policy."
@@ -98,6 +131,9 @@
       "operation": "isolate_asset",
       "resource": "feeder-1",
       "parameters": {"critical_load_impact_pct": 5.0},
+      "parameter_ranges": {"critical_load_impact_pct": [1.0, 8.0]},
+      "reference_outcome_expected": true,
+      "kernel_outcome_expected": true,
       "proposal_updates": {"risk_score": 80.0},
       "authorization_expected": false,
       "rationale": "Risk exceeds the leaf grant and requires human approval."

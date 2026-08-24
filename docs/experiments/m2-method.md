@@ -25,9 +25,12 @@ boundary disagreements observable.
 | B7_DELEGATION_NO_FRESHNESS | Uses identity, delegation, contextual policy, and kernel safety while omitting freshness. |
 
 The 12-scenario catalog includes nominal, consequence-unsafe, guardband,
-identity, resource-scope, freshness, confidence, and risk/approval cases. Each
-master seed exercises three shuffled catalog cycles when the default 36 trials
-per seed is used.
+identity, resource-scope, freshness, confidence, and risk/approval templates.
+Each template defines bounded parameter ranges plus reviewed reference-oracle
+and kernel expectations. Trial seeds sample within those ranges, and the runner
+fails if a sampled case crosses its declared classification. Each master seed
+exercises three shuffled and independently sampled catalog cycles when the
+default 36 trials per seed is used.
 
 ## Measures
 
@@ -42,8 +45,10 @@ per seed is used.
 - Kernel-oracle disagreement: different safety classifications for the same
   proposal and pre-action state.
 
-Rate estimates include Wilson 95 percent confidence intervals. Thirty master
-seeds are required for the controlled M2 run. The manifest preserves all seeds,
+Rate estimates include Wilson 95 percent confidence intervals over the balanced
+synthetic trial records. They characterize sampling under this designed catalog,
+not model-form or field uncertainty. Thirty master seeds are required for the
+controlled M2 run. The manifest preserves all seeds,
 source and scenario hashes, Git state, host details, raw timing-inclusive hash,
 and timing-independent deterministic outcome hash.
 

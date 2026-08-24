@@ -102,6 +102,12 @@ def test_multiseed_summary_has_all_baselines_and_bounded_intervals() -> None:
     results, summary = run_multiseed_experiment(12, seeds)
     assert len(results) == 3 * 12 * len(BASELINES)
     assert set(summary) == set(BASELINES)
+    nominal_impacts = {
+        item.parameters["critical_load_impact_pct"]
+        for item in results
+        if item.baseline == BASELINES[0] and item.scenario == "nominal_isolation"
+    }
+    assert len(nominal_impacts) > 1
     for baseline in BASELINES:
         interval = summary[baseline]["mission_success_ci95"]
         assert 0.0 <= interval["lower"] <= interval["estimate"] <= interval["upper"] <= 1.0

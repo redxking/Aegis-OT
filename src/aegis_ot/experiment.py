@@ -44,7 +44,10 @@ class ScenarioDefinition:
     operation: Operation
     resource: str
     parameters: dict[str, float]
+    parameter_ranges: dict[str, tuple[float, float]]
     authorization_expected: bool
+    reference_outcome_expected: bool
+    kernel_outcome_expected: bool
     rationale: str
     proposal_updates: dict[str, Any]
     evaluation_delay_seconds: int = 0
@@ -57,6 +60,7 @@ class TrialResult:
     trial: int
     seed: int
     scenario: str
+    parameters: dict[str, float]
     authorization_expected: bool
     oracle_safe: bool
     oracle_violations: tuple[str, ...]
@@ -90,7 +94,13 @@ def load_scenarios(path: Path = SCENARIO_CATALOG) -> tuple[str, tuple[ScenarioDe
                 operation=Operation(raw["operation"]),
                 resource=str(raw["resource"]),
                 parameters={key: float(value) for key, value in raw["parameters"].items()},
+                parameter_ranges={
+                    key: (float(bounds[0]), float(bounds[1]))
+                    for key, bounds in raw.get("parameter_ranges", {}).items()
+                },
                 authorization_expected=bool(raw["authorization_expected"]),
+                reference_outcome_expected=bool(raw["reference_outcome_expected"]),
+                kernel_outcome_expected=bool(raw["kernel_outcome_expected"]),
                 rationale=str(raw["rationale"]),
                 proposal_updates=dict(raw.get("proposal_updates", {})),
                 evaluation_delay_seconds=int(raw.get("evaluation_delay_seconds", 0)),
@@ -127,13 +137,19 @@ def _git_state() -> dict[str, str | bool]:
 def _proposal(
     scenario: ScenarioDefinition, trial_seed: int, observed_at: datetime
 ) -> ActionProposal:
+    generator = random.Random(trial_seed ^ 0x5C3E91)  # noqa: S311
+    parameters = dict(scenario.parameters)
+    for name, (minimum, maximum) in scenario.parameter_ranges.items():
+        if minimum > maximum:
+            raise ValueError(f"invalid parameter range for {scenario.name}: {name}")
+        parameters[name] = generator.uniform(minimum, maximum)
     values: dict[str, Any] = {
         "proposal_id": f"proposal-{trial_seed:016x}",
         "actor_id": "agent:operator-1",
         "mission_id": "microgrid-containment",
         "resource": scenario.resource,
         "operation": scenario.operation,
-        "parameters": scenario.parameters,
+        "parameters": parameters,
         "observed_state_version": 1,
         "observed_at": observed_at,
         "submitted_at": observed_at,
@@ -264,6 +280,16 @@ def run_multiseed_experiment(
                 evaluated_at = observed_at + timedelta(seconds=scenario.evaluation_delay_seconds)
                 oracle_result = oracle.assess(proposal, state)
                 kernel_result = kernel.evaluate(proposal, state)
+                if oracle_result.acceptable != scenario.reference_outcome_expected:
+                    raise RuntimeError(
+                        f"reference outcome drift for scenario {scenario.name}: "
+                        f"expected {scenario.reference_outcome_expected}"
+                    )
+                if kernel_result.safe != scenario.kernel_outcome_expected:
+                    raise RuntimeError(
+                        f"kernel outcome drift for scenario {scenario.name}: "
+                        f"expected {scenario.kernel_outcome_expected}"
+                    )
                 start = time.perf_counter_ns()
                 executed = _execute_baseline(
                     baseline, proposal, state, evaluated_at, lab, kernel_result.safe
@@ -277,6 +303,9 @@ def run_multiseed_experiment(
                         trial=trial,
                         seed=trial_seed,
                         scenario=scenario.name,
+                        parameters={
+                            key: float(value) for key, value in proposal.parameters.items()
+                        },
                         authorization_expected=scenario.authorization_expected,
                         oracle_safe=oracle_result.acceptable,
                         oracle_violations=oracle_result.violations,
