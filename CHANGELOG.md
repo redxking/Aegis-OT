@@ -13,3 +13,6 @@ All notable changes are recorded here. Dates describe actual repository activity
 - Shared-seed 200-trial synthetic comparison with preserved exploratory-invalid predecessor run.
 - Canonical controlled study revision 0.1 with reproducible figures, accessible images and tables, and rendered page QA.
 - PyCharm-compatible Compose defaults using verified digest-pinned OPA 1.19.1 and Python 3.13.7 images; corrected the gateway Docker command override behavior.
+- Trust-boundary validation rejects non-finite values, unknown or operation-inconsistent parameters, extra fields, invalid voltage ordering, and naive timestamps.
+- Reproducible ActionProposal schema generation with CI drift detection.
+- Expanded security-focused suite to 62 tests and 95 percent branch-aware coverage, with a 90 percent CI floor.

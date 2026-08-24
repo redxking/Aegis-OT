@@ -7,7 +7,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.1, revision log, manifest, and raw hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | 26 tests pass; strict typing and linting clean; 88 percent line coverage |
+| WP1 Executable assurance kernel | Initial implementation complete | 62 tests pass; strict typing and linting clean; 95 percent branch-aware coverage; critical gateway, policy, model, replay, and evidence paths at 100 percent |
 | WP2 Formal specification | Started | Initial bounded model scaffold |
 | WP3 Single-host simulation | Surrogate operational | Shared-seed 200-trial smoke run complete; physical independence and multi-seed analysis remain open |
 | WP4 Power-system and OT integration | Planned | No closed-loop PLC or power-flow evidence |
@@ -31,6 +31,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 
 - A clean editable install succeeds without `PYTHONPATH`.
 - Security-critical rejection paths have positive, negative, and property-based tests.
+- The committed ActionProposal schema is generated from and checked against the runtime model.
 - Every experiment records code state, configuration, host, seeds, and result hashes.
 - The outcome oracle is implemented separately from the gateway safety evaluator.
 - The canonical DOCX is the only manuscript and identifies Angelis Pseftis as author and editor.

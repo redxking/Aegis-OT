@@ -14,14 +14,14 @@ from .models import ActionProposal, Operation
 
 
 class DelegationGrant(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
-    grant_id: str
-    issuer_id: str
-    subject_id: str
-    mission_id: str
-    resources: frozenset[str]
-    operations: frozenset[Operation]
+    grant_id: str = Field(min_length=1)
+    issuer_id: str = Field(min_length=1)
+    subject_id: str = Field(min_length=1)
+    mission_id: str = Field(min_length=1)
+    resources: frozenset[str] = Field(min_length=1)
+    operations: frozenset[Operation] = Field(min_length=1)
     not_before: datetime
     expires_at: datetime
     risk_limit: float = Field(ge=0, le=100)

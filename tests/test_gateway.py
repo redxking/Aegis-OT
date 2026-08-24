@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from aegis_ot.lab import SimulatedCommandAdapter
 from aegis_ot.models import DecisionOutcome
+from aegis_ot.policy import ContextualPolicy
 
 
 def test_safe_authorized_action_is_permitted(lab, proposal, state, now) -> None:
@@ -29,6 +30,21 @@ def test_unknown_identity_is_denied(lab, proposal, state, now) -> None:
 def test_stale_state_is_denied(lab, proposal, state, now) -> None:
     decision = lab.gateway.decide(proposal, state, now + timedelta(seconds=6))
     assert "state_not_fresh" in decision.reasons
+
+
+def test_future_state_and_proposal_observation_mismatch_are_denied(
+    lab, proposal, state, now
+) -> None:
+    future_state = state.model_copy(update={"observed_at": now + timedelta(seconds=1)})
+    decision = lab.gateway.decide(proposal, future_state, now)
+    assert "state_not_fresh" in decision.reasons
+    assert "proposal_observation_mismatch" in decision.reasons
+
+
+def test_state_version_mismatch_is_denied(lab, proposal, state, now) -> None:
+    mismatched = proposal.model_copy(update={"observed_state_version": state.version + 1})
+    decision = lab.gateway.decide(mismatched, state, now)
+    assert "state_version_mismatch" in decision.reasons
 
 
 def test_replay_is_denied(lab, proposal, state, now) -> None:
@@ -60,6 +76,19 @@ def test_high_risk_requires_approval(lab, proposal, state, now) -> None:
     assert "risk_out_of_scope" in decision.reasons
 
 
+def test_approval_outcome_and_approved_permit_are_distinct(lab, proposal, state, now) -> None:
+    lab.gateway.policy = ContextualPolicy(human_approval_risk_threshold=50.0)
+    pending = lab.gateway.decide(proposal, state, now)
+    assert pending.outcome is DecisionOutcome.REQUIRE_APPROVAL
+    assert pending.reasons == ("human_approval_required",)
+
+    approved = proposal.model_copy(
+        update={"human_approval_id": "approval-1", "nonce": "approved-01234567"}
+    )
+    permitted = lab.gateway.decide(approved, state, now)
+    assert permitted.outcome is DecisionOutcome.PERMIT
+
+
 def test_adapter_rejects_nonpermit(lab, proposal, state, now) -> None:
     unsafe = proposal.model_copy(update={"parameters": {"critical_load_impact_pct": 30.0}})
     decision = lab.gateway.decide(unsafe, state, now)
@@ -74,3 +103,19 @@ def test_adapter_blocks_time_of_check_time_of_use_change(lab, proposal, state, n
     execution = SimulatedCommandAdapter().execute(proposal, decision, changed_state)
     assert not execution.executed
     assert execution.reason == "time_of_check_time_of_use_state_change"
+
+
+def test_adapter_rejects_proposal_decision_mismatch(lab, proposal, state, now) -> None:
+    decision = lab.gateway.decide(proposal, state, now)
+    different = proposal.model_copy(update={"proposal_id": "proposal-2"})
+    execution = SimulatedCommandAdapter().execute(different, decision, state)
+    assert not execution.executed
+    assert execution.reason == "proposal_decision_mismatch"
+
+
+def test_adapter_executes_matching_current_permit(lab, proposal, state, now) -> None:
+    decision = lab.gateway.decide(proposal, state, now)
+    execution = SimulatedCommandAdapter().execute(proposal, decision, state)
+    assert execution.executed
+    assert execution.resulting_state is not None
+    assert execution.resulting_state.version == state.version + 1

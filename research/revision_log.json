@@ -10,8 +10,16 @@
       "timestamp_utc": "2026-08-24T14:39:38Z",
       "editor": "Angelis Pseftis",
       "description": "Established the reconstructed research protocol, evidence boundary, requirements, architecture, threat model, formal strategy, experimental method, current implementation evidence, and completion gates.",
-      "git_commit": "pending initial controlled commit",
+      "git_commit": "e94e47fb911a14e3e49f3fe875672138a8eb267b",
       "experiment_manifest": "results/reproduction-v0.1/manifest.json"
+    },
+    {
+      "revision": "0.2",
+      "timestamp_utc": "2026-08-24T15:03:20Z",
+      "editor": "Angelis Pseftis",
+      "description": "Hardened trust-boundary validation, synchronized the generated schema, expanded rejection tests, and raised the branch-aware coverage floor.",
+      "git_commit": "pending trust-boundary hardening commit",
+      "evidence_artifact": "schemas/action-proposal.schema.json"
     }
   ]
 }

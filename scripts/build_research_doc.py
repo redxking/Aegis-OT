@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "research" / "Aegis-OT_Research_Study.docx"
 REVISION = json.loads((ROOT / "research" / "revision_log.json").read_text())
 MANIFEST = json.loads((ROOT / "results" / "reproduction-v0.1" / "manifest.json").read_text())
+CURRENT_REVISION = REVISION["revisions"][-1]
+REVISION_NUMBER = CURRENT_REVISION["revision"]
 BLUE = RGBColor(23, 105, 170)
 DARK = RGBColor(16, 42, 67)
 MUTED = RGBColor(82, 96, 109)
@@ -88,14 +90,15 @@ def add_bullets(doc: Document, items: list[str]) -> None:
         paragraph = doc.add_paragraph(style="List Bullet")
         paragraph.paragraph_format.left_indent = Inches(0.5)
         paragraph.paragraph_format.first_line_indent = Inches(-0.25)
-        paragraph.paragraph_format.space_after = Pt(4)
-        paragraph.paragraph_format.line_spacing = 1.15
+        paragraph.paragraph_format.space_after = Pt(6)
+        paragraph.paragraph_format.line_spacing = 1.2
         set_font(paragraph.add_run(item), 10.5)
 
 
 def heading(doc: Document, text: str, level: int = 1) -> None:
     paragraph = doc.add_heading(text, level=level)
     paragraph.paragraph_format.keep_with_next = True
+    paragraph.paragraph_format.line_spacing = 1.05
 
 
 def table(doc: Document, headers: list[str], rows: list[list[str]], widths: list[float]) -> None:
@@ -166,7 +169,13 @@ def add_header_footer(doc: Document) -> None:
     for section in doc.sections:
         header = section.header.paragraphs[0]
         header.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        set_font(header.add_run("AEGIS-OT-STUDY-001 | CONTROLLED RESEARCH STUDY | REV 0.1"), 8, color=MUTED)
+        set_font(
+            header.add_run(
+                f"AEGIS-OT-STUDY-001 | CONTROLLED RESEARCH STUDY | REV {REVISION_NUMBER}"
+            ),
+            8,
+            color=MUTED,
+        )
         footer = section.footer.paragraphs[0]
         footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
         field = OxmlElement("w:fldSimple")
@@ -199,7 +208,13 @@ def add_cover(doc: Document) -> None:
     set_font(author.add_run("Angelis Pseftis"), 12, bold=True)
     metadata = doc.add_paragraph()
     metadata.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_font(metadata.add_run("Document AEGIS-OT-STUDY-001 | Revision 0.1 | 24 August 2026"), 10, color=MUTED)
+    set_font(
+        metadata.add_run(
+            f"Document AEGIS-OT-STUDY-001 | Revision {REVISION_NUMBER} | 24 August 2026"
+        ),
+        10,
+        color=MUTED,
+    )
     boundary = doc.add_paragraph()
     boundary.alignment = WD_ALIGN_PARAGRAPH.CENTER
     boundary.paragraph_format.space_before = Pt(28)
@@ -217,9 +232,9 @@ def build() -> None:
     props.subject = "Identity-bound runtime assurance for simulated critical infrastructure"
     props.keywords = "Aegis-OT, runtime assurance, workload identity, delegation, OT security"
     props.comments = "Controlled research document. Author and editor: Angelis Pseftis."
-    props.created = datetime(2026, 8, 24, 14, 39, 38, tzinfo=UTC)
+    props.created = datetime.fromisoformat(REVISION["created_at_utc"].replace("Z", "+00:00"))
     props.modified = datetime.now(UTC)
-    props.revision = 1
+    props.revision = len(REVISION["revisions"])
     add_cover(doc)
 
     heading(doc, "Document Control")
@@ -228,7 +243,7 @@ def build() -> None:
         ["Field", "Controlled value"],
         [
             ["Document identifier", "AEGIS-OT-STUDY-001"],
-            ["Revision", "0.1"],
+            ["Revision", REVISION_NUMBER],
             ["Author and editor", "Angelis Pseftis"],
             ["Canonical file", "research/Aegis-OT_Research_Study.docx"],
             ["Evidence boundary", "Reconstructed repository; lost historical artifacts are not current evidence"],
@@ -236,15 +251,27 @@ def build() -> None:
         [1.65, 4.85],
     )
     heading(doc, "Revision History", 2)
-    revision = REVISION["revisions"][0]
+    revision_rows = []
+    for revision in REVISION["revisions"]:
+        evidence_link = revision.get("experiment_manifest") or "ActionProposal schema"
+        revision_rows.append(
+            [
+                revision["revision"],
+                revision["timestamp_utc"],
+                revision["editor"],
+                revision["description"],
+                evidence_link,
+            ]
+        )
     table(
         doc,
         ["Revision", "UTC timestamp", "Editor", "Substantive change", "Evidence link"],
-        [[revision["revision"], revision["timestamp_utc"], revision["editor"], revision["description"], revision["experiment_manifest"]]],
-        [0.65, 1.2, 1.05, 2.55, 1.05],
+        revision_rows,
+        [0.55, 1.15, 0.9, 2.35, 1.55],
     )
     add_paragraph(doc, "Control statement: This DOCX is the single authoritative editable manuscript. Git history and research/revision_log.json preserve its revision trail. Supporting Markdown, figures, renders, and data are not alternate manuscripts.")
 
+    doc.add_page_break()
     heading(doc, "Contents")
     sections = [
         "1 Abstract", "2 Executive Summary", "3 Introduction and Research Gap", "4 Research Objectives, Questions, and Hypotheses",
@@ -265,12 +292,13 @@ def build() -> None:
     heading(doc, "2. Executive Summary")
     add_paragraph(doc, "The central engineering decision is that identity is necessary but insufficient. An agent never receives direct simulated-control authority; it receives authority to propose a bounded action. The gateway remains the policy-enforcement point and fails closed when identity, delegation, state, replay, policy, safety, or required approval cannot be established.")
     add_bullets(doc, [
-        "Current verified implementation evidence: 26 passing tests, clean static type checking, clean linting, and 88 percent measured line coverage on the local Python 3.14 host.",
+        "Current verified implementation evidence: 62 passing tests, clean static type checking, clean linting, and 95 percent branch-aware coverage on the local Python 3.14 host. Gateway, policy, trust-boundary model, replay, and evidence paths each measure 100 percent coverage in this suite; coverage is implementation-conformance evidence, not independent validation.",
         "Current experiment evidence: 200 synthetic trials per baseline using a shared seed set and master seed 20260824.",
         "Current limitation: perfect performance by the assured baseline is expected under the simplified rules and cannot support a claim of field effectiveness.",
-        "Next decision gate: strengthen delegation and concurrency testing, run the TLA+ model and weakened variants, and replace the shared transition model with an independently executed power-system reference.",
+        "Next decision gate: run the TLA+ model and deliberately weakened variants, map modeled transitions to implementation-conformance tests, and replace the shared transition model with an independently executed power-system reference.",
     ])
 
+    doc.add_page_break()
     heading(doc, "3. Introduction and Research Gap")
     add_paragraph(doc, "Workload identity, delegated authorization, policy engines, runtime assurance, cyber-physical safety analysis, and tamper-evident logging are established fields. Aegis-OT does not claim novelty for those elements individually. The research contribution under evaluation is the integration and reproducible testing of those mechanisms as an independent action-control plane for adversarial autonomous-agent operation in simulated critical infrastructure.")
     add_paragraph(doc, "The present gap statement is provisional. Public evidence has not yet established a mature benchmark that jointly measures cryptographic agent identity, attenuation and revocation, contextual cyber policy, physical-state validation, operate-through-compromise behavior, evidence reconstruction, fleet scale, and governance cost. Absence of identified public evidence is not proof that no comparable system exists; the related-work search must actively seek counterexamples and narrow the claim.")
@@ -331,12 +359,12 @@ def build() -> None:
 
     heading(doc, "12. Implementation and Verification Status")
     table(doc, ["Capability", "Current state", "Evidence boundary"], [
-        ["Typed proposal and state", "Implemented with Pydantic validation", "Local conformance only"],
+        ["Typed proposal and state", "Closed Pydantic models with operation-specific finite parameter validation and generated JSON Schema", "Local conformance only"],
         ["Signed delegation", "Ed25519 full-chain validation and attenuation", "Local keys; no SPIRE integration"],
         ["Gateway", "Fail-closed decision path with replay and freshness", "Single process"],
         ["Safety and oracle", "Separate rule evaluators using a shared surrogate transition", "Not independent physical validation"],
         ["Evidence", "Hash-chained decision records", "Tamper-evident while trusted head is preserved"],
-        ["Verification", "26 tests; ruff and strict mypy clean; 88 percent measured line coverage", "Python 3.14 local host; CI not yet observed"],
+        ["Verification", "62 tests; ruff and strict mypy clean; 95 percent branch-aware coverage", "Python 3.14 local host; CI not yet observed"],
     ], [1.55, 2.25, 2.7])
 
     heading(doc, "13. Preliminary Controlled Results")
@@ -400,7 +428,7 @@ def build() -> None:
     heading(doc, "22. Requirements Traceability Appendix")
     table(doc, ["Requirement", "Implementation", "Test/evidence", "Residual gap"], [
         ["REQ-AUTH-001", "gateway.py; identity.py; delegation.py", "test_unknown_identity; test_valid_full_chain", "No SPIRE service"],
-        ["REQ-DELEG-002", "delegation.py", "amplification, expiry, forgery, ancestor revocation tests", "More property and fuzz coverage"],
+        ["REQ-DELEG-002", "delegation.py", "Full-chain negative tests covering scope, time, depth, signature, expiry, revocation, and linkage", "Mutation testing and distributed revocation remain absent"],
         ["REQ-SAFE-003", "safety.py; oracle.py", "Hypothesis comparison and unsafe denial", "Shared transition model"],
         ["REQ-REPLAY-004", "replay.py", "Concurrent reservation and retention tests", "Distributed replay store absent"],
         ["REQ-EVID-005", "evidence.py", "Chain integrity and tampering tests", "No signature or external anchor"],
@@ -408,13 +436,13 @@ def build() -> None:
     ], [1.05, 1.8, 2.25, 1.4])
 
     heading(doc, "23. Data and Message Schemas Appendix")
-    add_paragraph(doc, "The ActionProposal schema binds actor, mission, resource, operation, parameters, observed state and time, submission time, nonce, confidence, risk score, delegation chain, and optional approval identifier. Decision records bind outcome, reasons, policy and safety versions, state version, decision time, and evidence-record hash. JSON Schema source is maintained under schemas/ and Pydantic models are authoritative for the current implementation.")
+    add_paragraph(doc, "The ActionProposal schema binds actor, mission, resource, operation, parameters, observed state and time, submission time, nonce, confidence, risk score, delegation chain, and optional approval identifier. Operation-specific parameter sets are closed, and non-finite numeric inputs, out-of-range percentages, extra fields, and timezone-naive timestamps are rejected at the validation boundary. The committed JSON Schema is generated from the authoritative Pydantic model and checked for drift in CI. Decision records bind outcome, reasons, policy and safety versions, state version, decision time, and evidence-record hash.")
 
     heading(doc, "24. Reproduction Runbook Appendix")
     add_bullets(doc, [
         "Create and activate a clean Python 3.11-or-later virtual environment.",
         "Install with pip install -e \".[dev,docs]\"; do not rely on PYTHONPATH.",
-        "Run ruff check ., mypy src, and pytest --cov=aegis_ot --cov-report=term-missing.",
+        "Run python scripts/export_schemas.py --check, ruff check ., mypy src, and pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90.",
         "Run python -m aegis_ot demo --output-dir results/demo.",
         "Run python -m aegis_ot experiment --trials 200 --seed 20260824 --output-dir results/reproduction-v0.1.",
         "Verify the manifest raw-data hash and dirty-tree declaration before reporting results.",
@@ -422,13 +450,14 @@ def build() -> None:
     ])
 
     heading(doc, "25. Version-Control Audit Trail Appendix")
-    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. The initial controlled commit remains pending at document-build time so the experiment manifest correctly records an unknown commit and dirty working tree. A post-commit reproduction run is required before any tagged release.")
+    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation. The current trust-boundary hardening milestone remains uncommitted at document-build time and is recorded as pending in the revision log. A clean post-commit experiment reproduction remains required before any tagged release.")
 
     add_header_footer(doc)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUTPUT)
-    words = len(re.findall(r"\b[\w'-]+\b", " ".join(p.text for p in doc.paragraphs)))
-    print(json.dumps({"output": str(OUTPUT), "paragraph_word_count": words, "revision": "0.1"}))
+    body_text = " ".join(node.text or "" for node in doc.element.body.iter(qn("w:t")))
+    words = len(re.findall(r"\b[\w'-]+\b", body_text))
+    print(json.dumps({"output": str(OUTPUT), "paragraph_word_count": words, "revision": REVISION_NUMBER}))
 
 
 if __name__ == "__main__":

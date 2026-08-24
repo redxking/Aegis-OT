@@ -32,7 +32,8 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[dev,docs]"
-pytest --cov=aegis_ot --cov-report=term-missing
+python scripts/export_schemas.py --check
+pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 ruff check .
 python -m aegis_ot demo --output-dir results/demo
 python -m aegis_ot experiment --trials 200 --seed 20260824 --output-dir results/reproduction-v0.1
@@ -52,6 +53,17 @@ curl http://127.0.0.1:8181/health
 ```
 
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
+
+## Trust-boundary schemas
+
+`ActionProposal` is the authoritative validation model. Regenerate and verify its public JSON Schema with:
+
+```bash
+python scripts/export_schemas.py
+python scripts/export_schemas.py --check
+```
+
+Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, non-finite values, out-of-range percentages, extra message fields, and timezone-naive timestamps are rejected before authorization evaluation.
 
 ## Safety and disclosure
 

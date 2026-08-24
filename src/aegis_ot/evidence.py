@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from threading import Lock
+from threading import RLock
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -26,7 +26,7 @@ class EvidenceRecord(BaseModel):
 class EvidenceChain:
     def __init__(self) -> None:
         self._records: list[EvidenceRecord] = []
-        self._lock = Lock()
+        self._lock = RLock()
 
     @staticmethod
     def _digest(data: dict[str, Any]) -> str:
@@ -60,22 +60,24 @@ class EvidenceChain:
 
     @property
     def records(self) -> tuple[EvidenceRecord, ...]:
-        return tuple(self._records)
+        with self._lock:
+            return tuple(self._records)
 
     def verify(self) -> bool:
-        previous_hash = "0" * 64
-        for record in self._records:
-            material = {
-                "sequence": record.sequence,
-                "recorded_at": record.recorded_at.isoformat(),
-                "proposal_id": record.proposal_id,
-                "decision_id": record.decision_id,
-                "previous_hash": record.previous_hash,
-                "payload": record.payload,
-            }
-            chain_broken = record.previous_hash != previous_hash
-            digest_mismatch = record.record_hash != self._digest(material)
-            if chain_broken or digest_mismatch:
-                return False
-            previous_hash = record.record_hash
-        return True
+        with self._lock:
+            previous_hash = "0" * 64
+            for record in self._records:
+                material = {
+                    "sequence": record.sequence,
+                    "recorded_at": record.recorded_at.isoformat(),
+                    "proposal_id": record.proposal_id,
+                    "decision_id": record.decision_id,
+                    "previous_hash": record.previous_hash,
+                    "payload": record.payload,
+                }
+                chain_broken = record.previous_hash != previous_hash
+                digest_mismatch = record.record_hash != self._digest(material)
+                if chain_broken or digest_mismatch:
+                    return False
+                previous_hash = record.record_hash
+            return True

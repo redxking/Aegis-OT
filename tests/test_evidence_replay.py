@@ -26,3 +26,18 @@ def test_nonce_expires_after_retention(now) -> None:
     assert ledger.reserve("nonce", now)
     assert not ledger.reserve("nonce", now)
     assert ledger.reserve("nonce", now + timedelta(seconds=2))
+    assert ledger.contains("nonce")
+
+
+def test_evidence_link_tampering_is_detected() -> None:
+    chain = EvidenceChain()
+    chain.append("p1", "d1", {"outcome": "permit"})
+    chain.append("p2", "d2", {"outcome": "deny"})
+    chain._records[1] = chain.records[1].model_copy(  # noqa: SLF001
+        update={"previous_hash": "f" * 64}
+    )
+    assert not chain.verify()
+
+
+def test_empty_evidence_chain_is_valid() -> None:
+    assert EvidenceChain().verify()

@@ -24,4 +24,5 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: mypy src
-      - run: pytest --cov=aegis_ot --cov-report=term-missing --cov-fail-under=80
+      - run: python scripts/export_schemas.py --check
+      - run: pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90

@@ -1,28 +1,228 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Operation": {
+      "enum": [
+        "isolate_asset",
+        "restore_asset",
+        "shed_load",
+        "dispatch_battery"
+      ],
+      "title": "Operation",
+      "type": "string"
+    }
+  },
   "$id": "https://example.invalid/aegis-ot/action-proposal-v1.schema.json",
-  "title": "Aegis-OT ActionProposal v1",
-  "type": "object",
-  "required": [
-    "proposal_id", "actor_id", "mission_id", "resource", "operation",
-    "observed_state_version", "observed_at", "submitted_at", "nonce",
-    "confidence", "risk_score", "delegation_chain"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "isolate_asset"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "critical_load_impact_pct": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "line_loading_delta_pct": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "restore_asset"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "critical_load_restore_pct": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "line_loading_delta_pct": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "shed_load"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "critical_load_impact_pct": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "line_loading_relief_pct": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "dispatch_battery"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "maximum_voltage_delta_pu": {
+                "type": "number"
+              },
+              "minimum_voltage_delta_pu": {
+                "type": "number"
+              },
+              "mw": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    }
   ],
   "properties": {
-    "proposal_id": {"type": "string", "minLength": 1},
-    "actor_id": {"type": "string", "minLength": 1},
-    "mission_id": {"type": "string", "minLength": 1},
-    "resource": {"type": "string", "minLength": 1},
-    "operation": {"enum": ["isolate_asset", "restore_asset", "shed_load", "dispatch_battery"]},
-    "parameters": {"type": "object"},
-    "observed_state_version": {"type": "integer", "minimum": 0},
-    "observed_at": {"type": "string", "format": "date-time"},
-    "submitted_at": {"type": "string", "format": "date-time"},
-    "nonce": {"type": "string", "minLength": 16, "maxLength": 256},
-    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "risk_score": {"type": "number", "minimum": 0, "maximum": 100},
-    "delegation_chain": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
-    "human_approval_id": {"type": ["string", "null"]}
+    "actor_id": {
+      "minLength": 1,
+      "title": "Actor Id",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "delegation_chain": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Delegation Chain",
+      "type": "array"
+    },
+    "human_approval_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Human Approval Id"
+    },
+    "mission_id": {
+      "minLength": 1,
+      "title": "Mission Id",
+      "type": "string"
+    },
+    "nonce": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Nonce",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "observed_state_version": {
+      "minimum": 0,
+      "title": "Observed State Version",
+      "type": "integer"
+    },
+    "operation": {
+      "$ref": "#/$defs/Operation"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "proposal_id": {
+      "minLength": 1,
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "resource": {
+      "minLength": 1,
+      "title": "Resource",
+      "type": "string"
+    },
+    "risk_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Risk Score",
+      "type": "number"
+    },
+    "submitted_at": {
+      "format": "date-time",
+      "title": "Submitted At",
+      "type": "string"
+    }
   },
-  "additionalProperties": false
+  "required": [
+    "actor_id",
+    "mission_id",
+    "resource",
+    "operation",
+    "observed_state_version",
+    "observed_at",
+    "nonce",
+    "confidence",
+    "risk_score",
+    "delegation_chain"
+  ],
+  "title": "Aegis-OT ActionProposal v1",
+  "type": "object"
 }
