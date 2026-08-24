@@ -112,3 +112,17 @@ def test_deterministic_outcome_hash_excludes_host_timing(tmp_path) -> None:
     first = write_multiseed_experiment(tmp_path / "first", 12, seeds)
     second = write_multiseed_experiment(tmp_path / "second", 12, seeds)
     assert first["deterministic_outcome_sha256"] == second["deterministic_outcome_sha256"]
+
+
+def test_manifest_captures_git_state_before_writing(tmp_path, monkeypatch) -> None:
+    calls = []
+
+    def git_state():  # noqa: ANN202
+        calls.append((tmp_path / "evidence").exists())
+        return {"commit": "test-commit", "working_tree_dirty": False}
+
+    monkeypatch.setattr("aegis_ot.experiment._git_state", git_state)
+    manifest = write_multiseed_experiment(tmp_path / "evidence", 1, (7,))
+    assert calls == [False]
+    assert manifest["git_commit"] == "test-commit"
+    assert manifest["working_tree_dirty"] is False

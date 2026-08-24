@@ -200,10 +200,12 @@ def _wilson(successes: int, total: int) -> dict[str, float | int]:
     center = (estimate + z**2 / (2 * total)) / denominator
     margin = z * math.sqrt(estimate * (1 - estimate) / total + z**2 / (4 * total**2))
     margin /= denominator
+    lower = 0.0 if successes == 0 else max(0.0, center - margin)
+    upper = 1.0 if successes == total else min(1.0, center + margin)
     return {
         "estimate": estimate,
-        "lower": max(0.0, center - margin),
-        "upper": min(1.0, center + margin),
+        "lower": lower,
+        "upper": upper,
         "denominator": total,
     }
 
@@ -305,6 +307,7 @@ def _outcome_payload(item: TrialResult) -> dict[str, object]:
 def write_multiseed_experiment(
     output_dir: Path, trials_per_seed: int, master_seeds: tuple[int, ...]
 ) -> dict[str, object]:
+    git = _git_state()
     output_dir.mkdir(parents=True, exist_ok=True)
     results, summary = run_multiseed_experiment(trials_per_seed, master_seeds)
     raw_path = output_dir / "trials.jsonl"
@@ -314,7 +317,6 @@ def write_multiseed_experiment(
         json.dumps(_outcome_payload(item), sort_keys=True) + "\n" for item in results
     )
     catalog_version, scenarios = load_scenarios()
-    git = _git_state()
     source_paths = (
         Path(__file__),
         Path(__file__).with_name("oracle.py"),
