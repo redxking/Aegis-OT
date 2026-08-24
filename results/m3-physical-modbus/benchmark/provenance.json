@@ -1,0 +1,48 @@
+{
+  "constructor": "pandapower.networks.create_cigre_network_mv(with_der='all')",
+  "constructor_source_sha256": "e85f784c50f2af90cbf5109ae10e67e1211b19fc97544425c0c11cf5677156a9",
+  "instantiated_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+  "license_boundary": "The packaged pandapower constructor and Aegis adapter are used under their software licenses. This record does not characterize separate rights in the underlying CIGRE benchmark publication.",
+  "model_id": "pandapower-cigre-mv-all",
+  "pandapower_license": "BSD-3-Clause",
+  "pandapower_license_file_sha256": "115ae3808a950626b17b5549a3512743b5c81d7d87a654f41258537364845afc",
+  "pandapower_version": "3.5.4",
+  "release_source": "https://github.com/e2nIEE/pandapower/releases/tag/v3.5.4",
+  "source_documentation": "https://pandapower.readthedocs.io/en/latest/networks/cigre.html",
+  "transformation": {
+    "implementation_sha256": "0ea42802ba9ffbdc83ee8b9473506c55d8d93c4364d393f38a797b0df58ed0ca",
+    "meaning": "Aegis-OT synthetic mission-priority subset; not CIGRE semantics",
+    "mission_priority_load_indices": [
+      12,
+      13,
+      16,
+      17
+    ],
+    "resource_bindings": {
+      "battery-1": {
+        "command_type": "set_battery_injection",
+        "maximum_setpoint": 1.0,
+        "minimum_setpoint": -1.0,
+        "resource": "battery-1",
+        "target": "Battery 1",
+        "target_index": 0
+      },
+      "feeder-1": {
+        "command_type": "set_line_service",
+        "maximum_setpoint": 1.0,
+        "minimum_setpoint": 0.0,
+        "resource": "feeder-1",
+        "target": "Line 5-6",
+        "target_index": 4
+      },
+      "feeder-2": {
+        "command_type": "set_line_service",
+        "maximum_setpoint": 1.0,
+        "minimum_setpoint": 0.0,
+        "resource": "feeder-2",
+        "target": "Line 8-9",
+        "target_index": 6
+      }
+    }
+  }
+}

@@ -41,6 +41,17 @@
       "evidence_label": "M2 independent-oracle manifest",
       "experiment_manifest": "results/m2-independent-oracle/manifest.json",
       "page_count": 15
+    },
+    {
+      "revision": "0.5",
+      "timestamp_utc": "2026-08-24T18:47:57Z",
+      "editor": "Angelis Pseftis",
+      "description": "Added the bounded M3 steady-state plant and Modbus process-boundary implementation, controlled evidence, offline verification, and local outcome reproduction under matching recorded conditions.",
+      "git_commit": "168b8bd61a13f70e0871d36e56acbe76a8ebb659",
+      "evidence_label": "M3 physical Modbus manifest",
+      "experiment_manifest": "results/m3-physical-modbus/manifest.json",
+      "reproduction_manifest": "results/m3-physical-modbus-reproduction/manifest.json",
+      "page_count": 20
     }
   ]
 }

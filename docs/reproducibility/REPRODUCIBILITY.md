@@ -77,7 +77,34 @@ the Compose services.
 
 ## Controlled M3 run
 
-The controlled M3 experiment is still pending. Before running it:
+The operator run record identifies commit
+`168b8bd61a13f70e0871d36e56acbe76a8ebb659` as the prepared clean checkout
+for the primary controlled run and one local reproduction completed on
+2026-08-24. The unsigned manifests record matching source and
+`requirements.lock` hashes, host metadata, Python 3.14.7, pandapower 3.5.4, and
+PyModbus 3.15.0; they do not attest the complete installed environment. The
+primary package is retained at
+`results/m3-physical-modbus`; the second package is retained separately at
+`results/m3-physical-modbus-reproduction`. Do not overwrite either directory.
+
+The recorded experiment commands were:
+
+```bash
+/private/tmp/aegis-ot-m3-run-venv-168b8bd/bin/aegis-ot physical-experiment \
+  --seed-count 30 \
+  --seed 20260824 \
+  --output-dir /private/tmp/aegis-m3-controlled-168b8bd
+/private/tmp/aegis-ot-m3-run-venv-168b8bd/bin/aegis-ot physical-experiment \
+  --seed-count 30 \
+  --seed 20260824 \
+  --output-dir /private/tmp/aegis-m3-reproduction-168b8bd
+```
+
+Those two completed output trees were copied byte-for-byte into the retained
+repository paths identified above; the original experiment directories were not
+used as later-run destinations.
+
+For a future repeat run:
 
 1. Commit the implementation and verification changes.
 2. Confirm `git status --short` is empty.
@@ -89,15 +116,42 @@ The controlled M3 experiment is still pending. Before running it:
 .venv/bin/aegis-ot physical-experiment \
   --seed-count 30 \
   --seed 20260824 \
-  --output-dir results/m3-physical-modbus
+  --output-dir /private/tmp/aegis-m3-unique-run
 ```
 
 Each seed starts one fresh virtual-device/plant child process. Each session runs
 five deterministic conformance conditions in a fixed order: unknown identity,
 stale state, wrong permit audience, nominal permitted execution, and permit
-replay. The planned run therefore has 30 process sessions and 150 trial records.
+replay. Each retained run therefore has 30 process sessions and 150 trial records.
 Seeds vary identifiers and process sessions; they do not introduce stochastic
 physical behavior.
+
+The primary and reproduction manifests each report 30 sessions, 150 trials, and
+270 evidence events. From the matching clean checkout, both pass every
+registered offline-verifier check and produce
+the same deterministic outcome hash:
+
+```text
+150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005
+```
+
+Verify the retained copies from a checkout whose source, schema, project, and
+lock hashes match the manifest:
+
+```bash
+.venv/bin/aegis-ot verify-physical-evidence \
+  --output-dir results/m3-physical-modbus
+.venv/bin/aegis-ot verify-physical-evidence \
+  --output-dir results/m3-physical-modbus-reproduction
+```
+
+The verifier opens no Modbus socket. It validates package/current-checkout
+internal consistency; it does not authenticate the unsigned manifest, establish
+custody, or independently verify the self-asserted historical Git and host
+metadata. The second manifest records the same source and lock-file hashes,
+host metadata, Python version, and selected component versions; it is therefore
+a local outcome reproduction under matching recorded conditions, not proof of
+an identical environment or independent replication.
 
 The result directory must contain:
 
@@ -115,9 +169,10 @@ solver/configuration.json
 
 The manifest records clean-start Git state, all seeds, process/session counts,
 source and configuration hashes, artifact hashes, a timing-independent outcome
-hash, host details, simulator and protocol versions, model digest, benchmark
-provenance, solver settings, boundary description, analyst, and known
-limitations. Wall-clock latency remains in the raw evidence but is excluded from
+hash, host details, simulator and protocol versions, model digest, boundary
+description, analyst, and known limitations. It binds the separate benchmark
+provenance and solver-configuration artifacts by hash. Wall-clock latency
+remains in the raw evidence but is excluded from
 the deterministic outcome projection. A reproduction must use a separate output
 directory and match the deterministic outcome hash before it is described as a
 reproduction.
@@ -137,6 +192,8 @@ AC power-flow and virtual-device experiment. It is not evidence of:
 - field effectiveness, hardware-in-the-loop validation, independent replication,
   or external validation.
 
-WP4 and M3 remain in progress until the controlled evidence run and the remaining
-integration gates are completed. Tests and a manifest support only the exact
-local implementation, configuration, conditions, and evidence recorded.
+The bounded local process-boundary evaluation is complete. WP4 remains in
+progress until the HELICS, OpenPLC, segmented-deployment, hardware, and external
+validation gates are separately implemented and evaluated. Tests and retained
+manifests support only the exact local implementation, configuration,
+conditions, and evidence recorded.

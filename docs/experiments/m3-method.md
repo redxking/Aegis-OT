@@ -1,7 +1,7 @@
 # M3 Steady-State Modbus Process-Boundary Experiment Method
 
 - Author: Angelis Pseftis
-- Status: Preregistered method; controlled 30-session run not yet completed
+- Status: Preregistered design executed; controlled run and local reproduction retained
 - Experiment version: `m3-physical-modbus-v1`
 - Deterministic projection version: `m3-outcome-projection-v1`
 - Evidence boundary: localhost, separate-process, steady-state virtual-device experiment
@@ -22,12 +22,85 @@ authorization and execution invariants across a local Modbus process boundary:
 
 The unit under test is the complete local transaction from physical-state capture
 through gateway decision, candidate power flow, signed permit, Modbus execute request,
-signed acknowledgment, and simulator readback. A successful controlled run would be
-evidence about this implementation and these fixed conformance conditions. It would not
-estimate field failure rates or establish power-system, PLC, network, or operational
+signed acknowledgment, and simulator readback. The retained controlled run is evidence
+about this implementation and these fixed conformance conditions. It does not estimate
+field failure rates or establish power-system, PLC, network, or operational
 effectiveness.
 
-No controlled 30-session results are reported in this method.
+## Controlled result record
+
+The operator run record identifies commit
+`168b8bd61a13f70e0871d36e56acbe76a8ebb659` as the prepared clean checkout. The
+unsigned primary manifest records
+`working_tree_dirty_at_start: false`, analyst `Angelis Pseftis`, pandapower 3.5.4,
+PyModbus 3.15.0, Python 3.14.7, macOS 26.6.2 arm64 host metadata, the lock-file hash,
+and model digest
+`49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035`.
+Those historical Git and host fields remain self-asserted package metadata rather than
+external attestation.
+
+| Record | Primary controlled run | Local outcome reproduction |
+|---|---|---|
+| Directory | `results/m3-physical-modbus` | `results/m3-physical-modbus-reproduction` |
+| Experiment ID | `m3-physical-modbus-v1-20260824T183511767906Z` | `m3-physical-modbus-v1-20260824T183813360253Z` |
+| UTC interval | 2026-08-24 18:35:11.767906--18:36:08.939009 | 2026-08-24 18:38:13.360253--18:39:12.025797 |
+| Sessions / trials / events | 30 / 150 / 270 | 30 / 150 / 270 |
+| Offline verifier | Valid from matching clean checkout; all nine registered checks passed | Valid from matching clean checkout; all nine registered checks passed |
+| Deterministic outcome SHA-256 | `150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005` | Same |
+
+The second manifest records the same source and lock-file hashes, host and operating
+system metadata, Python and selected component versions, model, root seed, and fixed
+conditions. Matching the deterministic hash demonstrates local outcome reproduction
+under those recorded conditions. It does not establish an identical installed
+environment and is not independent replication.
+
+### Observed conformance outcomes
+
+| Condition | Trials | Gateway/device result | Modeled state effects | Unknown effects |
+|---|---:|---|---:|---:|
+| Unknown identity | 30 | Gateway denied; not dispatched | 0 | 0 |
+| Stale state | 30 | Gateway denied; not dispatched | 0 | 0 |
+| Wrong-audience permit | 30 | Signed device rejection | 0 | 0 |
+| Nominal permitted execution | 30 | Applied, signed acknowledgment, and readback matched | 30 | 0 |
+| Permit replay | 30 | Signed device replay rejection | 0 additional | 0 |
+
+In the primary package, the observed modeled-effect rate and the registered end-to-end
+unauthorized-device-application rate were both 0/120; the two-sided 95 percent Wilson
+upper bound for each was 0.0310192. The latter denominator includes 60 gateway-denied
+trials that never reached the device and is not a conditional device-acceptance rate.
+Nominal closed-loop completion was 30/30, with a Wilson lower bound of 0.886487.
+Stale-state execution and duplicate-replay effect were each 0/30, with an upper bound
+of 0.113513. Unknown effects were 0/150, but the runner treats any unknown effect as a
+failed controlled run; this is a conformance-completeness check, not an empirical
+ambiguity-rate estimate. The registered narrow trace indicator--proposal, decision,
+and nonempty terminal-evidence hash--was complete for 150/150 trials, with a lower
+bound of 0.975030. The stronger package-integrity and semantic checks are reported by
+the offline verifier. Zero observed events do not establish an impossible event or a
+field failure rate.
+
+Exactly 90 trials in each retained package contain signed device acknowledgments: 30
+wrong-audience rejections, 30 nominal applications, and 30 replay rejections. The 60
+gateway-denied trials per package contain no device acknowledgment and are counted as
+acknowledgment verified under the preregistered not-applicable convention because
+dispatch did not occur. The distinction is material and must be retained in downstream
+reporting.
+
+The primary package's deterministic nominal post-state had minimum voltage 0.9528655131773979 per unit,
+maximum line loading 54.60778755493034 percent, 100 percent synthetic priority-load
+service, and zero registered voltage, thermal, or supervisory unsafe-state flags. The
+same values in all 30 sessions reflect the single fixed physical model, operating
+point, and command; they are not independent physical samples. Controlled nominal
+end-to-end host latency had mean 180.551161 ms, median 180.117542 ms, and range
+177.116417--184.416541 ms. Latency is single-host descriptive evidence, is excluded
+from the deterministic outcome hash, and is not a real-time or OT performance bound.
+
+Both retained packages passed the implementation's offline verifier from the matching
+clean checkout. A separate
+read-only package audit also recomputed the artifact, source, schema, configuration,
+summary, and deterministic hashes without finding an internal discrepancy. Neither
+check is external validation: the manifests are unsigned, verification keys are inside
+the packages, candidate and authoritative plant paths share the same model, and the
+readback comes from that same virtual-device process.
 
 ## Preregistered design
 
@@ -199,11 +272,14 @@ Aggregate proportions are:
 
 - denied-command state-effect rate across the four non-nominal conditions, denominator
   120 in a complete run;
-- unauthorized device-acceptance rate across those same 120 records;
+- registered end-to-end unauthorized-device-application rate across those same
+  120 records, including 60 gateway no-dispatch trials and therefore not
+  conditional on device dispatch;
 - stale-state execution rate, denominator 30;
 - duplicate replay effect rate, denominator 30;
 - nominal closed-loop completion rate, denominator 30;
-- unknown-effect rate across all 150 records; and
+- fail-fast unknown-effect conformance-completeness check across all 150 records,
+  not an empirical ambiguity-rate estimate; and
 - evidence trace-completeness rate across all 150 records.
 
 For nominal post-states, record minimum voltage, maximum line loading, priority load

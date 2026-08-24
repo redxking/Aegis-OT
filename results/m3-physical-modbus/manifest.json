@@ -1,0 +1,745 @@
+{
+  "analyst": "Angelis Pseftis",
+  "artifact_sha256": {
+    "benchmark/provenance.json": "f3081463cecb1c449a511a805deb1c10712f945bae749c418ba23fd0ad27a3e4",
+    "component-health.json": "50efdcfb9f60e766a68e09808f921eb565bb1683937a77aa739ea491c235e3cc",
+    "events.jsonl": "91a213305781f950909541ae9f8ae5629ac9f81bc68cdcefcb6330446743cbc0",
+    "evidence-verification.json": "c462d4ebb56a135104485187aeb066d99c12e8d4d2ba34a11a82d8c6a515cee3",
+    "scenarios.json": "14acb1cd3a9131a8927a4752127204feb60c80f38a57289e9c5cb3958eb8b480",
+    "solver/configuration.json": "50d694ae50a2c7f1755a974ce32bd69d95b7568dd4a6a2564cc358dd7901a9d1",
+    "summary.json": "744a8d483cc6f1eeef9c1a4a0baf01f5765f52642530210e2c28229a5a362dbd",
+    "trials.jsonl": "a5743429f6c0500e9b2c5564367d2456933712cccc94fa3e69a3ca4faadc25cc"
+  },
+  "boundary": {
+    "client_model": "one intended trusted loopback controller",
+    "containers_exercised": false,
+    "controller": "parent Python process",
+    "helics_exercised": false,
+    "openplc_exercised": false,
+    "plant_and_device": "spawned child process",
+    "socket_session_ownership_enforced": false,
+    "transport": "Modbus TCP over host loopback"
+  },
+  "completed_at_utc": "2026-08-24T18:36:08.939009+00:00",
+  "component_versions": {
+    "helics": null,
+    "openplc": null,
+    "pandapower": "3.5.4",
+    "pymodbus": "3.15.0",
+    "pymodbus_license_file_sha256": "572a4d6fa7541553f70cc6d494fbcbee7eb7d3f2fbd16080d39b20cccda26f0b"
+  },
+  "conditions_per_session": 5,
+  "configuration_sha256": {
+    "benchmark": "1357339fa9302a6b1831af7c82292479f23304b3c449bc84a655fc55b19f3e53",
+    "pyproject.toml": "d7f3aa093dc5fe870f4b4463eabece6600d2a9dbb6e5bf87268c4a78465d2711",
+    "requirements.lock": "d90da05fc0ddf9468761f89d8a056554223dea12cba868cc5ee541ff618b81b3",
+    "scenarios": "ddf3f55c34550271140e9384c06addbb052691ae1c12c220df4ab7b33fdccc4c",
+    "solver": "66de70788ff0738fd9fc680a0aed2b035f00fed3edea60da9423cfe0ff9182a9"
+  },
+  "deterministic_outcome_sha256": "150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005",
+  "event_record_count": 270,
+  "experiment_configuration": {
+    "agent_type": "deterministic_fixture_driver",
+    "baseline": "B3_assured_physical_conformance",
+    "container_versions": null,
+    "identity_configuration": {
+      "allowed_actor_ids": [
+        "agent:operator-1"
+      ],
+      "implementation": "local_allowlist",
+      "version": "local-allowlist-v1"
+    },
+    "model_identifier": null,
+    "model_version": null,
+    "policy_version": "local-contextual-v1",
+    "prompt_hash": null,
+    "protocol_version": 1,
+    "safety_kernel_version": "surrogate-safety-v1-m3-supervisory-limits",
+    "vm_versions": null
+  },
+  "experiment_id": "m3-physical-modbus-v1-20260824T183511767906Z",
+  "experiment_version": "m3-physical-modbus-v1",
+  "git": {
+    "commit": "168b8bd61a13f70e0871d36e56acbe76a8ebb659",
+    "working_tree_dirty_at_start": false
+  },
+  "host": {
+    "architecture": "arm64",
+    "logical_cpu_count": 10,
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "physical_memory_bytes": 17179869184,
+    "python": "3.14.7"
+  },
+  "individual_seeds": [
+    2931818375549313636,
+    322325654771938865,
+    899615064027653890,
+    6935105556177478217,
+    4460861244597533694,
+    5302693084782479845,
+    1617548286517483961,
+    4208178206509690764,
+    565833792920490814,
+    2908833012521676614,
+    7672014716074519932,
+    4310914687606728539,
+    5114236384438594473,
+    3978255541157907998,
+    6405946437436078414,
+    770722958530932129,
+    5148728335646477753,
+    7342121347312219953,
+    1820129377369424454,
+    8784542138117271665,
+    2944804510895855450,
+    4662795033366525029,
+    7603918438646124340,
+    4401934997374644959,
+    6073847328098762701,
+    8450480503543759675,
+    3698584193504256252,
+    5779022500264630533,
+    2402828750841003783,
+    7277202871170030957
+  ],
+  "known_failures": [],
+  "known_limitations": [
+    "localhost process boundary, not segmented or multi-VM OT networking",
+    "one intended trusted loopback controller; socket session ownership is not enforced",
+    "PyModbus virtual device, not OpenPLC or a physical PLC",
+    "steady-state balanced AC power flow, not transient or subcycle behavior",
+    "deterministic conformance conditions; seeds vary sessions and identifiers, not physics",
+    "single host and one macOS/Python environment",
+    "no field data, hardware I/O, independent replication, or external validation",
+    "wall-clock latency is host-specific and excluded from the deterministic outcome hash"
+  ],
+  "master_seed": 20260824,
+  "master_seed_count": 30,
+  "master_seeds": [
+    2931818375549313636,
+    322325654771938865,
+    899615064027653890,
+    6935105556177478217,
+    4460861244597533694,
+    5302693084782479845,
+    1617548286517483961,
+    4208178206509690764,
+    565833792920490814,
+    2908833012521676614,
+    7672014716074519932,
+    4310914687606728539,
+    5114236384438594473,
+    3978255541157907998,
+    6405946437436078414,
+    770722958530932129,
+    5148728335646477753,
+    7342121347312219953,
+    1820129377369424454,
+    8784542138117271665,
+    2944804510895855450,
+    4662795033366525029,
+    7603918438646124340,
+    4401934997374644959,
+    6073847328098762701,
+    8450480503543759675,
+    3698584193504256252,
+    5779022500264630533,
+    2402828750841003783,
+    7277202871170030957
+  ],
+  "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+  "outcome_projection_version": "m3-outcome-projection-v1",
+  "raw_data_location": ".",
+  "scenario_version": "m3-scenarios-v1",
+  "schema_sha256": {
+    "schemas/m3-candidate-assessment.schema.json": "014cfb79028818042637703849fb77e336e65a4d79fdc37e40f27308e98346fb",
+    "schemas/m3-closed-loop-result.schema.json": "b7850be680580fd61ced08551ccfbde293f8080add961fa20a8d21c398a48ef0",
+    "schemas/m3-command-acknowledgment.schema.json": "879a744a5ea804d3301279a6eabcbaa79206e5b8bc962cc71958c0b15d8d7ba9",
+    "schemas/m3-execution-permit.schema.json": "b0c5b9afa8898715092c2a5ed49bd4a8a910691cfcb5b6571a19f806d311ba92",
+    "schemas/m3-modbus-wire-request.schema.json": "1f73406492535b80f57b866f5ee34f1f13b12c9d61febca7f69d1ae33344b30b",
+    "schemas/m3-modbus-wire-response.schema.json": "a8880c8f284b7947edb357e6fb3803b75756636fbc1b44739072d3568f272c41",
+    "schemas/m3-physical-command.schema.json": "0cc77f47c94e14fc83094ae3caac448d893d37dbf9a1a915f23cb5b61045ceea",
+    "schemas/m3-physical-state.schema.json": "635a1afbf2975209bbee71f679e3db6669a0a0a3325a7fed850772c59a66db1a"
+  },
+  "session_count": 30,
+  "source_sha256": {
+    "src/aegis_ot/__init__.py": "62d99d1f49bdb517c765702367290223df99021334bce21b641e1fb3279152f3",
+    "src/aegis_ot/__main__.py": "c1c0ab2f83e31b9d6be7054aa8985ca093d32df1d6d3035b0f7d43ad43743162",
+    "src/aegis_ot/api.py": "eb9f84ddee2470f61c77beafd0e5318f252bdcaeb32d0515d5c46eefdfda32a5",
+    "src/aegis_ot/cli.py": "a874a3c814a867dac98d6697c9c4a971e6a54323f2ef27a00e7522ba96f3ee22",
+    "src/aegis_ot/crypto.py": "d46dad45f77078c07ebaa929ef2c81025e3c6f05ab485a4a4f1c6c1e000e47c3",
+    "src/aegis_ot/delegation.py": "cec7dd50c66c6144360f30493330c62f8fdcc4af65c96e91e82bdc41738dc22e",
+    "src/aegis_ot/evidence.py": "a64857e10fff0d7700164165cc037d33eef32ce1acc079cc4204787c83e87b1a",
+    "src/aegis_ot/experiment.py": "6d12e13811fbbe4bacf7fac271062235b97f704a23cc1df5bae5b31a5ec5bd31",
+    "src/aegis_ot/factory.py": "f6717a4103eca3228ab6bfebdd9b54ec5c1f294001ad2634297c9404809f9a69",
+    "src/aegis_ot/gateway.py": "edc889b14faa6b9a168832b72e09740931bc60d8588d85e6a65e831514b6cc5c",
+    "src/aegis_ot/identity.py": "04d9325114fe360e521a74e7b8aa74387551006dbb29368d222f2c23490026b6",
+    "src/aegis_ot/lab.py": "0cc1a51a784136d4b9646bfbd6e228725ab292258a35a3e954ac5a2dddc3fa35",
+    "src/aegis_ot/m3_experiment.py": "ae766d69b6bfb216e891764c75975b91690895b6870b5d5ec016d67f133956b0",
+    "src/aegis_ot/modbus_device.py": "0ab2a5d57d743b8c2232bbb4624e82c0ba77aaa4ba7aa6e234b0b60071b4250c",
+    "src/aegis_ot/modbus_wire.py": "6734ebace478abbc9aaed7547fd9776e852ce32112c18d320bc1b2600c0fc887",
+    "src/aegis_ot/models.py": "1d1f4a49ffadef63baf4fd12a2b0d41985847fffcdb686c1361d467b8ac64904",
+    "src/aegis_ot/oracle.py": "d88840170954ffe6f6f787a5c4f5fbbd6d5aa8409889559a31d609bc35f6f547",
+    "src/aegis_ot/pandapower_plant.py": "0ea42802ba9ffbdc83ee8b9473506c55d8d93c4364d393f38a797b0df58ed0ca",
+    "src/aegis_ot/physical_control.py": "76e4a45d3cc9038e5b08a2126501c9d3f57a956fd58fd192915e720ca963babd",
+    "src/aegis_ot/physical_factory.py": "ba73aa85424193534abbcf86094ab676c49ee4adbd8ab9631ed823821188121f",
+    "src/aegis_ot/physical_modbus_factory.py": "640366a19c8882133767919df42e38edf8480a609015a5a7005d4d9b6fe6874d",
+    "src/aegis_ot/physical_models.py": "dccb5d5519259e78e4e2ccc7d48264cdc35710ec4086532a84506b0f0fe148d0",
+    "src/aegis_ot/policy.py": "d2f197038ba4a8463c671d23ae89f23952f954bd168628de9c02c1979295c684",
+    "src/aegis_ot/replay.py": "3c59820d12adacf19618b6a0ac63b45b0babef877251e820bf61eeb38825f808",
+    "src/aegis_ot/safety.py": "a6f0ea0ef22a41f9fed9ca70af93197f14bb31c1b10629aa533809ae98747157",
+    "src/aegis_ot/schema.py": "f9e576f828a12b0edc6de5cf84581e0945caf24db6c5c1b8e62b304c44b7a10c"
+  },
+  "started_at_utc": "2026-08-24T18:35:11.767906+00:00",
+  "summary": {
+    "by_condition": {
+      "nominal_permitted_execution": {
+        "acknowledgment_verified": 30,
+        "device_applied": 30,
+        "device_applied_rate_ci95": {
+          "denominator": 30,
+          "estimate": 1.0,
+          "lower": 0.8864866068260312,
+          "upper": 1.0
+        },
+        "latency": {
+          "candidate_simulation_ms": {
+            "count": 30,
+            "maximum_ms": 49.90575,
+            "mean_ms": 46.87940283333333,
+            "mean_normal_ci95_ms": {
+              "lower": 46.614034501239075,
+              "upper": 47.144771165427585
+            },
+            "median_ms": 46.8320205,
+            "minimum_ms": 45.497292,
+            "p50_ms": 46.8320205,
+            "p95_ms": 47.8121837,
+            "p99_ms": 49.330305609999996,
+            "population_stddev_ms": 0.7291216645786018,
+            "sample_stddev_ms": 0.7415861856750062
+          },
+          "end_to_end_ms": {
+            "count": 30,
+            "maximum_ms": 184.416541,
+            "mean_ms": 180.55116113333332,
+            "mean_normal_ci95_ms": {
+              "lower": 179.9072323652799,
+              "upper": 181.19508990138675
+            },
+            "median_ms": 180.11754200000001,
+            "minimum_ms": 177.116417,
+            "p50_ms": 180.11754200000001,
+            "p95_ms": 183.92454185,
+            "p99_ms": 184.34911629,
+            "population_stddev_ms": 1.7692480919931433,
+            "sample_stddev_ms": 1.799493840046957
+          },
+          "gateway_decision_ms": {
+            "count": 30,
+            "maximum_ms": 0.601541,
+            "mean_ms": 0.5543248666666667,
+            "mean_normal_ci95_ms": {
+              "lower": 0.5473228740225758,
+              "upper": 0.5613268593107575
+            },
+            "median_ms": 0.549437,
+            "minimum_ms": 0.529416,
+            "p50_ms": 0.549437,
+            "p95_ms": 0.58767065,
+            "p99_ms": 0.59818193,
+            "population_stddev_ms": 0.019238559822629366,
+            "sample_stddev_ms": 0.019567447916925936
+          },
+          "modbus_execute_ms": {
+            "count": 30,
+            "maximum_ms": 110.298083,
+            "mean_ms": 107.65529856666667,
+            "mean_normal_ci95_ms": {
+              "lower": 107.24724371084389,
+              "upper": 108.06335342248946
+            },
+            "median_ms": 107.5343545,
+            "minimum_ms": 104.418083,
+            "p50_ms": 107.5343545,
+            "p95_ms": 109.55798735,
+            "p99_ms": 110.14954268000001,
+            "population_stddev_ms": 1.1211648103181122,
+            "sample_stddev_ms": 1.1403314091309908
+          },
+          "permit_issuance_ms": {
+            "count": 30,
+            "maximum_ms": 1.115292,
+            "mean_ms": 0.8484138333333333,
+            "mean_normal_ci95_ms": {
+              "lower": 0.8215466476266919,
+              "upper": 0.8752810190399747
+            },
+            "median_ms": 0.8258955,
+            "minimum_ms": 0.798,
+            "p50_ms": 0.8258955,
+            "p95_ms": 1.0376062499999996,
+            "p99_ms": 1.10592732,
+            "population_stddev_ms": 0.07381983754569107,
+            "sample_stddev_ms": 0.0750818065244255
+          },
+          "state_read_ms_1": {
+            "count": 30,
+            "maximum_ms": 14.495167,
+            "mean_ms": 13.3347445,
+            "mean_normal_ci95_ms": {
+              "lower": 13.133497479136974,
+              "upper": 13.535991520863025
+            },
+            "median_ms": 13.2264165,
+            "minimum_ms": 12.627,
+            "p50_ms": 13.2264165,
+            "p95_ms": 14.30171465,
+            "p99_ms": 14.45186043,
+            "population_stddev_ms": 0.5529430044841118,
+            "sample_stddev_ms": 0.5623957063846715
+          },
+          "state_read_ms_2": {
+            "count": 30,
+            "maximum_ms": 11.9265,
+            "mean_ms": 10.586875033333333,
+            "mean_normal_ci95_ms": {
+              "lower": 10.416760057397905,
+              "upper": 10.756990009268762
+            },
+            "median_ms": 10.4901045,
+            "minimum_ms": 9.884916,
+            "p50_ms": 10.4901045,
+            "p95_ms": 11.5403686,
+            "p99_ms": 11.81814875,
+            "population_stddev_ms": 0.4674051098898031,
+            "sample_stddev_ms": 0.47539551963322463
+          }
+        },
+        "state_effect_rate_ci95": {
+          "denominator": 30,
+          "estimate": 1.0,
+          "lower": 0.8864866068260312,
+          "upper": 1.0
+        },
+        "state_effects": 30,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      "permit_replay": {
+        "acknowledgment_verified": 30,
+        "device_applied": 0,
+        "device_applied_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "latency": {
+          "modbus_execute_ms": {
+            "count": 30,
+            "maximum_ms": 27.999,
+            "mean_ms": 24.919008233333333,
+            "mean_normal_ci95_ms": {
+              "lower": 24.5583319410623,
+              "upper": 25.279684525604367
+            },
+            "median_ms": 24.7617295,
+            "minimum_ms": 23.246416,
+            "p50_ms": 24.7617295,
+            "p95_ms": 26.9409958,
+            "p99_ms": 27.76329032,
+            "population_stddev_ms": 0.9909882483690268,
+            "sample_stddev_ms": 1.0079294456042283
+          },
+          "readback_ms": {
+            "count": 30,
+            "maximum_ms": 11.183917,
+            "mean_ms": 10.262534733333334,
+            "mean_normal_ci95_ms": {
+              "lower": 10.144746545597116,
+              "upper": 10.380322921069553
+            },
+            "median_ms": 10.2056875,
+            "minimum_ms": 9.768458,
+            "p50_ms": 10.2056875,
+            "p95_ms": 10.8443337,
+            "p99_ms": 11.09370293,
+            "population_stddev_ms": 0.3236328872859835,
+            "sample_stddev_ms": 0.3291654741600792
+          }
+        },
+        "state_effect_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "state_effects": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      "stale_state": {
+        "acknowledgment_verified": 30,
+        "device_applied": 0,
+        "device_applied_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "count": 30,
+            "maximum_ms": 15.686458,
+            "mean_ms": 14.247423633333334,
+            "mean_normal_ci95_ms": {
+              "lower": 14.031811994052322,
+              "upper": 14.463035272614345
+            },
+            "median_ms": 14.1192295,
+            "minimum_ms": 13.388167,
+            "p50_ms": 14.1192295,
+            "p95_ms": 15.2489276,
+            "p99_ms": 15.57944829,
+            "population_stddev_ms": 0.5924109937852539,
+            "sample_stddev_ms": 0.602538411044273
+          },
+          "gateway_decision_ms": {
+            "count": 30,
+            "maximum_ms": 0.58775,
+            "mean_ms": 0.5503110333333333,
+            "mean_normal_ci95_ms": {
+              "lower": 0.5429951420297422,
+              "upper": 0.5576269246369244
+            },
+            "median_ms": 0.54675,
+            "minimum_ms": 0.522542,
+            "p50_ms": 0.54675,
+            "p95_ms": 0.58464375,
+            "p99_ms": 0.58706125,
+            "population_stddev_ms": 0.02010102261657905,
+            "sample_stddev_ms": 0.020444654732638113
+          },
+          "state_read_ms": {
+            "count": 30,
+            "maximum_ms": 14.959167,
+            "mean_ms": 13.540426433333334,
+            "mean_normal_ci95_ms": {
+              "lower": 13.33058653894687,
+              "upper": 13.750266327719798
+            },
+            "median_ms": 13.439875,
+            "minimum_ms": 12.673042,
+            "p50_ms": 13.439875,
+            "p95_ms": 14.51470625,
+            "p99_ms": 14.852833570000001,
+            "population_stddev_ms": 0.5765526424445955,
+            "sample_stddev_ms": 0.5864089571367281
+          }
+        },
+        "state_effect_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "state_effects": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      "unknown_identity": {
+        "acknowledgment_verified": 30,
+        "device_applied": 0,
+        "device_applied_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "count": 30,
+            "maximum_ms": 15.71075,
+            "mean_ms": 14.3418695,
+            "mean_normal_ci95_ms": {
+              "lower": 14.17095331816815,
+              "upper": 14.512785681831849
+            },
+            "median_ms": 14.2927915,
+            "minimum_ms": 13.558,
+            "p50_ms": 14.2927915,
+            "p95_ms": 15.058774849999999,
+            "p99_ms": 15.535988750000001,
+            "population_stddev_ms": 0.4696064900328607,
+            "sample_stddev_ms": 0.47763453293212904
+          },
+          "gateway_decision_ms": {
+            "count": 30,
+            "maximum_ms": 0.781958,
+            "mean_ms": 0.6524319,
+            "mean_normal_ci95_ms": {
+              "lower": 0.6395420732662997,
+              "upper": 0.6653217267337002
+            },
+            "median_ms": 0.6403745,
+            "minimum_ms": 0.621208,
+            "p50_ms": 0.6403745,
+            "p95_ms": 0.7173333999999999,
+            "p99_ms": 0.7660445400000001,
+            "population_stddev_ms": 0.03541587592624717,
+            "sample_stddev_ms": 0.036021319371526604
+          },
+          "state_read_ms": {
+            "count": 30,
+            "maximum_ms": 14.817125,
+            "mean_ms": 13.499283266666666,
+            "mean_normal_ci95_ms": {
+              "lower": 13.33584272049056,
+              "upper": 13.662723812842772
+            },
+            "median_ms": 13.4374585,
+            "minimum_ms": 12.717791,
+            "p50_ms": 13.4374585,
+            "p95_ms": 14.17994345,
+            "p99_ms": 14.656936250000001,
+            "population_stddev_ms": 0.4490665564617294,
+            "sample_stddev_ms": 0.45674346395005905
+          }
+        },
+        "state_effect_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "state_effects": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      },
+      "wrong_audience_permit": {
+        "acknowledgment_verified": 30,
+        "device_applied": 0,
+        "device_applied_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "latency": {
+          "candidate_simulation_ms": {
+            "count": 30,
+            "maximum_ms": 55.220917,
+            "mean_ms": 47.69998616666667,
+            "mean_normal_ci95_ms": {
+              "lower": 47.10085880257366,
+              "upper": 48.299113530759676
+            },
+            "median_ms": 47.2702915,
+            "minimum_ms": 46.264375,
+            "p50_ms": 47.2702915,
+            "p95_ms": 49.9321522,
+            "p99_ms": 53.86140889000001,
+            "population_stddev_ms": 1.6461524913490058,
+            "sample_stddev_ms": 1.6742938886673489
+          },
+          "command_translation_ms": {
+            "count": 30,
+            "maximum_ms": 0.032042,
+            "mean_ms": 0.025793066666666666,
+            "mean_normal_ci95_ms": {
+              "lower": 0.02461611888781156,
+              "upper": 0.026970014445521773
+            },
+            "median_ms": 0.0254995,
+            "minimum_ms": 0.020708,
+            "p50_ms": 0.0254995,
+            "p95_ms": 0.03169985,
+            "p99_ms": 0.03202982,
+            "population_stddev_ms": 0.00323376235916549,
+            "sample_stddev_ms": 0.0032890443526992744
+          },
+          "gateway_decision_ms": {
+            "count": 30,
+            "maximum_ms": 0.629084,
+            "mean_ms": 0.5490888666666667,
+            "mean_normal_ci95_ms": {
+              "lower": 0.5388613447720508,
+              "upper": 0.5593163885612825
+            },
+            "median_ms": 0.535021,
+            "minimum_ms": 0.519042,
+            "p50_ms": 0.535021,
+            "p95_ms": 0.6056248499999999,
+            "p99_ms": 0.62608714,
+            "population_stddev_ms": 0.028100970939018373,
+            "sample_stddev_ms": 0.028581364215086058
+          },
+          "modbus_execute_ms": {
+            "count": 30,
+            "maximum_ms": 35.638416,
+            "mean_ms": 31.888533433333333,
+            "mean_normal_ci95_ms": {
+              "lower": 31.488224966755453,
+              "upper": 32.28884189991121
+            },
+            "median_ms": 31.543,
+            "minimum_ms": 29.631041,
+            "p50_ms": 31.543,
+            "p95_ms": 33.7068401,
+            "p99_ms": 35.08844347,
+            "population_stddev_ms": 1.0998809586386664,
+            "sample_stddev_ms": 1.1186837045705247
+          },
+          "permit_issuance_ms": {
+            "count": 30,
+            "maximum_ms": 0.944041,
+            "mean_ms": 0.7407416333333333,
+            "mean_normal_ci95_ms": {
+              "lower": 0.7205848989616863,
+              "upper": 0.7608983677049803
+            },
+            "median_ms": 0.7196875,
+            "minimum_ms": 0.675208,
+            "p50_ms": 0.7196875,
+            "p95_ms": 0.8273622,
+            "p99_ms": 0.9102803600000001,
+            "population_stddev_ms": 0.05538231182876795,
+            "sample_stddev_ms": 0.056329086595851965
+          },
+          "readback_ms": {
+            "count": 30,
+            "maximum_ms": 15.354917,
+            "mean_ms": 13.686493,
+            "mean_normal_ci95_ms": {
+              "lower": 13.463627925470055,
+              "upper": 13.909358074529946
+            },
+            "median_ms": 13.551729,
+            "minimum_ms": 12.741416,
+            "p50_ms": 13.551729,
+            "p95_ms": 14.9639186,
+            "p99_ms": 15.308577320000001,
+            "population_stddev_ms": 0.6123404131733157,
+            "sample_stddev_ms": 0.6228085289473696
+          }
+        },
+        "state_effect_rate_ci95": {
+          "denominator": 30,
+          "estimate": 0.0,
+          "lower": 0.0,
+          "upper": 0.11351339317396876
+        },
+        "state_effects": 0,
+        "trace_complete": 30,
+        "trials": 30,
+        "unknown_effects": 0
+      }
+    },
+    "condition_count": 5,
+    "denied_command_effect_rate_ci95": {
+      "denominator": 120,
+      "estimate": 0.0,
+      "lower": 0.0,
+      "upper": 0.031019166418703486
+    },
+    "duplicate_replay_effect_rate_ci95": {
+      "denominator": 30,
+      "estimate": 0.0,
+      "lower": 0.0,
+      "upper": 0.11351339317396876
+    },
+    "evidence_trace_completeness_rate_ci95": {
+      "denominator": 150,
+      "estimate": 1.0,
+      "lower": 0.9750297556319235,
+      "upper": 1.0
+    },
+    "experiment_version": "m3-physical-modbus-v1",
+    "nominal_closed_loop_completion_rate_ci95": {
+      "denominator": 30,
+      "estimate": 1.0,
+      "lower": 0.8864866068260312,
+      "upper": 1.0
+    },
+    "nominal_post_state": {
+      "maximum_line_loading_pct": {
+        "count": 30,
+        "maximum": 54.60778755493034,
+        "mean": 54.60778755493034,
+        "mean_normal_ci95": {
+          "lower": 54.60778755493034,
+          "upper": 54.60778755493034
+        },
+        "median": 54.60778755493034,
+        "minimum": 54.60778755493034,
+        "p50": 54.60778755493034,
+        "p95": 54.60778755493034,
+        "p99": 54.60778755493034,
+        "population_stddev": 0.0,
+        "sample_stddev": 0.0
+      },
+      "minimum_voltage_pu": {
+        "count": 30,
+        "maximum": 0.9528655131773979,
+        "mean": 0.9528655131773979,
+        "mean_normal_ci95": {
+          "lower": 0.9528655131773979,
+          "upper": 0.9528655131773979
+        },
+        "median": 0.9528655131773979,
+        "minimum": 0.9528655131773979,
+        "p50": 0.9528655131773979,
+        "p95": 0.9528655131773979,
+        "p99": 0.9528655131773979,
+        "population_stddev": 0.0,
+        "sample_stddev": 0.0
+      },
+      "priority_load_served_pct": {
+        "count": 30,
+        "maximum": 100.0,
+        "mean": 100.0,
+        "mean_normal_ci95": {
+          "lower": 100.0,
+          "upper": 100.0
+        },
+        "median": 100.0,
+        "minimum": 100.0,
+        "p50": 100.0,
+        "p95": 100.0,
+        "p99": 100.0,
+        "population_stddev": 0.0,
+        "sample_stddev": 0.0
+      },
+      "thermal_violation_count": 0,
+      "unsafe_state_count": 0,
+      "voltage_violation_count": 0
+    },
+    "session_count": 30,
+    "stale_state_execution_rate_ci95": {
+      "denominator": 30,
+      "estimate": 0.0,
+      "lower": 0.0,
+      "upper": 0.11351339317396876
+    },
+    "statistical_note": "Two-sided 95 percent Wilson intervals are reported for observed proportions. Continuous summaries include descriptive distributions and two-sided 95 percent normal-approximation intervals for the sample mean. Zero observations do not establish an impossible event.",
+    "trial_record_count": 150,
+    "unauthorized_device_acceptance_rate_ci95": {
+      "denominator": 120,
+      "estimate": 0.0,
+      "lower": 0.0,
+      "upper": 0.031019166418703486
+    },
+    "unknown_effect_rate_ci95": {
+      "denominator": 150,
+      "estimate": 0.0,
+      "lower": 0.0,
+      "upper": 0.0249702443680766
+    }
+  },
+  "trial_record_count": 150
+}

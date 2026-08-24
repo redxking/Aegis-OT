@@ -31,3 +31,15 @@ All notable changes are recorded here. Dates describe actual repository activity
   strict JSON, event-chain and exact payload correlation, state digests, registered
   fixtures, replay relationships, permit and acknowledgment signatures, summaries,
   deterministic outcomes, and current-checkout bindings.
+- Retained the clean-checkout 30-session M3 controlled package and a separate
+  local outcome reproduction under matching recorded conditions: 150 trials and
+  270 chained events per package, all
+  verifier checks passing, with matching deterministic outcome SHA-256
+  `150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005`.
+- Added the evidence-derived M3 conformance and host-latency figure, including
+  explicit fixed-condition, single-host, and non-field-validation boundaries.
+
+### Fixed
+
+- Made M3 figure generation handle gateway-denial and device-rejection records
+  that intentionally do not carry a full `end_to_end_ms` field.

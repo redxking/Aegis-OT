@@ -1,6 +1,6 @@
 # ADR 0003: Steady-State Plant Behind a Signed Local Modbus Process Boundary
 
-- Status: Accepted for the bounded M3 implementation; controlled evaluation pending
+- Status: Accepted; bounded controlled evaluation completed and locally reproduced
 - Date: 2026-08-24
 - Decision authority: Angelis Pseftis
 
@@ -257,6 +257,22 @@ pandapower model, adapter, solver options, and process as the authoritative appl
 It reduces time-of-check/time-of-use drift; it does not provide independent physics or
 model-form validation. This interpretation is rejected.
 
+## Evaluation record
+
+The operator record identifies clean commit
+`168b8bd61a13f70e0871d36e56acbe76a8ebb659` for the preregistered 30-session
+evaluation and a separate local reproduction executed on 2026-08-24. The unsigned
+manifests record matching source and lock-file hashes, host metadata, Python version,
+and selected component versions. From the matching clean checkout, both retained
+packages pass the offline internal-consistency verifier and reproduce deterministic outcome hash
+`150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005`.
+The exact results, intervals, package identifiers, acknowledgment-count convention,
+and prohibited interpretations are recorded in the
+[M3 experiment method](../experiments/m3-method.md). This closes the bounded local
+evaluation action for this decision. It does not close WP4 or validate HELICS,
+OpenPLC, segmented networking, physical devices, field behavior, or operational
+effectiveness.
+
 ## Consequences
 
 The design provides an auditable, boot-bound, one-time authorization transaction and a
@@ -281,9 +297,10 @@ The following limitations remain design constraints, not completed capabilities:
 
 ## Required follow-on work
 
-- Complete the preregistered M3 controlled run only from a recorded source and
-  dependency state, and report failures rather than replacing them with successful
-  reruns.
+- Preserve both retained packages without overwriting them and obtain an independently
+  operated reproduction before making an independent-replication claim.
+- Add an external trust anchor and documented custody process before asserting package
+  origin or historical integrity.
 - Add explicit recovery and reconciliation semantics for post-commit unknown effects.
 - Add fault injection at each pre-commit and post-commit transport stage.
 - Introduce durable replay and key lifecycle controls before any persistent or

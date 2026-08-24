@@ -25,6 +25,32 @@ M3_CONDITIONS = (
     "nominal_permitted_execution",
     "permit_replay",
 )
+M3_LATENCY_KEYS = {
+    "unknown_identity": frozenset({"end_to_end_ms", "gateway_decision_ms", "state_read_ms"}),
+    "stale_state": frozenset({"end_to_end_ms", "gateway_decision_ms", "state_read_ms"}),
+    "wrong_audience_permit": frozenset(
+        {
+            "candidate_simulation_ms",
+            "command_translation_ms",
+            "gateway_decision_ms",
+            "modbus_execute_ms",
+            "permit_issuance_ms",
+            "readback_ms",
+        }
+    ),
+    "nominal_permitted_execution": frozenset(
+        {
+            "candidate_simulation_ms",
+            "end_to_end_ms",
+            "gateway_decision_ms",
+            "modbus_execute_ms",
+            "permit_issuance_ms",
+            "state_read_ms_1",
+            "state_read_ms_2",
+        }
+    ),
+    "permit_replay": frozenset({"modbus_execute_ms", "readback_ms"}),
+}
 
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -172,6 +198,24 @@ def percentile(values: list[float], quantile: float) -> float:
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
 
 
+def measured_path_latency_ms(item: dict[str, object]) -> float:
+    condition = item.get("condition")
+    latency = item.get("latency_ms")
+    if not isinstance(condition, str) or condition not in M3_LATENCY_KEYS:
+        raise ValueError("trial condition is not registered for the M3 figure")
+    if not isinstance(latency, dict) or set(latency) != M3_LATENCY_KEYS[condition]:
+        raise ValueError(f"trial latency_ms keys do not match the registered {condition} stages")
+    values = list(latency.values())
+    if any(isinstance(value, bool) or not isinstance(value, int | float) for value in values):
+        raise TypeError("trial latency_ms values must be numeric and not boolean")
+    numeric = [float(value) for value in values]
+    if not all(math.isfinite(value) and value >= 0.0 for value in numeric):
+        raise ValueError("trial latency_ms values must be finite and nonnegative")
+    if "end_to_end_ms" in latency:
+        return float(latency["end_to_end_ms"])
+    return sum(numeric)
+
+
 def m3_physical_results() -> None:
     trials_path = ROOT / "results" / "m3-physical-modbus" / "trials.jsonl"
     if not trials_path.is_file():
@@ -222,9 +266,10 @@ def m3_physical_results() -> None:
     chart_top = 800
     chart_left = 540
     chart_right = 1970
-    draw.text((80, 720), "End-to-end latency distribution by condition", font=font(30, True), fill=INK)
+    draw.text((80, 720), "Measured path latency distribution by condition", font=font(30, True), fill=INK)
+
     latencies = {
-        condition: [float(item["latency_ms"]["end_to_end_ms"]) for item in subset]
+        condition: [measured_path_latency_ms(item) for item in subset]
         for condition, subset in by_condition.items()
     }
     maximum = max(value for values in latencies.values() for value in values)
@@ -255,6 +300,7 @@ def m3_physical_results() -> None:
         draw.line((x_position(middle), y - 25, x_position(middle), y + 25), fill=INK, width=4)
         for value in values:
             draw.ellipse((x_position(value) - 4, y - 4, x_position(value) + 4, y + 4), fill=GOLD)
+    draw.text((80, 1370), "Where no end-to-end field exists, path latency is the sum of the recorded sequential stages.", font=font(21), fill=INK)
     draw.text((80, 1410), "Latency is a single-host process measurement and is excluded from the deterministic outcome hash.", font=font(21), fill=RED)
     draw.text((80, 1450), "The figure is conformance evidence for the retained fixtures, not field validation or an OT performance bound.", font=font(21), fill=RED)
     image.save(ASSETS / "m3_physical_results.png", dpi=(220, 220))

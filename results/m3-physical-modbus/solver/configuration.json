@@ -1,0 +1,27 @@
+{
+  "limits": {
+    "maximum_line_loading_pct": 100.0,
+    "maximum_voltage_pu": 1.1,
+    "minimum_priority_load_served_pct": 80.0,
+    "minimum_total_load_served_pct": 90.0,
+    "minimum_voltage_pu": 0.9
+  },
+  "not_modeled": [
+    "electromagnetic transients",
+    "subcycle protection",
+    "relay timing",
+    "field equipment dynamics",
+    "hardware I/O"
+  ],
+  "numeric_interpretation": "balanced steady-state AC Newton-Raphson power flow",
+  "power_flow": {
+    "algorithm": "nr",
+    "calculate_voltage_angles": true,
+    "init": "auto",
+    "max_iteration": 20,
+    "numba": false,
+    "tolerance_mva": 1e-08
+  },
+  "simulator": "pandapower-3.5.4",
+  "step_seconds": 1.0
+}

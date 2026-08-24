@@ -85,8 +85,8 @@ The current local M3 implementation has 264 passing tests and 91.57 percent
 branch-aware coverage. Ruff, strict mypy, schema-drift, bounded formal-model,
 and Compose-configuration checks are also clean locally. These are local
 implementation-verification results; they are not an observed remote CI run,
-independent replication, physical validation, or the pending controlled M3
-experiment.
+independent replication, physical validation, or operational validation. The
+retained controlled M3 experiment described below is a separate evidence set.
 
 Run the same local verification path with:
 
@@ -150,22 +150,71 @@ The controlled experiment starts one fresh child process per master seed and
 runs five fixed conformance conditions: unknown identity, stale state, wrong
 permit audience, nominal permitted execution, and permit replay. The seeds vary
 session identifiers and process instances, not the deterministic power-flow
-physics. The intended 30-session run, which will produce 150 trial records, is
-still pending. Run it only from a clean committed implementation into a new
-result directory:
+physics.
 
-```bash
-.venv/bin/aegis-ot physical-experiment \
-  --seed-count 30 \
-  --seed 20260824 \
-  --output-dir results/m3-physical-modbus
+The primary controlled run executed on 2026-08-24 from clean commit
+`168b8bd61a13f70e0871d36e56acbe76a8ebb659`. It retained 30 sessions, 150
+trial records, and 270 chained evidence events in
+`results/m3-physical-modbus`. A second run retained in
+`results/m3-physical-modbus-reproduction` records the same commit and lock-file
+hash, host metadata, Python version, and selected component versions. Both
+packages pass the offline verifier from the matching clean checkout and have the
+same timing-independent deterministic outcome hash:
+
+```text
+150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005
 ```
 
-The resulting package includes the manifest, raw trial and evidence JSONL,
+The primary-package observations were balanced at 30 per condition. Unknown
+identity and stale state were denied before dispatch; wrong-audience permits
+were rejected by the virtual device; all 30 nominal commands were applied,
+acknowledged, and read back; and all 30 replay attempts were rejected without a
+second modeled effect. Across the 120 non-nominal trials, 0 modeled effects and
+0 unauthorized device applications were observed under the registered
+end-to-end metric (two-sided 95 percent Wilson upper bound, 3.102 percent). That
+denominator includes 60 gateway-denied trials that never reached the device; it
+is not a device-dispatch-conditional acceptance rate. Nominal closed-loop
+completion was 30/30 (Wilson lower bound, 88.649 percent). Unknown effects were
+0/150, but the runner fails the controlled run if any unknown effect occurs, so
+this is a conformance-completeness check rather than an ambiguity-rate estimate.
+The registered narrow trace indicator--proposal, decision, and nonempty terminal
+evidence hash--was complete for 150/150 trials (Wilson lower bound, 97.503
+percent); the stronger package checks are reported separately by the offline
+verifier. Exactly 90 primary-package trials contain signed device
+acknowledgments; the 60 gateway no-dispatch trials use the registered
+verified/not-applicable convention because no device acknowledgment should
+exist.
+
+For the deterministic nominal fixture, the post-action minimum voltage was
+0.9528655132 per unit, maximum line loading was 54.60778755 percent, and the
+synthetic priority-load subset remained 100 percent served with no registered
+voltage, thermal, or supervisory unsafe-state flags. These identical physical
+values across sessions reflect repeated execution of one fixed model and
+operating point, not a distribution of grid conditions. The controlled nominal
+host-latency mean was 180.551 ms; host latency is excluded from the outcome
+hash and is not an OT performance bound.
+
+![M3 results table showing thirty trials per condition, thirty nominal modeled effects, no non-nominal effects, and single-host path-latency distributions](assets/m3_physical_results.png)
+
+Verify the retained packages without opening a device socket from a clean
+checkout whose source, schema, project, and lock hashes match the manifest. A
+modified checkout will intentionally fail `checkout_bindings`:
+
+```bash
+.venv/bin/aegis-ot verify-physical-evidence \
+  --output-dir results/m3-physical-modbus
+.venv/bin/aegis-ot verify-physical-evidence \
+  --output-dir results/m3-physical-modbus-reproduction
+```
+
+Each retained package includes the manifest, raw trial and evidence JSONL,
 scenario and summary files, per-session component health, evidence verification,
 benchmark provenance, solver configuration, artifact hashes, and a
-timing-independent deterministic outcome hash. Until that controlled run is
-completed and retained, no M3 empirical result should be reported.
+timing-independent deterministic outcome hash. The verifier establishes
+package/current-checkout internal consistency only: the manifest is unsigned,
+and the verification keys are retained in `component-health.json` inside the
+unsigned package. The second run is a local reproduction under matching recorded
+conditions, not independent replication.
 
 M3 remains bounded to localhost, a PyModbus virtual device, and steady-state
 simulation. It does not model electromagnetic transients, subcycle protection,

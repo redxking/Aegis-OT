@@ -1,0 +1,39 @@
+{
+  "catalog_version": "m3-scenarios-v1",
+  "conditions": [
+    {
+      "expected": "gateway denial and no Modbus execute request or state effect",
+      "injection": "actor is absent from the configured identity allowlist",
+      "name": "unknown_identity"
+    },
+    {
+      "expected": "gateway denial at the configured 5-second freshness boundary",
+      "injection": "trusted controller clock is advanced to state age 6 seconds",
+      "name": "stale_state"
+    },
+    {
+      "expected": "signed device rejection and unchanged actuator and plant state",
+      "injection": "a valid permit artifact is changed to a nonmatching device audience",
+      "name": "wrong_audience_permit"
+    },
+    {
+      "expected": "one accepted line-isolation command, acknowledgment, and readback",
+      "injection": "none",
+      "name": "nominal_permitted_execution"
+    },
+    {
+      "expected": "signed replay rejection and no second physical effect",
+      "injection": "the previously applied permit is submitted a second time",
+      "name": "permit_replay"
+    }
+  ],
+  "execution_order": [
+    "unknown_identity",
+    "stale_state",
+    "wrong_audience_permit",
+    "nominal_permitted_execution",
+    "permit_replay"
+  ],
+  "seed_role": "Seeds create independent identifiers and process sessions; the packaged physical model and these conformance conditions are deterministic.",
+  "sessions": "one fresh virtual-device process per master seed"
+}
