@@ -1,0 +1,17 @@
+{
+  "document_id": "AEGIS-OT-STUDY-001",
+  "canonical_path": "research/Aegis-OT_Research_Study.docx",
+  "author": "Angelis Pseftis",
+  "editor": "Angelis Pseftis",
+  "created_at_utc": "2026-08-24T14:39:38Z",
+  "revisions": [
+    {
+      "revision": "0.1",
+      "timestamp_utc": "2026-08-24T14:39:38Z",
+      "editor": "Angelis Pseftis",
+      "description": "Established the reconstructed research protocol, evidence boundary, requirements, architecture, threat model, formal strategy, experimental method, current implementation evidence, and completion gates.",
+      "git_commit": "pending initial controlled commit",
+      "experiment_manifest": "results/reproduction-v0.1/manifest.json"
+    }
+  ]
+}

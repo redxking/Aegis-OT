@@ -1,0 +1,22 @@
+---
+- name: Establish defensive research host baseline
+  hosts: all
+  become: true
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - python3
+          - python3-venv
+        state: present
+        update_cache: true
+
+    - name: Record environment role
+      ansible.builtin.copy:
+        dest: /etc/aegis-ot-role
+        content: "{{ group_names | join(',') }}\n"
+        owner: root
+        group: root
+        mode: "0644"

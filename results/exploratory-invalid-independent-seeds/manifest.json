@@ -1,0 +1,66 @@
+{
+  "experiment_id": "49ab18dc-15e1-45b4-9c36-c8690afefcaf",
+  "created_at_utc": "2026-08-24T14:34:26.562583+00:00",
+  "git_commit": "unknown",
+  "working_tree_dirty": true,
+  "scenario_version": "synthetic-isolation-v1",
+  "master_seed": 20260824,
+  "trial_count_per_baseline": 200,
+  "baselines": [
+    "B0_DIRECT",
+    "B1_IDENTITY",
+    "B2_STATIC_POLICY",
+    "B3_ASSURED"
+  ],
+  "agent_type": "deterministic-reference",
+  "policy_version": "local-contextual-v1",
+  "safety_kernel_version": "surrogate-safety-v1",
+  "oracle_version": "reference-oracle-v1",
+  "host": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.14.7"
+  },
+  "raw_data": "trials.jsonl",
+  "raw_sha256": "508be3df4d96e3be3624847baf523852c4ad36ac72d5f54a7d74c1a664bf6d07",
+  "known_limitations": [
+    "synthetic scenarios",
+    "deterministic supervisory surrogate",
+    "in-process development trust boundaries",
+    "rule-based oracle is not independent physical validation"
+  ],
+  "analyst": "Angelis Pseftis",
+  "summary": {
+    "B0_DIRECT": {
+      "trials": 200,
+      "unsafe_action_escape_rate": 1.0,
+      "false_block_rate": 0.0,
+      "mission_success_rate": 0.52,
+      "mean_decision_latency_ms": 6.6875e-05,
+      "kernel_oracle_disagreements": 0
+    },
+    "B1_IDENTITY": {
+      "trials": 200,
+      "unsafe_action_escape_rate": 1.0,
+      "false_block_rate": 0.0,
+      "mission_success_rate": 0.465,
+      "mean_decision_latency_ms": 6.6045e-05,
+      "kernel_oracle_disagreements": 0
+    },
+    "B2_STATIC_POLICY": {
+      "trials": 200,
+      "unsafe_action_escape_rate": 1.0,
+      "false_block_rate": 0.0,
+      "mission_success_rate": 0.52,
+      "mean_decision_latency_ms": 0.000166395,
+      "kernel_oracle_disagreements": 0
+    },
+    "B3_ASSURED": {
+      "trials": 200,
+      "unsafe_action_escape_rate": 0.0,
+      "false_block_rate": 0.0,
+      "mission_success_rate": 1.0,
+      "mean_decision_latency_ms": 0.948175585,
+      "kernel_oracle_disagreements": 0
+    }
+  }
+}

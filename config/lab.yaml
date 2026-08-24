@@ -1,0 +1,17 @@
+schema_version: "1.0"
+environment: synthetic-local
+limits:
+  minimum_critical_load_served_pct: 80.0
+  minimum_voltage_pu: 0.95
+  maximum_voltage_pu: 1.05
+  maximum_line_loading_pct: 100.0
+  maximum_simultaneous_isolations: 2
+  minimum_action_confidence: 0.70
+  human_approval_risk_threshold: 75.0
+freshness:
+  maximum_state_age_seconds: 5.0
+replay:
+  nonce_retention_seconds: 3600
+claim_boundary: >-
+  These values are provisional research parameters for a deterministic supervisory
+  surrogate. They are not universal utility criteria or production grid settings.

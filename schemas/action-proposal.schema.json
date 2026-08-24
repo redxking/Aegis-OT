@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/aegis-ot/action-proposal-v1.schema.json",
+  "title": "Aegis-OT ActionProposal v1",
+  "type": "object",
+  "required": [
+    "proposal_id", "actor_id", "mission_id", "resource", "operation",
+    "observed_state_version", "observed_at", "submitted_at", "nonce",
+    "confidence", "risk_score", "delegation_chain"
+  ],
+  "properties": {
+    "proposal_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "mission_id": {"type": "string", "minLength": 1},
+    "resource": {"type": "string", "minLength": 1},
+    "operation": {"enum": ["isolate_asset", "restore_asset", "shed_load", "dispatch_battery"]},
+    "parameters": {"type": "object"},
+    "observed_state_version": {"type": "integer", "minimum": 0},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "submitted_at": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "minLength": 16, "maxLength": 256},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "risk_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "delegation_chain": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "human_approval_id": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

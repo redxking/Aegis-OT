@@ -1,0 +1,18 @@
+services:
+  opa:
+    image: "${OPA_IMAGE:-openpolicyagent/opa:1.19.1-static@sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32}"
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policy"]
+    read_only: true
+    cap_drop: ["ALL"]
+    volumes:
+      - ./policy:/policy:ro
+    ports:
+      - "127.0.0.1:8181:8181"
+
+  gateway:
+    build: .
+    command: ["uvicorn", "aegis_ot.api:app", "--host", "0.0.0.0", "--port", "8080"]
+    read_only: true
+    cap_drop: ["ALL"]
+    ports:
+      - "127.0.0.1:8080:8080"
