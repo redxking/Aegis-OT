@@ -67,7 +67,7 @@ def architecture() -> None:
         draw.rounded_rectangle(box, radius=18, fill=fill, outline=BLUE, width=4)
         centered(draw, box, label, 25, bold=index == 3)
         x += width + 45
-    for left, right in zip(boxes, boxes[1:], strict=True):
+    for left, right in zip(boxes, boxes[1:], strict=False):
         arrow(draw, (left[2] + 5, 490), (right[0] - 8, 490))
 
     gateway = boxes[3]
@@ -120,35 +120,35 @@ def decision_sequence() -> None:
 
 
 def baseline_results() -> None:
-    manifest_path = ROOT / "results" / "reproduction-v0.1" / "manifest.json"
+    manifest_path = ROOT / "results" / "m2-independent-oracle" / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     summary = manifest["summary"]
-    image = Image.new("RGB", (1800, 1100), "white")
+    image = Image.new("RGB", (1800, 1180), "white")
     draw = ImageDraw.Draw(image)
-    draw.text((80, 55), "Preliminary synthetic baseline outcomes", font=font(46, True), fill=INK)
-    draw.text((80, 115), "200 trials per baseline; shared seed set; master seed 20260824", font=font(25), fill=BLUE)
+    draw.text((80, 55), "M2 synthetic authorization and consequence outcomes", font=font(43, True), fill=INK)
+    draw.text((80, 115), "30 master seeds; 1,080 sampled trials per baseline; Wilson intervals in report", font=font(24), fill=BLUE)
     baselines = list(summary)
-    colors = [RED, "#C05621", GOLD, GREEN]
-    chart_left, chart_bottom = 180, 900
-    group_width = 370
+    chart_left, chart_bottom = 135, 910
+    group_width = 205
     for index, baseline in enumerate(baselines):
         x = chart_left + index * group_width
-        values = [summary[baseline]["unsafe_action_escape_rate"], summary[baseline]["mission_success_rate"]]
+        values = [summary[baseline]["unsafe_action_escape_rate"], summary[baseline]["unauthorized_execution_rate"]]
         bar_data = zip(
             values,
-            [colors[index], BLUE],
-            ["unsafe escape", "mission success"],
+            [RED, BLUE],
+            ["unsafe", "unauth"],
             strict=True,
         )
         for offset, (value, color, label) in enumerate(bar_data):
-            bar_x = x + offset * 120
+            bar_x = x + offset * 65
             height = int(value * 520)
-            draw.rectangle((bar_x, chart_bottom - height, bar_x + 85, chart_bottom), fill=color)
-            draw.text((bar_x + 12, chart_bottom - height - 38), f"{value:.0%}", font=font(22, True), fill=INK)
-            draw.text((bar_x - 10, chart_bottom + 15 + offset * 30), label, font=font(17), fill=INK)
-        draw.text((x, 970), baseline.replace("_", " "), font=font(21, True), fill=INK)
-    draw.line((120, chart_bottom, 1680, chart_bottom), fill=INK, width=3)
-    draw.text((80, 1040), "These results test internal control-path behavior under a simplified surrogate; they are not field validation.", font=font(22), fill=RED)
+            draw.rectangle((bar_x, chart_bottom - height, bar_x + 50, chart_bottom), fill=color)
+            draw.text((bar_x - 1, chart_bottom - height - 34), f"{value:.0%}", font=font(19, True), fill=INK)
+            draw.text((bar_x - 3, chart_bottom + 14 + offset * 26), label, font=font(15), fill=INK)
+        draw.text((x + 22, 1015), baseline.split("_")[0], font=font(21, True), fill=INK)
+    draw.line((110, chart_bottom, 1710, chart_bottom), fill=INK, width=3)
+    draw.text((80, 1080), "Unsafe = execution outside the conservative reference envelope; unauth = execution when catalog authorization is false.", font=font(20), fill=INK)
+    draw.text((80, 1125), "Rule-based synthetic evidence only; guardband disagreements are intentionally retained and are not physical validation.", font=font(20), fill=RED)
     image.save(ASSETS / "baseline_results.png", dpi=(220, 220))
 
 

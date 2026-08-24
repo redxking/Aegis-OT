@@ -1,0 +1,346 @@
+{
+  "experiment_id": "8d61b4b6-b22a-4677-9932-5855870c11d4",
+  "created_at_utc": "2026-08-24T15:46:43.400327+00:00",
+  "git_commit": "cd20986ac31eb224d6678875e63f8e8a907d1b76",
+  "working_tree_dirty": false,
+  "scenario_version": "synthetic-microgrid-v2",
+  "scenario_catalog": "config/scenarios-v2.json",
+  "scenario_catalog_sha256": "65dd9abb52a8c9fb9be0544af2d25e18fdb3f5a882747cbc3c44c3fdf688989b",
+  "scenario_count": 12,
+  "master_seeds": [
+    2931818375549313636,
+    322325654771938865,
+    899615064027653890,
+    6935105556177478217,
+    4460861244597533694,
+    5302693084782479845,
+    1617548286517483961,
+    4208178206509690764,
+    565833792920490814,
+    2908833012521676614,
+    7672014716074519932,
+    4310914687606728539,
+    5114236384438594473,
+    3978255541157907998,
+    6405946437436078414,
+    770722958530932129,
+    5148728335646477753,
+    7342121347312219953,
+    1820129377369424454,
+    8784542138117271665,
+    2944804510895855450,
+    4662795033366525029,
+    7603918438646124340,
+    4401934997374644959,
+    6073847328098762701,
+    8450480503543759675,
+    3698584193504256252,
+    5779022500264630533,
+    2402828750841003783,
+    7277202871170030957
+  ],
+  "master_seed_count": 30,
+  "trials_per_seed_per_baseline": 36,
+  "total_trial_records": 8640,
+  "baselines": [
+    "B0_DIRECT",
+    "B1_IDENTITY",
+    "B2_STATIC_POLICY",
+    "B3_ASSURED",
+    "B4_CONTEXTUAL_ABAC",
+    "B5_RISK_AWARE",
+    "B6_SAFETY_NO_DELEGATION",
+    "B7_DELEGATION_NO_FRESHNESS"
+  ],
+  "policy_version": "local-contextual-v1",
+  "safety_kernel_version": "surrogate-safety-v1",
+  "oracle_version": "reference-outcome-v2",
+  "source_sha256": {
+    "src/aegis_ot/experiment.py": "6d12e13811fbbe4bacf7fac271062235b97f704a23cc1df5bae5b31a5ec5bd31",
+    "src/aegis_ot/oracle.py": "d88840170954ffe6f6f787a5c4f5fbbd6d5aa8409889559a31d609bc35f6f547",
+    "src/aegis_ot/safety.py": "5c7178babe4790332ff9a8f42c3280bdbff7347d9232e95b84aaf1da0b1a4268"
+  },
+  "host": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.14.7",
+    "architecture": "arm64",
+    "logical_cpu_count": 10
+  },
+  "raw_data": "trials.jsonl",
+  "raw_sha256": "7426b3ae83aa790f7416262fc7b7a3331704d2632d10e8134921e7fb92cdcb22",
+  "deterministic_outcome_sha256": "b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90",
+  "known_limitations": [
+    "human-reviewed synthetic scenario truth, not field measurements",
+    "independently implemented rule-based oracle, not a physical simulator",
+    "deterministic supervisory state transitions",
+    "in-process development trust boundaries",
+    "latency measurements are host-specific and excluded from the deterministic outcome hash"
+  ],
+  "analyst": "Angelis Pseftis",
+  "summary": {
+    "B0_DIRECT": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 1.0,
+      "unsafe_action_escape_ci95": {
+        "estimate": 1.0,
+        "lower": 0.9915356811370294,
+        "upper": 1.0,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 1.0,
+      "unauthorized_execution_ci95": {
+        "estimate": 1.0,
+        "lower": 0.9915356811370294,
+        "upper": 1.0,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.16666666666666666,
+      "mission_success_ci95": {
+        "estimate": 0.16666666666666666,
+        "lower": 0.14562964774949985,
+        "upper": 0.19006655196644626,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.44397463796296294,
+      "kernel_oracle_disagreements": 270
+    },
+    "B1_IDENTITY": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 1.0,
+      "unsafe_action_escape_ci95": {
+        "estimate": 1.0,
+        "lower": 0.9915356811370294,
+        "upper": 1.0,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.8,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.8,
+        "lower": 0.7605725078479408,
+        "upper": 0.8343489008342768,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.25,
+      "mission_success_ci95": {
+        "estimate": 0.25,
+        "lower": 0.22509186432547254,
+        "upper": 0.2766802854614872,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.4475507287037037,
+      "kernel_oracle_disagreements": 270
+    },
+    "B2_STATIC_POLICY": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 0.8,
+      "unsafe_action_escape_ci95": {
+        "estimate": 0.8,
+        "lower": 0.7605725078479408,
+        "upper": 0.8343489008342768,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.4,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.4,
+        "lower": 0.3557670244583916,
+        "upper": 0.4459258393142026,
+        "denominator": 450
+      },
+      "false_block_rate": 0.5,
+      "false_block_ci95": {
+        "estimate": 0.5,
+        "lower": 0.42772362432714783,
+        "upper": 0.5722763756728522,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.4166666666666667,
+      "mission_success_ci95": {
+        "estimate": 0.4166666666666667,
+        "lower": 0.3876098710653612,
+        "upper": 0.4463141788636255,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.4527891287037037,
+      "kernel_oracle_disagreements": 270
+    },
+    "B3_ASSURED": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 0.6,
+      "unsafe_action_escape_ci95": {
+        "estimate": 0.6,
+        "lower": 0.5540741606857974,
+        "upper": 0.6442329755416084,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.0,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.008464318862970662,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.75,
+      "mission_success_ci95": {
+        "estimate": 0.75,
+        "lower": 0.7233197145385128,
+        "upper": 0.7749081356745275,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.9351867018518518,
+      "kernel_oracle_disagreements": 270
+    },
+    "B4_CONTEXTUAL_ABAC": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 1.0,
+      "unsafe_action_escape_ci95": {
+        "estimate": 1.0,
+        "lower": 0.9915356811370294,
+        "upper": 1.0,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.2,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.2,
+        "lower": 0.16565109916572324,
+        "upper": 0.23942749215205916,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.5,
+      "mission_success_ci95": {
+        "estimate": 0.5,
+        "lower": 0.4702329898464795,
+        "upper": 0.5297670101535206,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.43543735185185184,
+      "kernel_oracle_disagreements": 270
+    },
+    "B5_RISK_AWARE": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 1.0,
+      "unsafe_action_escape_ci95": {
+        "estimate": 1.0,
+        "lower": 0.9915356811370294,
+        "upper": 1.0,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.4,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.4,
+        "lower": 0.3557670244583916,
+        "upper": 0.4459258393142026,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.4166666666666667,
+      "mission_success_ci95": {
+        "estimate": 0.4166666666666667,
+        "lower": 0.3876098710653612,
+        "upper": 0.4463141788636255,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.4362929398148148,
+      "kernel_oracle_disagreements": 270
+    },
+    "B6_SAFETY_NO_DELEGATION": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 0.6,
+      "unsafe_action_escape_ci95": {
+        "estimate": 0.6,
+        "lower": 0.5540741606857974,
+        "upper": 0.6442329755416084,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.2,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.2,
+        "lower": 0.16565109916572324,
+        "upper": 0.23942749215205916,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.6666666666666666,
+      "mission_success_ci95": {
+        "estimate": 0.6666666666666666,
+        "lower": 0.638005127610067,
+        "upper": 0.6941467725319598,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.4351780027777778,
+      "kernel_oracle_disagreements": 270
+    },
+    "B7_DELEGATION_NO_FRESHNESS": {
+      "trials": 1080,
+      "unsafe_action_escape_rate": 0.6,
+      "unsafe_action_escape_ci95": {
+        "estimate": 0.6,
+        "lower": 0.5540741606857974,
+        "upper": 0.6442329755416084,
+        "denominator": 450
+      },
+      "unauthorized_execution_rate": 0.2,
+      "unauthorized_execution_ci95": {
+        "estimate": 0.2,
+        "lower": 0.16565109916572324,
+        "upper": 0.23942749215205916,
+        "denominator": 450
+      },
+      "false_block_rate": 0.0,
+      "false_block_ci95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "upper": 0.02089549792161305,
+        "denominator": 180
+      },
+      "mission_success_rate": 0.6666666666666666,
+      "mission_success_ci95": {
+        "estimate": 0.6666666666666666,
+        "lower": 0.638005127610067,
+        "upper": 0.6941467725319598,
+        "denominator": 1080
+      },
+      "mean_decision_latency_ms": 0.4341270657407407,
+      "kernel_oracle_disagreements": 270
+    }
+  }
+}

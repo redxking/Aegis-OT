@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from xml.etree import ElementTree
 
 from docx import Document
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
@@ -17,7 +20,9 @@ from docx.shared import Inches, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "research" / "Aegis-OT_Research_Study.docx"
 REVISION = json.loads((ROOT / "research" / "revision_log.json").read_text())
-MANIFEST = json.loads((ROOT / "results" / "reproduction-v0.1" / "manifest.json").read_text())
+MANIFEST = json.loads(
+    (ROOT / "results" / "m2-independent-oracle" / "manifest.json").read_text()
+)
 FORMAL_MANIFEST = json.loads(
     (ROOT / "results" / "formal" / "m1-authorization-conformance" / "manifest.json").read_text()
 )
@@ -28,6 +33,9 @@ BLUE = RGBColor(23, 105, 170)
 DARK = RGBColor(16, 42, 67)
 MUTED = RGBColor(82, 96, 109)
 LIGHT_FILL = "EAF2F8"
+EXTENDED_PROPERTIES_NAMESPACE = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+)
 
 
 def set_font(run, size: float, *, bold: bool = False, color: RGBColor = DARK) -> None:
@@ -226,6 +234,30 @@ def add_cover(doc: Document) -> None:
     doc.add_page_break()
 
 
+def patch_extended_properties(path: Path, pages: int, words: int) -> None:
+    """Preserve useful publication metadata omitted by python-docx."""
+    with zipfile.ZipFile(path) as source:
+        app_xml = source.read("docProps/app.xml")
+        root = ElementTree.fromstring(app_xml)  # noqa: S314 - self-generated DOCX part
+        for name, value in (("Pages", pages), ("Words", words)):
+            node = root.find(f"{{{EXTENDED_PROPERTIES_NAMESPACE}}}{name}")
+            if node is not None:
+                node.text = str(value)
+        updated = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
+        with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".docx", delete=False) as handle:
+            temporary_path = Path(handle.name)
+        try:
+            with zipfile.ZipFile(temporary_path, "w", zipfile.ZIP_DEFLATED) as target:
+                for item in source.infolist():
+                    target.writestr(
+                        item,
+                        updated if item.filename == "docProps/app.xml" else source.read(item.filename),
+                    )
+            temporary_path.replace(path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
+
 def build() -> None:
     doc = Document()
     configure_styles(doc)
@@ -254,6 +286,8 @@ def build() -> None:
         ],
         [1.65, 4.85],
     )
+    add_paragraph(doc, "Control statement: This DOCX is the single authoritative editable manuscript. Git history and research/revision_log.json preserve its revision trail. Supporting Markdown, figures, renders, and data are not alternate manuscripts.")
+    doc.add_page_break()
     heading(doc, "Revision History", 2)
     revision_rows = []
     for revision in REVISION["revisions"]:
@@ -278,15 +312,13 @@ def build() -> None:
         revision_rows,
         [0.55, 1.15, 0.9, 2.7, 1.2],
     )
-    add_paragraph(doc, "Control statement: This DOCX is the single authoritative editable manuscript. Git history and research/revision_log.json preserve its revision trail. Supporting Markdown, figures, renders, and data are not alternate manuscripts.")
-
     doc.add_page_break()
     heading(doc, "Contents")
     sections = [
         "1 Abstract", "2 Executive Summary", "3 Introduction and Research Gap", "4 Research Objectives, Questions, and Hypotheses",
         "5 Scope, Assumptions, and Claim Boundaries", "6 Threat Model", "7 System Requirements", "8 Reference Architecture",
         "9 Authorization and Safety Model", "10 Formal Specification Strategy", "11 Experimental Methodology",
-        "12 Implementation and Verification Status", "13 Preliminary Controlled Results", "14 Multi-VM Integration Plan",
+        "12 Implementation and Verification Status", "13 M2 Controlled Results", "14 Multi-VM Integration Plan",
         "15 Operate-Through-Compromise Test Program", "16 Scale and Economic Analysis Plan", "17 Reproducibility and Data Management",
         "18 Risks, Limitations, and Validity Threats", "19 Work Plan and Completion Criteria", "20 Conclusions", "21 References",
         "22 Requirements Traceability Appendix", "23 Data and Message Schemas Appendix", "24 Reproduction Runbook Appendix",
@@ -296,16 +328,16 @@ def build() -> None:
     doc.add_page_break()
 
     heading(doc, "1. Abstract")
-    add_paragraph(doc, "Aegis-OT investigates whether an independently enforced runtime-assurance control plane can prevent a validly authenticated but compromised, misled, stale, or faulty AI agent from executing actions outside its delegated mission and modeled cyber-physical safety envelope while preserving legitimate containment and recovery. The reconstructed v0.1 implementation binds typed proposals to Ed25519-signed delegation chains, contextual policy, state freshness, replay protection, a deterministic safety kernel, a command adapter, and hash-chained evidence. A separate post-decision rule oracle is used for initial experiments, although both it and the enforcer depend on the same simplified transition model. Current results therefore establish only internal control-path behavior in a synthetic local environment.")
+    add_paragraph(doc, "Aegis-OT investigates whether an independently enforced runtime-assurance control plane can prevent a validly authenticated but compromised, misled, stale, or faulty AI agent from executing actions outside its delegated mission and modeled cyber-physical safety envelope while preserving legitimate containment and recovery. The reconstructed v0.1 implementation binds typed proposals to Ed25519-signed delegation chains, contextual policy, state freshness, replay protection, a deterministic safety kernel, a command adapter, and hash-chained evidence. The M2 experiment removes the initial circular oracle path: a separately implemented decimal-arithmetic reference model computes candidate states directly from proposals and pre-action state, applies conservative guardbands, and records disagreements. Results establish only synthetic local control-path behavior, not physical accuracy or field effectiveness.")
 
     heading(doc, "2. Executive Summary")
     add_paragraph(doc, "The central engineering decision is that identity is necessary but insufficient. An agent never receives direct simulated-control authority; it receives authority to propose a bounded action. The gateway remains the policy-enforcement point and fails closed when identity, delegation, state, replay, policy, safety, or required approval cannot be established.")
     add_bullets(doc, [
-        "Current verified implementation evidence: 73 passing tests, clean static type checking, clean linting, and 95 percent branch-aware coverage on the local Python 3.14 host. Gateway, policy, trust-boundary model, replay, and evidence paths each measure 100 percent coverage in this suite; coverage is implementation-conformance evidence, not independent validation.",
+        "Current verified implementation evidence: 79 passing tests, clean static type checking, clean linting, schema-drift validation, and 93 percent branch-aware coverage on the local Python 3.14 host. Gateway, policy, trust-boundary model, replay, and evidence paths each measure 100 percent coverage in this suite; coverage is implementation-conformance evidence, not independent validation.",
         f"Current formal evidence: TLC explored {FORMAL_INTENDED['states_generated']:,} generated and {FORMAL_INTENDED['distinct_states']:,} distinct states to depth {FORMAL_INTENDED['search_depth']} in the intended bounded configuration without an invariant or liveness violation. Sixteen targeted weakened configurations each produced the expected counterexample. This is bounded model evidence, not proof of the Python implementation or physical process.",
-        "Current experiment evidence: 200 synthetic trials per baseline using a shared seed set and master seed 20260824.",
-        "Current limitation: perfect performance by the assured baseline is expected under the simplified rules and cannot support a claim of field effectiveness.",
-        "Next decision gate: replace the shared transition model with an independently executed power-system reference, strengthen comparison baselines, and run multi-seed analysis with uncertainty estimates.",
+        "Current experiment evidence: 8,640 decision records across eight baselines, 12 reviewed scenario templates, 30 master seeds, and 36 sampled trials per seed per baseline. An independent reproduction matched deterministic outcome hash b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90.",
+        "Current result: the assured path produced zero unauthorized executions among 450 authorization-negative records but executed 60 percent of the 450 reference-unsafe records because three conservative guardband templates remained inside the runtime kernel limits. This is a threshold-sensitivity finding, not physical evidence.",
+        "Next decision gate: use an independently executed power-system simulator and virtual PLC boundary to calibrate consequence envelopes and test whether the observed guardband gap represents appropriate operating policy or unsafe permissiveness.",
     ])
 
     doc.add_page_break()
@@ -365,34 +397,38 @@ def build() -> None:
     add_paragraph(doc, "Initial model-check finding: The first TLC run against the earlier scaffold found a specification defect: its revocation invariant retroactively treated a later grant revocation as invalidating an execution that had already completed. Revision 0.3 corrects this by recording whether revocation, expiry, state staleness, acknowledgment absence, or quarantine was effective at execution time. This was a defect in the specification, not evidence of a corresponding runtime exploit.", bold_lead="Initial model-check finding:")
 
     heading(doc, "11. Experimental Methodology")
-    add_paragraph(doc, "The reconstructed smoke experiment executes four baselines against the same 200 seeded isolation scenarios. The scenario generator varies critical-load impact and classifies the resulting candidate state using a post-decision oracle implemented outside the gateway. Direct access, identity-only, and static resource/risk policy baselines execute the proposed action; the assured baseline also evaluates delegation, contextual policy, freshness, replay, and modeled safety.")
-    add_paragraph(doc, "Primary measures are unsafe-action escape, false block, mission-correct outcome, decision latency, and safety-kernel/oracle disagreement. This smoke design is exploratory: it has one master seed, a deterministic agent, synthetic prevalence, weak comparison baselines, and no confidence intervals or external physical simulator.")
+    add_paragraph(doc, "The controlled M2 experiment executes eight baselines and ablations against 12 human-reviewed synthetic scenario templates spanning nominal, consequence-unsafe, guardband, identity, delegation-scope, freshness, confidence, and approval conditions. Thirty master seeds each run three shuffled catalog cycles. Trial seeds sample bounded action parameters within each template; execution stops if either the kernel or reference classification departs from the catalog's reviewed expectation. B0-B3 preserve the original direct, identity-only, static-policy, and complete-gateway paths. B4-B7 add contextual ABAC, risk-aware, safety-without-delegation, and delegation-without-freshness comparisons.")
+    add_paragraph(doc, "The reference oracle receives the proposal and pre-action state and independently calculates the candidate state with decimal arithmetic. It does not consume the kernel's predicted state. Its tighter load, voltage, thermal, isolation, and battery guardbands deliberately expose sensitivity. Primary measures are conditional unsafe-action escape, unauthorized execution, false block, mission correctness, decision latency, and kernel-oracle disagreement. Wilson 95 percent intervals characterize records under the balanced synthetic design; they do not capture model-form or field uncertainty.")
 
     heading(doc, "12. Implementation and Verification Status")
     table(doc, ["Capability", "Current state", "Evidence boundary"], [
         ["Typed proposal and state", "Closed Pydantic models with operation-specific finite parameter validation and generated JSON Schema", "Local conformance only"],
         ["Signed delegation", "Ed25519 full-chain validation and attenuation", "Local keys; no SPIRE integration"],
         ["Gateway", "Fail-closed decision path with replay and freshness", "Single process"],
-        ["Safety and oracle", "Separate rule evaluators using a shared surrogate transition", "Not independent physical validation"],
+        ["Safety and oracle", "Separate candidate-state implementations with intentionally different guardbands", "Code-path independence only; no physical validation"],
         ["Evidence", "Hash-chained decision records", "Tamper-evident while trusted head is preserved"],
-        ["Verification", "73 tests; ruff and strict mypy clean; 95 percent branch-aware coverage", "Python 3.14 local host; CI not yet observed"],
+        ["Verification", "79 tests; ruff and strict mypy clean; 93 percent branch-aware coverage", "Python 3.14 local host; CI not yet observed"],
         ["Formal model", "17 safety/type invariants and one decision-liveness property checked; 16 weakened cases produced expected violations", "Bounded abstraction; not implementation or physical proof"],
     ], [1.55, 2.25, 2.7])
 
-    heading(doc, "13. Preliminary Controlled Results")
+    heading(doc, "13. M2 Controlled Results")
     summary = MANIFEST["summary"]
     result_rows = []
     for baseline, values in summary.items():
+        unsafe_ci = values["unsafe_action_escape_ci95"]
+        unauthorized_ci = values["unauthorized_execution_ci95"]
+        mission_ci = values["mission_success_ci95"]
         result_rows.append([
-            baseline,
-            f"{values['unsafe_action_escape_rate']:.0%}",
+            baseline.split("_")[0],
+            f"{values['unsafe_action_escape_rate']:.0%} [{unsafe_ci['lower']:.1%}, {unsafe_ci['upper']:.1%}]",
+            f"{values['unauthorized_execution_rate']:.0%} [{unauthorized_ci['lower']:.1%}, {unauthorized_ci['upper']:.1%}]",
             f"{values['false_block_rate']:.0%}",
-            f"{values['mission_success_rate']:.0%}",
-            f"{values['mean_decision_latency_ms']:.4f} ms",
+            f"{values['mission_success_rate']:.0%} [{mission_ci['lower']:.1%}, {mission_ci['upper']:.1%}]",
         ])
-    table(doc, ["Baseline", "Unsafe escape", "False block", "Mission success", "Mean latency"], result_rows, [1.35, 1.15, 1.05, 1.2, 1.75])
-    figure(doc, "baseline_results.png", "Figure 3. Preliminary synthetic baseline outcomes.", "Grouped bar chart comparing unsafe-action escape and mission success for direct, identity-only, static-policy, and assured baselines over 200 shared-seed synthetic trials.")
-    add_paragraph(doc, "Interpretation: the result demonstrates that the implemented assured path blocks the unsafe conditions encoded by the initial surrogate while permitting all encoded safe conditions. It does not demonstrate that real agents, PLCs, grids, operators, or incidents would produce the same result. The zero disagreement count is expected because both evaluators apply equivalent limits to the same simplified predicted state.")
+    table(doc, ["Baseline", "Unsafe escape [95% CI]", "Unauthorized [95% CI]", "False block", "Mission correct [95% CI]"], result_rows, [1.05, 1.55, 1.55, 0.85, 1.5])
+    figure(doc, "baseline_results.png", "Figure 3. M2 synthetic baseline and ablation outcomes.", "Grouped bar chart comparing conditional unsafe-action escape and unauthorized execution across eight baselines. Each baseline has 1,080 trial records from 30 master seeds and 12 sampled scenario templates.")
+    add_paragraph(doc, "Interpretation: B3_ASSURED recorded zero unauthorized executions among 450 authorization-negative records (Wilson 95 percent upper bound 0.85 percent), zero false blocks among 180 authorized reference-safe records (upper bound 2.09 percent), and 75 percent overall mission correctness (72.3-77.5 percent). It nevertheless executed 270 of 450 reference-unsafe records, a 60 percent conditional escape rate (55.4-64.4 percent), because the load, thermal, and voltage guardband templates were inside the runtime kernel's looser thresholds. B6 and B7 matched the 60 percent physical escape rate but each executed 20 percent of authorization-negative records, isolating the value of the omitted delegation or freshness control. Rates are conditional on this balanced catalog and do not estimate operational incident likelihood.")
+    add_paragraph(doc, f"Reproducibility: the controlled run started from clean commit {MANIFEST['git_commit'][:7]}, wrote {MANIFEST['total_trial_records']:,} records, and produced deterministic outcome SHA-256 {MANIFEST['deterministic_outcome_sha256']}. A second run produced the same outcome hash. Raw hashes differ as expected because host timing is retained separately. B3 mean in-process decision latency was {summary['B3_ASSURED']['mean_decision_latency_ms']:.3f} ms on the recorded host; this is a local development measurement, not a deployment latency claim.")
 
     heading(doc, "14. Multi-VM Integration Plan")
     add_paragraph(doc, "The six-node scaffold separates management, trust, agent, gateway, OT, and simulation functions. The gateway must become the only routed path between the agent network and the OT environment. Exit evidence includes route and firewall inspection, negative connectivity tests, packet capture, gateway partition behavior, and host-specific deployment documentation. The present Vagrant file is an unvalidated VirtualBox scaffold; it is not evidence that a six-VM range has been deployed.")
@@ -410,22 +446,22 @@ def build() -> None:
     add_paragraph(doc, "Fleet experiments will use logical identities and synthetic authorization workloads at 10, 100, 1,000, and 10,000 agents rather than one VM per agent. Measures include throughput, queue delay, delegation graph complexity, revocation propagation, policy distribution, evidence volume, operator span, incident-response effort, and marginal governance cost. Any cost finding will state labor rates, infrastructure assumptions, utilization, retention, and sensitivity ranges.")
 
     heading(doc, "17. Reproducibility and Data Management")
-    add_paragraph(doc, "The experiment manifest records the working-tree state, configuration hash, master and individual seeds, baseline definitions, component versions, host details, raw-data path, SHA-256 result hash, analyst, and known limitations. Raw JSONL is retained separately from derived summaries. The exploratory run that used different seed sets across baselines is preserved under results/exploratory-invalid-independent-seeds and excluded from controlled comparison.")
+    add_paragraph(doc, "The M2 manifest records clean-start Git state, scenario catalog and source hashes, all master seeds, baseline definitions, component versions, host details, raw-data path, timing-inclusive raw SHA-256, timing-independent outcome SHA-256, analyst, and known limitations. Raw JSONL retains sampled parameters and conditional outcomes. Derived summaries and figures are generated from committed code. The original exploratory run remains separately labeled and is excluded from M2 comparison.")
 
     heading(doc, "18. Risks, Limitations, and Validity Threats")
     table(doc, ["Threat to validity", "Current consequence", "Required mitigation"], [
-        ["Shared transition model", "Kernel and oracle disagreement is not a strong independence test", "Use a separately executed power-flow simulator and reviewed truth set"],
-        ["Weak baselines", "Effect size can be inflated", "Add contextual ABAC, risk-aware, and ablation baselines"],
+        ["Rule-model physical validity", "Separate code paths can share incorrect physics", "Use an independently executed power-flow simulator and virtual PLC"],
+        ["Guardband selection", "B3 permits three reference-unsafe boundary templates", "Calibrate thresholds and uncertainty against physical-model evidence"],
         ["Synthetic prevalence", "Rates do not estimate incident likelihood", "Report conditional scenario performance only"],
         ["Single host", "Trust boundaries and availability are untested", "Deploy and negatively test independent services and networks"],
-        ["One seed set", "Uncertainty is not characterized", "Use at least 30 independent seeds per condition and confidence intervals"],
+        ["Designed scenario distribution", "Wilson intervals do not capture model-form or field uncertainty", "Add externally justified distributions and sensitivity analysis"],
     ], [1.65, 2.25, 2.6])
 
     heading(doc, "19. Work Plan and Completion Criteria")
     add_paragraph(doc, "The project advances through controlled governance, executable-kernel, formal-conformance, single-host experiment, physical and PLC integration, multi-node trust-boundary, operate-through-compromise, fleet-scale/economics, and independent-validation gates. A demonstration, green test suite, or perfect synthetic baseline does not satisfy the final completion definition.")
 
     heading(doc, "20. Conclusions")
-    add_paragraph(doc, "The reconstructed v0.1 foundation is sufficient to test a narrow proposition: under its explicit synthetic rules, the gateway can distinguish safe from unsafe isolation proposals and preserve evidence of the decision. The bounded formal model now adds state-space evidence for its explicit abstraction, but it is not sufficient to conclude that autonomous agents can be trusted on real critical infrastructure. The next defensible advance is independently executed physical outcome evaluation, followed by stronger baselines and deployed trust boundaries.")
+    add_paragraph(doc, "The reconstructed v0.1 foundation now supports a defensible narrow finding: under the reviewed synthetic authorization cases, the complete gateway prevented authorization-invalid execution and outperformed partial control paths. The separately implemented reference model also exposed a material threshold-sensitivity gap: the gateway permitted every sampled load, thermal, and voltage guardband case classified outside the conservative reference envelope. That result prevents a premature perfect-safety claim and defines the next experiment. The bounded formal evidence and M2 control-path measurements remain insufficient to conclude that autonomous agents can be trusted on real critical infrastructure. The next defensible advance is independent power-system and virtual-PLC outcome evaluation, followed by deployed trust boundaries.")
 
     heading(doc, "21. References")
     references = [
@@ -441,7 +477,7 @@ def build() -> None:
     table(doc, ["Requirement", "Implementation", "Test/evidence", "Residual gap"], [
         ["REQ-AUTH-001", "gateway.py; identity.py; delegation.py", "test_unknown_identity; test_valid_full_chain", "No SPIRE service"],
         ["REQ-DELEG-002", "delegation.py", "Full-chain negative tests covering scope, time, depth, signature, expiry, revocation, and linkage", "Mutation testing and distributed revocation remain absent"],
-        ["REQ-SAFE-003", "safety.py; oracle.py", "Hypothesis comparison and unsafe denial", "Shared transition model"],
+        ["REQ-SAFE-003", "safety.py; oracle.py", "Independent candidate-state tests; 30-seed M2 comparison", "No independent physical simulator"],
         ["REQ-REPLAY-004", "replay.py", "Concurrent reservation and retention tests", "Distributed replay store absent"],
         ["REQ-EVID-005", "evidence.py", "Chain integrity and tampering tests", "No signature or external anchor"],
         ["REQ-TOCTOU-006", "lab.py", "State-version change integration test", "No real PLC acknowledgment"],
@@ -457,19 +493,20 @@ def build() -> None:
         "Run python scripts/export_schemas.py --check, ruff check ., mypy src, and pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90.",
         "Acquire the pinned TLC 1.8.0 JAR, verify SHA-256 eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a, and run python scripts/run_formal.py --jar /path/to/tla2tools.jar --output-dir results/formal/<run-name>.",
         "Run python -m aegis_ot demo --output-dir results/demo.",
-        "Run python -m aegis_ot experiment --trials 200 --seed 20260824 --output-dir results/reproduction-v0.1.",
-        "Verify the manifest raw-data hash and dirty-tree declaration before reporting results.",
+        "Run python -m aegis_ot experiment --trials-per-seed 36 --seed-count 30 --seed 20260824 --output-dir results/m2-independent-oracle.",
+        "Verify clean-start Git state, the raw-data hash, and deterministic outcome hash before reporting results; reproduce into a separate directory and compare outcome hashes.",
         "Build figures and the canonical document from committed scripts, then render and inspect every page.",
     ])
 
     heading(doc, "25. Version-Control Audit Trail Appendix")
-    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation, c906ae7 records trust-boundary hardening, and 3b5f129 records the bounded formal model, weakened-check automation, CI gate, and implementation-conformance mapping. The committed formal evidence was then generated from a clean 3b5f129 worktree. A clean post-commit experiment reproduction remains required before any tagged release.")
+    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation, c906ae7 records trust-boundary hardening, 3b5f129 records the bounded formal model and conformance mapping, e8b304d introduces the independent multi-seed evaluator, 050f9b1 corrects clean-start provenance capture, and cd20986 adds sampled reviewed scenario envelopes. The controlled M2 evidence was generated from clean cd20986 and independently reproduced by deterministic outcome hash. No tagged release or external CI run has been observed.")
 
     add_header_footer(doc)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUTPUT)
     body_text = " ".join(node.text or "" for node in doc.element.body.iter(qn("w:t")))
     words = len(re.findall(r"\b[\w'-]+\b", body_text))
+    patch_extended_properties(OUTPUT, int(CURRENT_REVISION["page_count"]), words)
     print(json.dumps({"output": str(OUTPUT), "paragraph_word_count": words, "revision": REVISION_NUMBER}))
 
 
