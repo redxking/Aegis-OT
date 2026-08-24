@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
 from aegis_ot import cli
+from aegis_ot.capability_models import CapabilityClosedLoopStatus
 
 runner = CliRunner()
 
@@ -137,3 +142,60 @@ def test_verify_physical_evidence_command_fails_closed(monkeypatch: Any) -> None
 
     assert result.exit_code == 1
     assert json.loads(result.output)["valid"] is False
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit"),
+    [
+        (CapabilityClosedLoopStatus.COMPLETED, 0),
+        (CapabilityClosedLoopStatus.NOT_DISPATCHED, 1),
+    ],
+)
+def test_capability_smoke_reports_bounded_live_status_and_fails_closed(
+    status: CapabilityClosedLoopStatus,
+    expected_exit: int,
+    monkeypatch: Any,
+) -> None:
+    observed_at = datetime(2026, 8, 24, tzinfo=UTC)
+    result = SimpleNamespace(
+        status=status,
+        reasons=("test_terminal_reason",),
+        dispatch_attempts=1 if status is CapabilityClosedLoopStatus.COMPLETED else 0,
+        automatic_retry_count=0,
+    )
+    def health(role: str) -> dict[str, str]:
+        return {"role": role, "status": "ready"}
+
+    lab = SimpleNamespace(
+        initial_observation=SimpleNamespace(
+            snapshot=SimpleNamespace(state_version=0, observed_at=observed_at)
+        ),
+        authorization=SimpleNamespace(
+            root_grant=SimpleNamespace(grant_id="grant-root"),
+            leaf_grant=SimpleNamespace(grant_id="grant-leaf"),
+            gateway=SimpleNamespace(evidence=SimpleNamespace(verify=lambda: True)),
+        ),
+        controller=SimpleNamespace(execute=lambda request: result),
+        request_for=lambda proposal, observation: (proposal, observation),
+        topology_pids={"coordinator": 1, "plant": 2, "observer": 3, "plc": 4},
+        processes=SimpleNamespace(
+            plant_admin=SimpleNamespace(health=lambda: health("plant")),
+            observer_admin=SimpleNamespace(health=lambda: health("observer")),
+            plc_admin=SimpleNamespace(health=lambda: health("plc")),
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "start_capability_separated_lab",
+        lambda now: nullcontext(lab),
+    )
+
+    invocation = runner.invoke(cli.app, ["capability-smoke"])
+
+    assert invocation.exit_code == expected_exit, invocation.output
+    payload = json.loads(invocation.output)
+    assert payload["status"] == status.value
+    assert payload["automatic_retry_count"] == 0
+    assert payload["evidence_chain_valid"] is True
+    assert payload["topology_pids"] == lab.topology_pids
+    assert payload["claim_boundary"].startswith("local implementation smoke test only")

@@ -135,6 +135,26 @@ def test_verify_m3_package_accepts_fresh_retained_evidence(
     assert all(result["checks"].values())
 
 
+@pytest.mark.parametrize(
+    "package_name",
+    ("m3-physical-modbus", "m3-physical-modbus-reproduction"),
+)
+def test_historical_m3_package_separates_internal_integrity_from_checkout_drift(
+    package_name: str,
+) -> None:
+    result = m3.verify_m3_package(m3.ROOT / "results" / package_name)
+
+    assert result["checks"]["configuration_bindings"] is True
+    assert result["checks"]["checkout_bindings"] is False
+    assert all(
+        value is True
+        for name, value in result["checks"].items()
+        if name != "checkout_bindings"
+    )
+    assert result["errors"]
+    assert all(error.startswith("checkout_bindings:") for error in result["errors"])
+
+
 def test_verify_m3_package_detects_tampered_trial_content(
     retained_m3_package: Path,
     tmp_path: Path,

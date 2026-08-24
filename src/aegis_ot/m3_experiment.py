@@ -1154,8 +1154,16 @@ def _scenario_catalog() -> dict[str, Any]:
     }
 
 
-def _benchmark_provenance(model_digest: str) -> dict[str, Any]:
+def _benchmark_provenance(
+    model_digest: str,
+    *,
+    implementation_sha256: str | None = None,
+) -> dict[str, Any]:
     constructor_source = inspect.getsource(pn.create_cigre_network_mv).encode("utf-8")
+    if implementation_sha256 is None:
+        implementation_sha256 = _sha256_bytes(
+            (ROOT / "src/aegis_ot/pandapower_plant.py").read_bytes()
+        )
     return {
         "model_id": CIGRE_MV_MODEL_ID,
         "constructor": CIGRE_MV_SOURCE,
@@ -1180,9 +1188,7 @@ def _benchmark_provenance(model_digest: str) -> dict[str, Any]:
                 }
                 for key, value in sorted(DEFAULT_RESOURCE_BINDINGS.items())
             },
-            "implementation_sha256": _sha256_bytes(
-                (ROOT / "src/aegis_ot/pandapower_plant.py").read_bytes()
-            ),
+            "implementation_sha256": implementation_sha256,
         },
         "license_boundary": (
             "The packaged pandapower constructor and Aegis adapter are used under their "
@@ -2549,9 +2555,20 @@ def _verify_m3_package_checked(output_dir: Path) -> dict[str, Any]:
         fail("configuration_bindings", "scenario catalog differs from the registered catalog")
     if not _json_exact_equal(solver, _solver_configuration()):
         fail("configuration_bindings", "solver configuration differs from the registered design")
+    source_hashes = manifest.get("source_sha256")
+    recorded_plant_sha256 = (
+        source_hashes.get("src/aegis_ot/pandapower_plant.py")
+        if isinstance(source_hashes, dict)
+        else None
+    )
     if not _json_exact_equal(
         benchmark,
-        _benchmark_provenance(str(manifest.get("model_digest"))),
+        _benchmark_provenance(
+            str(manifest.get("model_digest")),
+            implementation_sha256=(
+                recorded_plant_sha256 if isinstance(recorded_plant_sha256, str) else ""
+            ),
+        ),
     ):
         fail("configuration_bindings", "benchmark provenance or model binding is inconsistent")
     if (

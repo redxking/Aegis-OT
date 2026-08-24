@@ -1,0 +1,83 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "error_code": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "operation": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Operation",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "request_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "request_payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Payload Digest",
+      "type": "string"
+    },
+    "response_counter": {
+      "minimum": 1,
+      "title": "Response Counter",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "capability-ipc-response-v1",
+      "default": "capability-ipc-response-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "server_boot_epoch": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Server Boot Epoch",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "rejected",
+        "error"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "operation",
+    "request_payload_digest",
+    "status",
+    "payload",
+    "payload_digest",
+    "server_boot_epoch",
+    "response_counter"
+  ],
+  "title": "IpcResponseFrame",
+  "type": "object"
+}

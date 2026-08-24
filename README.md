@@ -39,6 +39,24 @@ is not network segmentation, OpenPLC, a physical PLC, HELICS coordination, or a
 multi-VM deployment. Development-mode identity, policy, and evidence components
 also remain in process.
 
+The M4a increment adds a second, capability-separated deterministic-local path:
+
+```text
+trusted local harness (lifecycle administration + permit signer)
+  `-> closed-loop controller [observe | simulate | dispatch; no plant-apply handle]
+        |-> signed-observer process -> read-only plant capture
+        |-> candidate-simulation port -> plant process
+        `-> PLC gateway -> Python research virtual-PLC process
+                              `-> sole plant-apply capability -> plant process
+```
+
+The plant, signed observer, and research virtual PLC are distinct spawned
+processes with distinct PIDs. The observer and PLC also use separately generated
+signing keys and boot epochs. These are application-level capability boundaries
+on one host; the trusted harness still holds lifecycle-administration clients and
+the permit-signing key. They do not establish hostile-host isolation, network
+segmentation, independent sensing, OpenPLC integration, or physical-PLC behavior.
+
 ## Quick start
 
 ```bash
@@ -82,9 +100,24 @@ its working directory. Use `.venv\Scripts\aegis-ot.exe` and a suitable temporary
 directory on Windows. When the environment is activated, the same entry point
 can be invoked as `aegis-ot physical-experiment`.
 
-The current local implementation has 289 passing tests and 91.35 percent
-branch-aware coverage. Ruff, strict mypy, schema-drift, bounded formal-model,
-and Compose-configuration checks are also clean locally. These are local
+Run the bounded M4a capability smoke check with:
+
+```bash
+.venv/bin/aegis-ot capability-smoke
+```
+
+The equivalent PyCharm run configuration uses `.venv/bin/aegis-ot` as the
+script path, `capability-smoke` as the parameters, and the repository root as
+the working directory. If the package has not yet been installed in editable
+mode, use `.venv/bin/python` as the script path and `-m aegis_ot.cli
+capability-smoke` as the parameters, with `src` marked as a Sources Root or
+`PYTHONPATH=src` in the run configuration.
+
+The isolated candidate tree has 478 passing tests and 92.05 percent branch-aware
+coverage. The run preserved the user-modified retained-result files in the main
+working tree and used their committed counterparts for evidence-package checks.
+Ruff, strict mypy, and schema-drift checks are also clean locally. The previously
+verified bounded formal-model evidence remains unchanged. These are local
 implementation-verification results; they are not an observed remote CI run,
 independent replication, physical validation, or operational validation. The
 retained controlled M3 experiment described below is a separate evidence set.
@@ -163,10 +196,11 @@ packaged display data before committing it:
 
 ## Trust-boundary schemas
 
-`ActionProposal` and the M3 physical-state, command, candidate, permit,
-acknowledgment, closed-loop-result, and Modbus mailbox models are the
-authoritative validation contracts. Regenerate and verify their public JSON
-Schemas with:
+`ActionProposal`; the M3 physical-state, command, candidate, permit,
+acknowledgment, closed-loop-result, and Modbus mailbox models; and the M4a
+action-request, signed-observation, permit, PLC acknowledgment, closed-loop
+result, and IPC frame models are the authoritative validation contracts.
+Regenerate and verify their public JSON Schemas with:
 
 ```bash
 python scripts/export_schemas.py
@@ -174,6 +208,43 @@ python scripts/export_schemas.py --check
 ```
 
 Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, non-finite values, out-of-range percentages, extra message fields, and timezone-naive timestamps are rejected before authorization evaluation.
+
+## M4a capability-separated deterministic-local loop
+
+The M4a path resolves a fresh signed pre-observation, simulates the proposed
+candidate against that exact observed state, signs a short-lived permit bound to
+the target PLC identity, key, boot epoch, model, topology, state, and expected
+effect, and makes at most one dispatch attempt. The plant applies a command only
+through the virtual PLC's private application endpoint and only if the current
+state still matches the authorized state version, state digest, and pre-
+observation digest.
+
+Completion requires both a transaction-valid PLC-signed applied acknowledgment
+and a separate fresh observer-signed post snapshot that directly identifies the
+transaction's pre-observation and matches the authorized expected state. This is
+a direct transaction predecessor link, not a continuous global observation
+chain. The implementation records six terminal outcomes: `not_dispatched`,
+`candidate_rejected`, `plc_rejected`, `unknown_effect`,
+`observation_diverged`, and `completed`. It performs no automatic dispatch
+retry. Ambiguous transport or response failures after consequential dispatch
+are classified as `unknown_effect`.
+
+The smoke command reports live process status, PIDs, health counters, retry
+count, and an in-memory evidence-chain check. It does not retain the signed
+transaction artifacts, trust anchors, negative capability probes, or replay
+provenance. Its temporary orderly-restart replay ledger is removed when the
+local stack closes. M4a therefore is not a retained or offline-verifiable
+experiment package. Replay protection covers one orderly virtual-PLC child
+replacement while the local lab remains running; it does not cover host crash,
+power loss, filesystem tampering, or full-stack restart.
+
+This bounded path uses the same authoritative deterministic plant for candidate
+simulation and observer capture. It does not provide independent sensing or
+model validation, concurrent multi-controller assurance, real-time PLC scan
+semantics, segmented or multi-host deployment, HELICS, OpenPLC, hardware,
+hardware-in-the-loop, field evidence, external validation, or operational
+effectiveness. It is a locally conformance-tested WP4 submilestone, not the WP4
+exit gate.
 
 ## M3 physical and virtual-device experiment
 

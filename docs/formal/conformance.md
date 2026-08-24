@@ -26,3 +26,22 @@ safety or deployed-system correctness.
 | `DecisionLiveness` | `Submit`, `Resolve` | Gap | No runtime availability or failover liveness evidence. |
 
 The explicit gaps are work items, not passing conformance claims.
+
+## M4a implementation-conformance boundary
+
+M4a adds runtime contracts and tests for a separate plant process, separately
+keyed signed-observer process, Python research virtual-PLC process, and a
+controller that has observe/simulate/dispatch ports but no plant-apply handle.
+Those tests exercise application-level capability denial, signature and binding
+validation, pre-observation compare-and-swap, one-dispatch behavior, explicit
+unknown-effect handling, direct transaction pre/post linkage, and one orderly
+PLC-child replay-reservation transfer.
+
+This is implementation conformance evidence only. The committed TLA+ model was
+not extended for M4a and therefore does not model the process topology, IPC
+framing, observer or PLC boot epochs, transaction-local observation linkage,
+orderly child replacement, or transport ambiguity. No TLC result should be
+read as verification of those mechanisms. Conversely, passing M4a runtime tests
+do not close the existing formal gaps for liveness, conflicting controllers,
+quarantine, deployed identity, hostile-host isolation, or physical-process
+safety.

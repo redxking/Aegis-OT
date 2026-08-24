@@ -8,6 +8,8 @@ from pathlib import Path
 
 import typer
 
+from .capability_factory import start_capability_separated_lab
+from .capability_models import CapabilityClosedLoopStatus
 from .experiment import derive_master_seeds, write_multiseed_experiment
 from .factory import build_local_lab
 from .lab import SimulatedCommandAdapter, nominal_state
@@ -52,6 +54,52 @@ def demo(output_dir: Path = Path("results/demo")) -> None:
     }
     (output_dir / "demo.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("capability-smoke")
+def capability_smoke() -> None:
+    """Run one bounded same-host capability-separated control transaction."""
+
+    now = datetime.now(UTC)
+    with start_capability_separated_lab(now) as lab:
+        observation = lab.initial_observation
+        proposal = ActionProposal(
+            actor_id="agent:operator-1",
+            mission_id="microgrid-containment",
+            resource="feeder-1",
+            operation=Operation.ISOLATE_ASSET,
+            parameters={"critical_load_impact_pct": 5.0},
+            observed_state_version=observation.snapshot.state_version,
+            observed_at=observation.snapshot.observed_at,
+            submitted_at=observation.snapshot.observed_at,
+            nonce=f"capability-smoke-{now.timestamp():.6f}",
+            confidence=0.95,
+            risk_score=40.0,
+            delegation_chain=(
+                lab.authorization.root_grant.grant_id,
+                lab.authorization.leaf_grant.grant_id,
+            ),
+        )
+        result = lab.controller.execute(lab.request_for(proposal, observation))
+        payload = {
+            "schema_version": "capability-smoke-v1",
+            "status": result.status.value,
+            "reasons": list(result.reasons),
+            "topology_pids": lab.topology_pids,
+            "dispatch_attempts": result.dispatch_attempts,
+            "automatic_retry_count": result.automatic_retry_count,
+            "plant": lab.processes.plant_admin.health(),
+            "observer": lab.processes.observer_admin.health(),
+            "plc": lab.processes.plc_admin.health(),
+            "evidence_chain_valid": lab.authorization.gateway.evidence.verify(),
+            "claim_boundary": (
+                "local implementation smoke test only; not HELICS, OpenPLC, "
+                "segmented deployment, hardware, or external validation"
+            ),
+        }
+    typer.echo(json.dumps(payload, indent=2))
+    if result.status is not CapabilityClosedLoopStatus.COMPLETED:
+        raise typer.Exit(code=1)
 
 
 @app.command()

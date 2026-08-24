@@ -50,6 +50,7 @@ class TransactionalPhysicalPlant(StateCandidateSource, Protocol):
         *,
         expected_pre_state_version: int | None = None,
         expected_pre_state_digest: str | None = None,
+        expected_pre_observation_digest: str | None = None,
         expected_post_state_digest: str | None = None,
         expected_post_topology_digest: str | None = None,
     ) -> PhysicalStateSnapshot: ...
@@ -438,6 +439,7 @@ class PermitAwareVirtualControlDevice:
                 permit.command,
                 expected_pre_state_version=permit.state_version,
                 expected_pre_state_digest=permit.state_digest,
+                expected_pre_observation_digest=permit.observation_digest,
                 expected_post_state_digest=permit.expected_post_state_digest,
                 expected_post_topology_digest=permit.expected_post_topology_digest,
             )

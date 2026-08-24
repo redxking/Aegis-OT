@@ -44,6 +44,19 @@ spawned child process. It must not be changed to bind a non-loopback interface.
 When `.venv` is activated, the same entry point can be invoked as
 `aegis-ot physical-experiment`.
 
+For the bounded M4a capability smoke check, use:
+
+```bash
+.venv/bin/aegis-ot capability-smoke
+```
+
+In PyCharm, use `.venv/bin/aegis-ot` as the script path,
+`capability-smoke` as the parameters, and the repository root as the working
+directory. On Windows, use `.venv\Scripts\aegis-ot.exe`. If an editable install
+has not yet been completed, use `.venv/bin/python` with parameters `-m
+aegis_ot.cli capability-smoke` and configure `src` as a Sources Root or set
+`PYTHONPATH=src`.
+
 ## Verification sequence
 
 Run these commands from the repository root before recording an experiment:
@@ -62,19 +75,52 @@ AEGIS_TLA_JAR=/absolute/path/to/tla2tools-1.8.0.jar
   --output-dir /private/tmp/aegis-formal-check
 ```
 
-The current local implementation produces 289 passing tests and 91.35 percent
-branch-aware coverage. Ruff, strict mypy, schema-drift, bounded intended and
-weakened formal-model checks, and Compose configuration validation are clean in
-the same local development state. These observations are local evidence only.
-They do not establish a remote CI result, container startup, deployed isolation,
-physical validity, or independent replication.
+The isolated candidate tree produces 478 passing tests and 92.05 percent
+branch-aware coverage. That run used the committed retained-evidence files while
+leaving user-modified result files untouched in the primary working tree. Ruff,
+strict mypy, and schema-drift checks are clean locally. The previously verified
+bounded intended and weakened formal-model evidence is unchanged. These
+observations are local evidence only. They do not establish a remote CI result,
+container startup, deployed isolation, physical validity, or independent
+replication.
 
-Schema checking covers `ActionProposal` and the M3 physical-state, physical
+Schema checking covers `ActionProposal`; the M3 physical-state, physical
 command, candidate assessment, execution permit, acknowledgment,
-closed-loop-result, and signed Modbus request/response contracts. Compose
+closed-loop-result, and signed Modbus request/response contracts; and the M4a
+action-request, signed-observation, execution-permit, PLC-acknowledgment,
+closed-loop-result, and IPC-frame contracts. Compose
 configuration validation checks interpolation and structure; the current M3
 experiment runs directly from the Python environment and is not exercised by
 the Compose services.
+
+## M4a smoke-check evidence boundary
+
+`capability-smoke` starts a deterministic local stack, performs one candidate
+transaction, and reports the terminal state, live process identifiers,
+component health counters, dispatch and retry counts, and whether the in-memory
+transaction chain verified before shutdown. A successful run is a local
+implementation smoke observation. It is not an experiment package.
+
+The command does not export the signed pre/post observations, permit, PLC
+acknowledgment, trust-anchor public keys, negative capability-probe results, or
+orderly-restart replay provenance. The controller evidence chain exists only in
+memory, and the temporary replay-reservation directory is removed when the
+stack closes. The output therefore cannot be used as a retained, reproduced, or
+offline-verifiable M4a result. A future evidence milestone requires an explicit
+manifest, canonical artifact serialization, trust-anchor registration, hashes,
+an offline verifier, a new output directory per run, and an independently
+defined replication protocol.
+
+The M4a topology is bounded to distinct spawned processes on one host under the
+same OS user, filesystem, and clock. The separately keyed observer reads the
+same authoritative deterministic plant used for candidate simulation, and its
+post snapshot links directly to that transaction's pre snapshot rather than a
+continuous global observation chain. Replay transfer covers one orderly
+virtual-PLC child replacement within the running lab; host crash, power loss,
+filesystem tampering, and full-stack restart are outside scope. The command does
+not establish segmentation, hostile-coordinator isolation, concurrent-controller
+behavior, HELICS, OpenPLC or physical-PLC behavior, hardware-in-the-loop,
+external validation, operational effectiveness, or WP4 exit.
 
 ## Controlled M3 run
 

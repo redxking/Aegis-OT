@@ -9,6 +9,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from aegis_ot.capability_ipc import IpcRequestFrame, IpcResponseFrame
+from aegis_ot.capability_models import (
+    CapabilityActionRequest,
+    CapabilityClosedLoopResult,
+    CapabilityExecutionPermit,
+    PlcCommandAcknowledgment,
+    SignedObservationEnvelope,
+)
 from aegis_ot.modbus_wire import SignedWireResponse, WireRequest
 from aegis_ot.physical_models import (
     CandidateAssessment,
@@ -23,6 +31,13 @@ from aegis_ot.schema import action_proposal_schema
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
 MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
+    ROOT / "schemas" / "m4a-action-request.schema.json": CapabilityActionRequest,
+    ROOT / "schemas" / "m4a-closed-loop-result.schema.json": CapabilityClosedLoopResult,
+    ROOT / "schemas" / "m4a-execution-permit.schema.json": CapabilityExecutionPermit,
+    ROOT / "schemas" / "m4a-ipc-request.schema.json": IpcRequestFrame,
+    ROOT / "schemas" / "m4a-ipc-response.schema.json": IpcResponseFrame,
+    ROOT / "schemas" / "m4a-plc-acknowledgment.schema.json": PlcCommandAcknowledgment,
+    ROOT / "schemas" / "m4a-signed-observation.schema.json": SignedObservationEnvelope,
     ROOT / "schemas" / "m3-candidate-assessment.schema.json": CandidateAssessment,
     ROOT / "schemas" / "m3-closed-loop-result.schema.json": ClosedLoopResult,
     ROOT / "schemas" / "m3-command-acknowledgment.schema.json": CommandAcknowledgment,

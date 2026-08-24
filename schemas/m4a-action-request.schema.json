@@ -1,0 +1,163 @@
+{
+  "$defs": {
+    "ActionProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "delegation_chain": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Delegation Chain",
+          "type": "array"
+        },
+        "human_approval_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Approval Id"
+        },
+        "mission_id": {
+          "minLength": 1,
+          "title": "Mission Id",
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Nonce",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "observed_state_version": {
+          "minimum": 0,
+          "title": "Observed State Version",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "mission_id",
+        "resource",
+        "operation",
+        "observed_state_version",
+        "observed_at",
+        "nonce",
+        "confidence",
+        "risk_score",
+        "delegation_chain"
+      ],
+      "title": "ActionProposal",
+      "type": "object"
+    },
+    "Operation": {
+      "enum": [
+        "isolate_asset",
+        "restore_asset",
+        "shed_load",
+        "dispatch_battery"
+      ],
+      "title": "Operation",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "An agent proposal plus a reference to observer-held signed state, never a state body.",
+  "properties": {
+    "correlation_id": {
+      "minLength": 1,
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "observation_challenge_nonce": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Observation Challenge Nonce",
+      "type": "string"
+    },
+    "observation_envelope_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Observation Envelope Digest",
+      "type": "string"
+    },
+    "observation_id": {
+      "minLength": 1,
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "proposal": {
+      "$ref": "#/$defs/ActionProposal"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "capability-action-request-v1",
+      "default": "capability-action-request-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "correlation_id",
+    "proposal",
+    "observation_id",
+    "observation_envelope_digest",
+    "observation_challenge_nonce"
+  ],
+  "title": "CapabilityActionRequest",
+  "type": "object"
+}

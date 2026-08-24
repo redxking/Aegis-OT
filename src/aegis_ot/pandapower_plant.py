@@ -540,6 +540,7 @@ class PandapowerCigreMVPlant:
         *,
         expected_pre_state_version: int | None = None,
         expected_pre_state_digest: str | None = None,
+        expected_pre_observation_digest: str | None = None,
         expected_post_state_digest: str | None = None,
         expected_post_topology_digest: str | None = None,
     ) -> PhysicalStateSnapshot:
@@ -558,6 +559,11 @@ class PandapowerCigreMVPlant:
                 and current.state_digest != expected_pre_state_digest
             ):
                 raise PhysicalSimulationError("precommit_state_digest_changed")
+            if (
+                expected_pre_observation_digest is not None
+                and current.observation_digest != expected_pre_observation_digest
+            ):
+                raise PhysicalSimulationError("precommit_observation_changed")
             candidate_net = copy.deepcopy(self._net)
             self._apply_to_network(candidate_net, command)
             if not self._solve(candidate_net):

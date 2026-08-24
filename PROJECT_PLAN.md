@@ -7,10 +7,10 @@ The original package is unavailable. This repository is a clean reconstruction b
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.6, revision log, experiment and formal manifests, and reproducible outcome hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | Current combined local suite: 289 tests pass with 91.35 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
+| WP1 Executable assurance kernel | Initial implementation complete | Isolated candidate suite: 478 tests pass with 92.05 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate has a verified 30-session result and a local outcome reproduction under matching recorded conditions; HELICS/OpenPLC, segmented deployment, and external validation are not implemented |
+| WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate has a verified 30-session result and a local outcome reproduction under matching recorded conditions; M4a adds a locally conformance-tested capability-separated plant/observer/virtual-PLC loop without a retained experiment package; HELICS/OpenPLC, segmented deployment, and external validation are not implemented |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
 | WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
 | WP7 Scale and economics | Planned | No measurements |
@@ -21,11 +21,14 @@ The original package is unavailable. This repository is a clean reconstruction b
 1. M0: controlled reconstruction baseline, clean install, tests, experiment manifest, and canonical study revision 0.1.
 2. M1: expanded TLA+ model, weakened variants, model-check evidence, and runtime conformance tests.
 3. M2: independent outcome oracle, stronger baselines, ablations, and multi-seed statistical analysis.
-4. M3: public power-system model and local process/virtual-device command boundary, followed by HELICS and OpenPLC integration.
-5. M4: SPIFFE/SPIRE identity, OPA service, network isolation, and six-node deployment.
-6. M5: operate-through-compromise and degraded-mode evaluation.
-7. M6: logical fleet scaling and economic sensitivity model.
-8. M7-M8: independent review, replication package, publication, and release.
+4. M3: public power-system model and local process/virtual-device command boundary.
+5. M4a: capability-separated deterministic-local plant, signed-observer, and
+   research virtual-PLC loop; retained evidence and broader WP4 integration
+   remain separate gates.
+6. M4: SPIFFE/SPIRE identity, OPA service, network isolation, and six-node deployment.
+7. M5: operate-through-compromise and degraded-mode evaluation.
+8. M6: logical fleet scaling and economic sensitivity model.
+9. M7-M8: independent review, replication package, publication, and release.
 
 ## Immediate acceptance gates
 
@@ -54,9 +57,10 @@ Implemented and locally verified:
   concurrent compare-and-swap behavior, restart-epoch invalidation, and explicit
   unknown-effect handling.
 - Generated public schemas for the M3 trust-boundary messages.
-- A local suite of 289 passing tests at 91.35 percent branch-aware coverage,
-  together with clean ruff, strict mypy, schema-drift, formal, and Compose
-  configuration checks.
+- An isolated candidate suite of 478 passing tests at 92.05 percent branch-aware
+  coverage, together with clean ruff, strict mypy, and schema-drift checks. The
+  candidate run used committed retained-evidence files while preserving the
+  user-modified copies in the primary working tree.
 - A retained primary controlled run and separate local reproduction, each
   containing 30 fresh child-process sessions, 150 trials, and 270 chained
   evidence events. Both pass the offline verifier from the matching clean
@@ -94,6 +98,52 @@ WP4 therefore remains in progress. Passing tests establish local implementation
 behavior under the tested conditions; they do not satisfy the WP4 exit gate or
 establish operational effectiveness.
 
+## Active M4a capability-separation increment
+
+Implemented and locally conformance-tested:
+
+- Distinct spawned plant, signed-observer, and Python research virtual-PLC
+  processes with distinct PIDs and separate observer/PLC signing keys and boot
+  epochs.
+- A closed-loop controller with observation, candidate-simulation, and PLC-
+  dispatch ports but no plant-apply handle. The trusted local harness separately
+  retains lifecycle administration and permit-signing authority.
+- Canonical JSON application frames over private process pipes with static
+  operation allowlists and generated public schemas.
+- A sole plant-apply endpoint created inside the plant supervisor and passed
+  directly to the virtual PLC; negative probes exercise unavailable apply
+  operations on observer, simulation, telemetry, and coordinator-admin paths.
+- Permit and compare-and-swap binding across PLC identity, key, boot epoch,
+  model, topology, state version, state digest, pre-observation digest, and
+  expected post-state.
+- Completion requiring one transaction-valid PLC-signed applied acknowledgment
+  plus a fresh separately observer-signed post snapshot directly linked to the
+  transaction's pre-observation and matching the authorized state.
+- Explicit `not_dispatched`, `candidate_rejected`, `plc_rejected`,
+  `unknown_effect`, `observation_diverged`, and `completed` terminal states,
+  with at most one dispatch attempt and no automatic retry.
+- Replay reservations surviving one orderly PLC-child replacement while the
+  local lab remains running.
+
+Acceptance boundary:
+
+- Separation is at the application/process-capability level on one host under
+  one OS user, filesystem, and clock domain. It is not a security boundary
+  against a hostile coordinator or host.
+- The observer and candidate evaluator read the same authoritative deterministic
+  plant. The observer is separately keyed and separately processed, but it is
+  not an independently operated sensor or an independently validated model.
+- Post-observation linkage is transaction-local, not a continuous global chain.
+- Replay state is temporary and covers one orderly child replacement only; it
+  is not durable across host crash, power loss, tampering, or full-stack restart.
+- The smoke output is transient operational status, not a retained manifest,
+  signed-artifact package, offline verifier, reproduced experiment, or
+  replication result.
+- HELICS, OpenPLC and physical-PLC integration, real-time scan semantics,
+  segmented or multi-host deployment, hardware-in-the-loop, recovery evaluation,
+  concurrent controllers, external validation, and operational effectiveness
+  remain open. M4a does not satisfy the WP4 exit gate.
+
 ## Read-only public demonstration increment
 
 The local Compose service now publishes a packaged evidence explorer rather
@@ -107,7 +157,8 @@ packaged projection. The mutable decision and
 state routes remain available only through a separately launched research
 application documented for loopback-only use.
 
-This increment improves public traceability and removes a default exposed
-mutation surface. It does not add HELICS, an independently operated observer,
-a virtual PLC separate from the simulator process, segmented deployment, or
-external validation, so it does not advance the WP4 exit gate by itself.
+This public-demo increment improves public traceability and removes a default
+exposed mutation surface. It did not itself add HELICS, an independently
+operated observer, segmented deployment, or external validation, so it does not
+advance the WP4 exit gate by itself. The later M4a local process work described
+above is not represented as retained public-demo evidence.

@@ -53,6 +53,18 @@ All notable changes are recorded here. Dates describe actual repository activity
   the public demonstration; manually verified the browser, isolated wheel, and
   container surfaces; and constrained the container install to the checked-in
   dependency lock file.
+- Added the bounded M4a capability-separated deterministic-local loop with
+  distinct plant, signed-observer, and Python research virtual-PLC processes;
+  separate observer and PLC identities and boot epochs; controller-only
+  observe/simulate/dispatch ports; an internally held sole plant-apply
+  capability; observation-bound compare-and-swap; one-dispatch fail-closed
+  semantics; six explicit terminal states; and one-orderly-child replay
+  reservation transfer.
+- Added generated M4a trust-boundary schemas, adversarial process/IPC and
+  lifecycle tests, a `capability-smoke` command, and explicit documentation that
+  the transient same-host smoke result is not a retained experiment, segmented
+  deployment, independent sensing result, OpenPLC/physical-PLC integration, or
+  WP4 completion.
 
 ### Fixed
 

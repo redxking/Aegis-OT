@@ -214,6 +214,29 @@ def test_authorized_apply_is_versioned_and_rejects_target_or_bounds(now) -> None
         plant.apply_authorized_command(out_of_bounds)
 
 
+def test_authorized_apply_rejects_a_superseded_observation_envelope(now) -> None:
+    plant = PandapowerCigreMVPlant(observed_at=now)
+    command = TrustedCommandTranslator().translate(m3_proposal(now))
+    pre = plant.capture_state()
+    assessment = plant.simulate_candidate(command)
+    superseding_observation = plant.capture_state()
+
+    assert superseding_observation.state_digest == pre.state_digest
+    assert superseding_observation.observation_digest != pre.observation_digest
+    with pytest.raises(PhysicalSimulationError, match="precommit_observation_changed"):
+        plant.apply_authorized_command(
+            command,
+            expected_pre_state_version=pre.state_version,
+            expected_pre_state_digest=pre.state_digest,
+            expected_pre_observation_digest=pre.observation_digest,
+            expected_post_state_digest=assessment.post_state.state_digest,
+            expected_post_topology_digest=assessment.post_state.topology_digest,
+        )
+    after = plant.read_state()
+    assert after.state_version == pre.state_version
+    assert after.isolated_resources == pre.isolated_resources
+
+
 def test_invalid_plant_configuration_fails_before_simulation(now) -> None:
     with pytest.raises(ValueError, match="mission-priority"):
         PandapowerCigreMVPlant(observed_at=now, priority_load_indices=frozenset())
