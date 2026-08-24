@@ -62,6 +62,16 @@
       "evidence_label": "Public demo evidence bundle",
       "evidence_artifact": "src/aegis_ot/web_demo/evidence.json",
       "page_count": 21
+    },
+    {
+      "revision": "0.7",
+      "timestamp_utc": "2026-08-24T22:54:40Z",
+      "editor": "Angelis Pseftis",
+      "description": "Added the bounded M4a capability-separated deterministic-local plant, signed-observer, and research virtual-PLC implementation, contracts, fault-path verification, and explicit evidence limits.",
+      "git_commit": "e323bbf113bfebd301c60a92fc246ae3b0126ce5",
+      "evidence_label": "M4a architecture decision record",
+      "evidence_artifact": "docs/adr/0004-capability-separated-deterministic-local-loop.md",
+      "page_count": 24
     }
   ]
 }

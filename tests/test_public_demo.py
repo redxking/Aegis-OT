@@ -457,9 +457,13 @@ def test_packaged_demo_evidence_is_current() -> None:
     assert "validly signed wrong-audience permit" in report_text
     assert "Wrong-audience permit" not in report_text
     assert "wrong permit audience" not in report_text
-    assert "289 passing tests" in report_text
-    assert "clean strict mypy across the package source and public-demo builder" in report_text
-    assert "91.35 percent branch-aware coverage" in report_text
+    assert "passed 478 tests" in report_text
+    assert "strict mypy" in report_text
+    assert "92.05 percent branch-aware coverage" in report_text
+    assert "M4a currently has no equivalent retained package" in report_text
+    assert "not a continuous global observation chain" in report_text
+    assert "controller has no plant-apply handle" in report_text
+    assert "289 passing tests" not in report_text
     assert "264 passing tests" not in report_text
     assert "91.57 percent" not in report_text
     assert '"wrong_audience_permit": "Audience altered post-signing"' in report_source
@@ -467,14 +471,14 @@ def test_packaged_demo_evidence_is_current() -> None:
 
     assert revision_log["author"] == "Angelis Pseftis"
     assert revision_log["editor"] == "Angelis Pseftis"
-    assert len(revision_log["revisions"]) == 6
+    assert len(revision_log["revisions"]) == 7
     assert {revision["editor"] for revision in revision_log["revisions"]} == {
         "Angelis Pseftis"
     }
     current_revision = revision_log["revisions"][-1]
-    assert current_revision["revision"] == "0.6"
+    assert current_revision["revision"] == "0.7"
     assert current_revision["git_commit"] == (
-        "3214b65932f4c9acf762d9631814572f0897d8ef"
+        "e323bbf113bfebd301c60a92fc246ae3b0126ce5"
     )
     core_namespace = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
     dc_namespace = "http://purl.org/dc/elements/1.1/"
@@ -483,7 +487,7 @@ def test_packaged_demo_evidence_is_current() -> None:
         core_properties.findtext(f"{{{core_namespace}}}lastModifiedBy")
         == "Angelis Pseftis"
     )
-    assert core_properties.findtext(f"{{{core_namespace}}}revision") == "6"
+    assert core_properties.findtext(f"{{{core_namespace}}}revision") == "7"
 
     app_namespace = (
         "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
