@@ -32,6 +32,10 @@ M3_REPRODUCTION_MANIFEST = json.loads(
 M3_SUMMARY = json.loads(
     (ROOT / "results" / "m3-physical-modbus" / "summary.json").read_text()
 )
+PUBLIC_DEMO_EVIDENCE = json.loads(
+    (ROOT / "src" / "aegis_ot" / "web_demo" / "evidence.json").read_text()
+)
+PUBLIC_M3_VERIFICATION = PUBLIC_DEMO_EVIDENCE["m3"]["verification"]
 FORMAL_MANIFEST = json.loads(
     (ROOT / "results" / "formal" / "m1-authorization-conformance" / "manifest.json").read_text()
 )
@@ -86,6 +90,13 @@ def set_repeat_table_header(row) -> None:
     tr_pr.append(header)
 
 
+def prevent_row_split(row) -> None:
+    tr_pr = row._tr.get_or_add_trPr()
+    cant_split = OxmlElement("w:cantSplit")
+    cant_split.set(qn("w:val"), "true")
+    tr_pr.append(cant_split)
+
+
 def set_alt_text(inline_shape, description: str) -> None:
     doc_pr = inline_shape._inline.docPr
     doc_pr.set("descr", description)
@@ -116,9 +127,16 @@ def add_bullets(doc: Document, items: list[str]) -> None:
         set_font(paragraph.add_run(item), 10.5)
 
 
-def heading(doc: Document, text: str, level: int = 1) -> None:
+def heading(
+    doc: Document,
+    text: str,
+    level: int = 1,
+    *,
+    page_break_before: bool = False,
+) -> None:
     paragraph = doc.add_heading(text, level=level)
     paragraph.paragraph_format.keep_with_next = True
+    paragraph.paragraph_format.page_break_before = page_break_before
     paragraph.paragraph_format.line_spacing = 1.05
 
 
@@ -135,8 +153,11 @@ def table(doc: Document, headers: list[str], rows: list[list[str]], widths: list
         set_cell_margins(cell)
         set_font(cell.paragraphs[0].add_run(header), 9, bold=True)
     set_repeat_table_header(tbl.rows[0])
+    prevent_row_split(tbl.rows[0])
     for values in rows:
-        cells = tbl.add_row().cells
+        row = tbl.add_row()
+        prevent_row_split(row)
+        cells = row.cells
         for index, value in enumerate(values):
             cells[index].width = Inches(widths[index])
             cells[index].vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -262,7 +283,9 @@ def patch_extended_properties(path: Path, pages: int, words: int) -> None:
                         item,
                         updated if item.filename == "docProps/app.xml" else source.read(item.filename),
                     )
-            temporary_path.replace(path)
+            # Keep the canonical manuscript's filesystem identity and creation
+            # timestamp while replacing its ZIP payload in place.
+            path.write_bytes(temporary_path.read_bytes())
         finally:
             temporary_path.unlink(missing_ok=True)
 
@@ -321,8 +344,7 @@ def build() -> None:
         revision_rows,
         [0.55, 1.15, 0.9, 2.7, 1.2],
     )
-    doc.add_page_break()
-    heading(doc, "Contents")
+    heading(doc, "Contents", page_break_before=True)
     sections = [
         "1 Abstract", "2 Executive Summary", "3 Introduction and Research Gap", "4 Research Objectives, Questions, and Hypotheses",
         "5 Scope, Assumptions, and Claim Boundaries", "6 Threat Model", "7 System Requirements", "8 Reference Architecture",
@@ -342,12 +364,13 @@ def build() -> None:
     heading(doc, "2. Executive Summary")
     add_paragraph(doc, "The central engineering decision is that identity is necessary but insufficient. An agent never receives direct simulated-control authority; it receives authority to propose a bounded action. The gateway remains the policy-enforcement point and fails closed when identity, delegation, state, replay, policy, safety, or required approval cannot be established.")
     add_bullets(doc, [
-        "Current verified implementation evidence: 264 passing tests, clean strict type checking, clean linting, schema-drift validation, and 91.57 percent branch-aware coverage on the local Python 3.14 host. Coverage is implementation-conformance evidence, not independent validation.",
+        "Current verified implementation evidence: 289 passing tests, clean strict mypy across the package source and public-demo builder, clean repository linting, schema-drift validation, and 91.35 percent branch-aware coverage on the local Python 3.14 host. Coverage is implementation-conformance evidence, not independent validation.",
         f"Current formal evidence: TLC explored {FORMAL_INTENDED['states_generated']:,} generated and {FORMAL_INTENDED['distinct_states']:,} distinct states to depth {FORMAL_INTENDED['search_depth']} in the intended bounded configuration without an invariant or liveness violation. Sixteen targeted weakened configurations each produced the expected counterexample. This is bounded model evidence, not proof of the Python implementation or physical process.",
         "M2 evidence: 8,640 decision records across eight baselines, 12 reviewed scenario templates, 30 master seeds, and 36 sampled trials per seed per baseline. A separate rerun matched deterministic outcome hash b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90.",
         "M2 result: the assured path produced zero unauthorized executions among 450 authorization-negative records but executed 60 percent of the 450 reference-unsafe records because three conservative guardband templates remained inside the runtime kernel limits. This is a threshold-sensitivity finding, not physical evidence.",
         f"M3 evidence: the primary manifest records 30 fresh child-process sessions, 150 fixed-condition trials, 270 chained evidence events, commit {M3_MANIFEST['git']['commit'][:7]}, and a clean-start flag. The controlled package and local rerun pass the offline verifier from the matching clean checkout and share deterministic outcome SHA-256 {M3_MANIFEST['deterministic_outcome_sha256']}. The unsigned historical metadata is not external attestation.",
         "M3 result: 0 of 120 primary-package non-nominal trials produced a modeled effect or unauthorized device application under the registered end-to-end metric, whose denominator includes 60 gateway no-dispatch cases; all 30 nominal commands were applied, acknowledged, and read back; and 0 of 30 replays produced a second effect. The fail-fast runner observed no unknown-effect outcome, and the narrow proposal/decision/terminal-hash indicator was complete for 150 of 150 trials. These are fixed-condition conformance checks from one deterministic model and host, not device-dispatch-conditional, ambiguity-rate, or field-rate estimates.",
+        "Public demonstration: the packaged read-only explorer, evidence-builder check, browser surface, isolated wheel, and container surface were verified locally. These checks establish local implementation, packaging, and presentation behavior only; they are not observed remote CI, deployed isolation, evidence that M3 ran in containers, independent validation, operational validation, or production readiness.",
         "Next decision gate: introduce an independently operated measurement or model path, then evaluate HELICS coordination, OpenPLC or hardware I/O, durable device identity, segmented networking, post-commit recovery, and externally anchored evidence under separate acceptance gates.",
     ])
 
@@ -411,7 +434,8 @@ def build() -> None:
     heading(doc, "11. Experimental Methodology")
     add_paragraph(doc, "The controlled M2 experiment executes eight baselines and ablations against 12 human-reviewed synthetic scenario templates spanning nominal, consequence-unsafe, guardband, identity, delegation-scope, freshness, confidence, and approval conditions. Thirty master seeds each run three shuffled catalog cycles. Trial seeds sample bounded action parameters within each template; execution stops if either the kernel or reference classification departs from the catalog's reviewed expectation. B0-B3 preserve the original direct, identity-only, static-policy, and complete-gateway paths. B4-B7 add contextual ABAC, risk-aware, safety-without-delegation, and delegation-without-freshness comparisons.")
     add_paragraph(doc, "The reference oracle receives the proposal and pre-action state and independently calculates the candidate state with decimal arithmetic. It does not consume the kernel's predicted state. Its tighter load, voltage, thermal, isolation, and battery guardbands deliberately expose sensitivity. Primary measures are conditional unsafe-action escape, unauthorized execution, false block, mission correctness, decision latency, and kernel-oracle disagreement. Wilson 95 percent intervals characterize records under the balanced synthetic design; they do not capture model-form or field uncertainty.")
-    add_paragraph(doc, "The preregistered M3 increment executes five ordered conditions in each of 30 fresh child-process sessions: unknown identity, stale state, wrong permit audience, nominal permitted execution, and reuse of the nominal permit. The parent owns the gateway, command translation, permit issuer, and verified client. The child owns the PyModbus mailbox, permit enforcement, replay state, signed acknowledgments, and authoritative pandapower plant. The tested command isolates one registered line only after the gateway decision, candidate solve, evidence binding, and device-audience checks succeed. The parent accepts completion only after signed acknowledgment verification and post-action readback.")
+    add_paragraph(doc, "The preregistered M3 increment executes five ordered conditions in each of 30 fresh child-process sessions: unknown identity, stale state, a permit whose audience is altered after signing, nominal permitted execution, and reuse of the nominal permit. The parent owns the gateway, command translation, permit issuer, and verified client. The child owns the PyModbus mailbox, permit enforcement, replay state, signed acknowledgments, and authoritative pandapower plant. The tested command isolates one registered line only after the gateway decision, candidate solve, evidence binding, and device-audience checks succeed. The parent accepts completion only after signed acknowledgment verification and post-action readback.")
+    add_paragraph(doc, "The audience-alteration fixture changes the audience field after permit issuance. The device checks audience before signature and returns a signed permit_wrong_audience rejection without applying the command. Changing the field also invalidates the permit's original signature, so this condition does not exercise a separately issued, validly signed wrong-audience permit.")
     add_paragraph(doc, "M3 uses pandapower 3.5.4 to instantiate the packaged CIGRE MV network with all distributed-energy resources and runs balanced steady-state Newton-Raphson power flow. Seeds vary process sessions, keys, identifiers, and boot epochs; they do not vary the network, operating point, command, solver, or condition parameters. Wilson intervals describe repeated fixed-condition outcomes only. Candidate assessment, authoritative commit, and readback share the same model and child process, so agreement is not independent physical validation.")
 
     heading(doc, "12. Implementation and Verification Status")
@@ -422,7 +446,8 @@ def build() -> None:
         ["Safety and oracle", "Separate candidate-state implementations with intentionally different guardbands", "Code-path independence only; no physical validation"],
         ["Physical command path", "Signed one-time permit, PyModbus loopback process boundary, transactional pandapower apply, signed acknowledgment, and readback", "One host and virtual device; no OpenPLC, hardware, or segmented OT network"],
         ["Evidence", "Hash-chained decisions plus M3 event, permit, acknowledgment, source, schema, configuration, and artifact bindings", "M3 manifest is unsigned and its verification keys are package-internal"],
-        ["Verification", "264 tests; ruff and strict mypy clean; 91.57 percent branch-aware coverage", "Python 3.14 local host; remote CI not observed"],
+        ["Verification", "289 tests; repository ruff clean; strict mypy clean for src and the public-demo builder; 91.35 percent branch-aware coverage", "Python 3.14 local host; remote CI not observed"],
+        ["Public demonstration", "Packaged read-only evidence explorer; public API exposes health and retained-evidence reads only", "Local browser, isolated-wheel, and container checks; no deployment or external validation"],
         ["Formal model", "17 safety/type invariants and one decision-liveness property checked; 16 weakened cases produced expected violations", "Bounded abstraction; not implementation or physical proof"],
     ], [1.55, 2.25, 2.7])
 
@@ -450,7 +475,7 @@ def build() -> None:
     m3_condition_labels = {
         "unknown_identity": "Unknown identity",
         "stale_state": "Stale state",
-        "wrong_audience_permit": "Wrong-audience permit",
+        "wrong_audience_permit": "Audience altered post-signing",
         "nominal_permitted_execution": "Nominal execution",
         "permit_replay": "Permit replay",
     }
@@ -482,17 +507,17 @@ def build() -> None:
         doc,
         "m3_physical_results.png",
         "Figure 4. M3 fixed-condition conformance outcomes and single-host measured path latency.",
-        "M3 results table with 30 trials per condition. Unknown identity, stale state, wrong-audience permit, and replay show no modeled effect; nominal execution shows 30 modeled effects and 30 device applications. Box-and-point plots show single-host measured path latency by condition, with explicit non-field-validation caveats.",
+        "M3 results table with 30 trials per condition. Unknown identity, stale state, the permit whose audience was altered after signing, and replay show no modeled effect; nominal execution shows 30 modeled effects and 30 device applications. Box-and-point plots show single-host measured path latency by condition, with explicit non-field-validation caveats.",
     )
     denied_ci = M3_SUMMARY["denied_command_effect_rate_ci95"]
     nominal_ci = M3_SUMMARY["nominal_closed_loop_completion_rate_ci95"]
     unknown_ci = M3_SUMMARY["unknown_effect_rate_ci95"]
     trace_ci = M3_SUMMARY["evidence_trace_completeness_rate_ci95"]
-    add_paragraph(doc, f"Primary-package conformance: unknown identity and stale state were denied before dispatch; all 30 wrong-audience permits received signed device rejections; all 30 nominal commands were applied, signed, and read back; and all 30 replay attempts received signed rejections without a second modeled effect. Across 120 non-nominal trials, 0 modeled effects and 0 unauthorized device applications were observed under the registered end-to-end metric (two-sided 95 percent Wilson upper bound {denied_ci['upper']:.3%}). That denominator includes 60 gateway no-dispatch trials and is not a device-dispatch-conditional acceptance rate. Nominal completion was 30/30 (lower bound {nominal_ci['lower']:.3%}). Unknown effects were 0/150 (upper bound {unknown_ci['upper']:.3%}), but any unknown effect fails the controlled run; this is a conformance-completeness check, not an ambiguity-rate estimate. The narrow proposal/decision/terminal-hash trace indicator was complete for 150/150 trials (lower bound {trace_ci['lower']:.3%}); the stronger integrity and semantic checks are reported separately by the offline verifier. Zero observations do not establish an impossible event or a field failure rate.")
+    add_paragraph(doc, f"Primary-package conformance: unknown identity and stale state were denied before dispatch; all 30 post-signing audience-altered permit artifacts received signed permit_wrong_audience device rejections; all 30 nominal commands were applied, signed, and read back; and all 30 replay attempts received signed rejections without a second modeled effect. Because audience was checked before signature, these records characterize the implemented rejection path, not a validly signed wrong-audience permit. Across 120 non-nominal trials, 0 modeled effects and 0 unauthorized device applications were observed under the registered end-to-end metric (two-sided 95 percent Wilson upper bound {denied_ci['upper']:.3%}). That denominator includes 60 gateway no-dispatch trials and is not a device-dispatch-conditional acceptance rate. Nominal completion was 30/30 (lower bound {nominal_ci['lower']:.3%}). Unknown effects were 0/150 (upper bound {unknown_ci['upper']:.3%}), but any unknown effect fails the controlled run; this is a conformance-completeness check, not an ambiguity-rate estimate. The narrow proposal/decision/terminal-hash trace indicator was complete for 150/150 trials (lower bound {trace_ci['lower']:.3%}); the stronger integrity and semantic checks are reported separately by the offline verifier. Zero observations do not establish an impossible event or a field failure rate.")
     nominal_state = M3_SUMMARY["nominal_post_state"]
     nominal_latency = M3_SUMMARY["by_condition"]["nominal_permitted_execution"]["latency"]["end_to_end_ms"]
     add_paragraph(doc, f"For the single deterministic nominal fixture, the post-action minimum voltage was {nominal_state['minimum_voltage_pu']['mean']:.10f} per unit, maximum line loading was {nominal_state['maximum_line_loading_pct']['mean']:.8f} percent, and synthetic priority-load service remained {nominal_state['priority_load_served_pct']['mean']:.0f} percent with no registered voltage, thermal, or supervisory unsafe-state flag. The same physical values in all 30 sessions reflect one fixed model, operating point, and command. Controlled nominal host latency had mean {nominal_latency['mean_ms']:.3f} ms, median {nominal_latency['median_ms']:.3f} ms, and range {nominal_latency['minimum_ms']:.3f}-{nominal_latency['maximum_ms']:.3f} ms; timing is excluded from the deterministic outcome hash and is not an OT performance bound.")
-    add_paragraph(doc, f"Evidence interpretation: exactly 90 primary-package trials contain signed device acknowledgments. The 60 gateway no-dispatch trials use the registered verified/not-applicable convention because no device acknowledgment should exist; the reproduction package has the same per-package counts. From the matching clean checkout, both packages pass all nine offline-verifier checks and reproduce outcome SHA-256 {M3_MANIFEST['deterministic_outcome_sha256']}. The reproduction manifest reports a separate experiment identifier, {M3_REPRODUCTION_MANIFEST['experiment_id']}, and matching source and lock-file hashes, host metadata, Python and selected component versions, model, seed, and conditions. It is local outcome reproduction under matching recorded conditions, not proof of an identical environment or independent replication. The manifests are unsigned and the verification keys are package-internal; verification establishes internal consistency with the matching checkout, not origin, custody, physical-model validity, external authenticity, or field-device identity.")
+    add_paragraph(doc, f"Evidence interpretation: exactly 90 primary-package trials contain signed device acknowledgments. The 60 gateway no-dispatch trials use the registered verified/not-applicable convention because no device acknowledgment should exist; the reproduction package has the same per-package counts. From the historical matching checkout at commit {M3_MANIFEST['git']['commit'][:7]}, both packages passed all nine offline-verifier checks and reproduced outcome SHA-256 {M3_MANIFEST['deterministic_outcome_sha256']}. The public-demo projection associated with commit {CURRENT_REVISION['git_commit'][:7]} records all {len(PUBLIC_M3_VERIFICATION['internal_checks'])} package-internal checks passing for both retained packages while checkout_bindings reports {PUBLIC_M3_VERIFICATION['current_checkout_binding_status']}, as expected because the current implementation postdates the recorded M3 execution commit. This projection is not a new M3 run, a current matching-checkout execution, or independent replication. The reproduction manifest reports a separate experiment identifier, {M3_REPRODUCTION_MANIFEST['experiment_id']}, and matching source and lock-file hashes, host metadata, Python and selected component versions, model, seed, and conditions. It is local outcome reproduction under matching recorded conditions, not proof of an identical environment or independent replication. The manifests are unsigned and the verification keys are package-internal; verification establishes internal consistency with the matching checkout, not origin, custody, physical-model validity, external authenticity, or field-device identity.")
 
     heading(doc, "15. Multi-VM Integration Plan")
     add_paragraph(doc, "The six-node scaffold separates management, trust, agent, gateway, OT, and simulation functions. The gateway must become the only routed path between the agent network and the OT environment. Exit evidence includes route and firewall inspection, negative connectivity tests, packet capture, gateway partition behavior, and host-specific deployment documentation. The present Vagrant file is an unvalidated VirtualBox scaffold; it is not evidence that a six-VM range has been deployed.")
@@ -511,7 +536,7 @@ def build() -> None:
 
     heading(doc, "18. Reproducibility and Data Management")
     add_paragraph(doc, "The M2 manifest records clean-start Git state, scenario catalog and source hashes, all master seeds, baseline definitions, component versions, host details, raw-data path, timing-inclusive raw SHA-256, timing-independent outcome SHA-256, analyst, and known limitations. Raw JSONL retains sampled parameters and conditional outcomes. The original exploratory run remains separately labeled and is excluded from M2 comparison.")
-    add_paragraph(doc, "Each M3 package contains a manifest that records the clean-start flag; source, schema, project, lock, configuration, and artifact hashes; all session seeds; component versions; model digest; summary statistics; deterministic projection; host details; boundary conditions; analyst; and limitations. Separate package artifacts retain per-session process identities and verification keys, benchmark provenance, solver settings, raw trials, and chained events; the manifest binds those artifacts by hash. The offline verifier checks artifact hashes, counts, event chains, trial semantics, deterministic outcomes, summaries, configuration bindings, and matching-checkout bindings. The primary and local reproduction directories are retained separately and must not be overwritten. Derived figures are generated from raw evidence only after package verification against a matching clean checkout.")
+    add_paragraph(doc, "Each M3 package contains a manifest that records the clean-start flag; source, schema, project, lock, configuration, and artifact hashes; all session seeds; component versions; model digest; summary statistics; deterministic projection; host details; boundary conditions; analyst; and limitations. Separate package artifacts retain per-session process identities and verification keys, benchmark provenance, solver settings, raw trials, and chained events; the manifest binds those artifacts by hash. The offline verifier checks artifact hashes, counts, event chains, trial semantics, deterministic outcomes, summaries, configuration bindings, and matching-checkout bindings. The primary and local reproduction directories are retained separately and must not be overwritten. The retained raw records used for derived figures pass all eight package-internal checks for both packages; checkout binding is reported separately and must not be represented as current-source matching.")
 
     heading(doc, "19. Risks, Limitations, and Validity Threats")
     table(doc, ["Threat to validity", "Current consequence", "Required mitigation"], [
@@ -526,7 +551,7 @@ def build() -> None:
     ], [1.65, 2.25, 2.6])
 
     heading(doc, "20. Work Plan and Completion Criteria")
-    add_paragraph(doc, "The project advances through controlled governance, executable-kernel, formal-conformance, single-host experiment, physical and PLC integration, multi-node trust-boundary, operate-through-compromise, fleet-scale/economics, and independent-validation gates. The bounded M3 localhost pandapower/PyModbus evaluation is complete. WP4 remains in progress because HELICS coordination, OpenPLC or hardware integration, segmented deployment, durable device identity, post-commit recovery, and external validation have not been completed. A demonstration, green test suite, internally valid evidence package, or perfect fixed-condition result does not satisfy the final completion definition.")
+    add_paragraph(doc, "The project advances through controlled governance, executable-kernel, formal-conformance, single-host experiment, physical and PLC integration, multi-node trust-boundary, operate-through-compromise, fleet-scale/economics, and independent-validation gates. The bounded M3 localhost pandapower/PyModbus evaluation and read-only public evidence-explorer increment are complete local milestones. WP4 remains in progress because HELICS coordination, OpenPLC or hardware integration, segmented deployment, durable device identity, post-commit recovery, and external validation have not been completed. A demonstration, green test suite, internally valid evidence package, or perfect fixed-condition result does not satisfy the final completion definition.")
 
     heading(doc, "21. Conclusions")
     add_paragraph(doc, "The reconstructed foundation now supports two defensible narrow findings. First, under the reviewed M2 synthetic authorization cases, the complete gateway prevented authorization-invalid execution and outperformed partial control paths, while the separate reference model exposed a material guardband-sensitivity gap. Second, under the five fixed M3 conditions, the signed permit and loopback virtual-device path denied or rejected each registered negative case, completed every nominal command with signed acknowledgment and readback, rejected every replay without a second modeled effect, and preserved the registered narrow proposal/decision/terminal-hash indicator. The local rerun reproduced the deterministic M3 outcome hash under matching recorded conditions.")
@@ -554,7 +579,7 @@ def build() -> None:
         ["REQ-REPLAY-004", "replay.py", "Concurrent reservation and retention tests", "Distributed replay store absent"],
         ["REQ-EVID-005", "evidence.py; m3_experiment.py", "Chain integrity, tampering, M3 event correlation, and package verification", "Unsigned manifest; no external anchor"],
         ["REQ-TOCTOU-006", "lab.py; physical_control.py; modbus_device.py", "State-version, candidate re-attestation, compare-and-swap, and restart tests", "No distributed transaction or physical PLC"],
-        ["REQ-EXEC-007", "physical_control.py; physical_models.py; modbus_wire.py; modbus_device.py", "Permit, wrong-audience, replay, signed acknowledgment, readback, and offline-verifier tests", "Ephemeral keys and in-memory replay state"],
+        ["REQ-EXEC-007", "physical_control.py; physical_models.py; modbus_wire.py; modbus_device.py", "Permit, audience-tampering, replay, signed acknowledgment, readback, and offline-verifier tests", "Ephemeral keys and in-memory replay state"],
     ], [1.05, 1.8, 2.25, 1.4])
 
     heading(doc, "24. Data and Message Schemas Appendix")
@@ -565,7 +590,7 @@ def build() -> None:
     add_bullets(doc, [
         "Create and activate a clean Python 3.11-or-later virtual environment.",
         "Install with pip install -e \".[dev,docs,simulation]\"; do not rely on PYTHONPATH.",
-        "Run python scripts/export_schemas.py --check, ruff check ., mypy src, and pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90.",
+        "Run python scripts/export_schemas.py --check, python scripts/build_public_demo.py --check, ruff check ., mypy src scripts/build_public_demo.py, and pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90.",
         "Acquire the pinned TLC 1.8.0 JAR, verify SHA-256 eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a, and run python scripts/run_formal.py --jar /path/to/tla2tools.jar --output-dir results/formal/<run-name>.",
         "Run python -m aegis_ot demo --output-dir results/demo.",
         "Run python -m aegis_ot experiment --trials-per-seed 36 --seed-count 30 --seed 20260824 --output-dir results/m2-independent-oracle.",
@@ -576,7 +601,7 @@ def build() -> None:
     ])
 
     heading(doc, "26. Version-Control Audit Trail Appendix")
-    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation, c906ae7 records trust-boundary hardening, 3b5f129 records the bounded formal model and conformance mapping, e8b304d introduces the independent multi-seed evaluator, 050f9b1 corrects clean-start provenance capture, cd20986 adds sampled reviewed scenario envelopes, and 168b8bd adds the bounded M3 steady-state plant and signed Modbus process boundary. The controlled M2 evidence and a separate rerun share their deterministic outcome hash. The primary M3 package records clean 168b8bd and a local rerun shares its deterministic outcome hash; those unsigned historical Git fields are internally checked, not externally attested. No tagged release, external CI run, independent replication, or external validation has been observed.")
+    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation, c906ae7 records trust-boundary hardening, 3b5f129 records the bounded formal model and conformance mapping, e8b304d introduces the independent multi-seed evaluator, 050f9b1 corrects clean-start provenance capture, cd20986 adds sampled reviewed scenario envelopes, 168b8bd adds the bounded M3 steady-state plant and signed Modbus process boundary, 0c48c39 retains the verified M3 evidence, and 3214b65 adds the evidence-backed read-only public demonstration. The controlled M2 evidence and a separate rerun share their deterministic outcome hash. The primary M3 package records clean 168b8bd and a local rerun shares its deterministic outcome hash; those unsigned historical Git fields are internally checked, not externally attested. No tagged release, external CI run, independent replication, or external validation has been observed.")
 
     add_header_footer(doc)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

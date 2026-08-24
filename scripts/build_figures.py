@@ -243,7 +243,7 @@ def m3_physical_results() -> None:
     condition_labels = {
         "unknown_identity": "Unknown identity",
         "stale_state": "Stale state",
-        "wrong_audience_permit": "Wrong-audience permit",
+        "wrong_audience_permit": "Audience altered post-signing",
         "nominal_permitted_execution": "Nominal permitted execution",
         "permit_replay": "Permit replay",
     }

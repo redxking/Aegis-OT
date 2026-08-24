@@ -58,3 +58,10 @@ All notable changes are recorded here. Dates describe actual repository activity
 
 - Made M3 figure generation handle gateway-denial and device-rejection records
   that intentionally do not carry a full `end_to_end_ms` field.
+- Corrected the canonical study and M3 figure to characterize the retained
+  audience condition as post-signing field alteration. The device checked the
+  audience first and returned `permit_wrong_audience`; the alteration also
+  invalidated the original signature, so the run did not exercise a validly
+  signed wrong-audience permit.
+- Advanced the canonical study to revision 0.6 with the current local test and
+  coverage observations and the bounded read-only public-demonstration state.

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import pytest
 import yaml
@@ -423,3 +426,68 @@ def test_packaged_demo_evidence_is_current() -> None:
         text=True,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
+
+    report_source = (ROOT / "scripts" / "build_research_doc.py").read_text(
+        encoding="utf-8"
+    )
+    figure_source = (ROOT / "scripts" / "build_figures.py").read_text(encoding="utf-8")
+    revision_log = json.loads(
+        (ROOT / "research" / "revision_log.json").read_text(encoding="utf-8")
+    )
+    report_paths = tuple(
+        (ROOT / "research").glob("Aegis-OT_Research_Study*.docx")
+    )
+
+    assert len(report_paths) == 1
+    with zipfile.ZipFile(report_paths[0]) as package:
+        names = package.namelist()
+        assert "docProps/custom.xml" not in names
+        document_xml = ElementTree.fromstring(  # noqa: S314 - controlled DOCX
+            package.read("word/document.xml")
+        )
+        core_properties = ElementTree.fromstring(  # noqa: S314 - controlled DOCX
+            package.read("docProps/core.xml")
+        )
+        app_properties = ElementTree.fromstring(  # noqa: S314 - controlled DOCX
+            package.read("docProps/app.xml")
+        )
+    report_text = "\n".join(document_xml.itertext())
+    assert "audience is altered after signing" in report_text
+    assert "invalidates the permit's original signature" in report_text
+    assert "validly signed wrong-audience permit" in report_text
+    assert "Wrong-audience permit" not in report_text
+    assert "wrong permit audience" not in report_text
+    assert "289 passing tests" in report_text
+    assert "clean strict mypy across the package source and public-demo builder" in report_text
+    assert "91.35 percent branch-aware coverage" in report_text
+    assert "264 passing tests" not in report_text
+    assert "91.57 percent" not in report_text
+    assert '"wrong_audience_permit": "Audience altered post-signing"' in report_source
+    assert '"wrong_audience_permit": "Audience altered post-signing"' in figure_source
+
+    assert revision_log["author"] == "Angelis Pseftis"
+    assert revision_log["editor"] == "Angelis Pseftis"
+    assert len(revision_log["revisions"]) == 6
+    assert {revision["editor"] for revision in revision_log["revisions"]} == {
+        "Angelis Pseftis"
+    }
+    current_revision = revision_log["revisions"][-1]
+    assert current_revision["revision"] == "0.6"
+    assert current_revision["git_commit"] == (
+        "3214b65932f4c9acf762d9631814572f0897d8ef"
+    )
+    core_namespace = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+    dc_namespace = "http://purl.org/dc/elements/1.1/"
+    assert core_properties.findtext(f"{{{dc_namespace}}}creator") == "Angelis Pseftis"
+    assert (
+        core_properties.findtext(f"{{{core_namespace}}}lastModifiedBy")
+        == "Angelis Pseftis"
+    )
+    assert core_properties.findtext(f"{{{core_namespace}}}revision") == "6"
+
+    app_namespace = (
+        "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+    )
+    pages = app_properties.find(f"{{{app_namespace}}}Pages")
+    assert pages is not None
+    assert int(pages.text or "0") == current_revision["page_count"]

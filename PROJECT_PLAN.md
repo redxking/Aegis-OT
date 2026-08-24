@@ -6,7 +6,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 
 | Work package | State | Current exit evidence |
 |---|---|---|
-| WP0 Governance and reproducibility | In progress | Canonical study revision 0.5, revision log, experiment and formal manifests, and reproducible outcome hashes established |
+| WP0 Governance and reproducibility | In progress | Canonical study revision 0.6, revision log, experiment and formal manifests, and reproducible outcome hashes established |
 | WP1 Executable assurance kernel | Initial implementation complete | Current combined local suite: 289 tests pass with 91.35 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |

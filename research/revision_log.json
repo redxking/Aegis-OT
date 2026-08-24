@@ -52,6 +52,16 @@
       "experiment_manifest": "results/m3-physical-modbus/manifest.json",
       "reproduction_manifest": "results/m3-physical-modbus-reproduction/manifest.json",
       "page_count": 20
+    },
+    {
+      "revision": "0.6",
+      "timestamp_utc": "2026-08-24T20:44:20Z",
+      "editor": "Angelis Pseftis",
+      "description": "Corrected the M3 audience-tampering claim; synchronized verification and read-only public-demo status.",
+      "git_commit": "3214b65932f4c9acf762d9631814572f0897d8ef",
+      "evidence_label": "Public demo evidence bundle",
+      "evidence_artifact": "src/aegis_ot/web_demo/evidence.json",
+      "page_count": 21
     }
   ]
 }
