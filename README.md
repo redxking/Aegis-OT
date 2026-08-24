@@ -65,6 +65,24 @@ python scripts/export_schemas.py --check
 
 Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, non-finite values, out-of-range percentages, extra message fields, and timezone-naive timestamps are rejected before authorization evaluation.
 
+## Bounded formal model
+
+The TLA+ model covers submission, authorization or denial, dispatch,
+acknowledgment, execution, full-chain delegation, ancestor revocation, grant
+expiry, replay, policy and state consistency, approval, conflicting actions,
+evidence, compromise, and quarantine. Run the intended model and all targeted
+weakened variants with the pinned TLC JAR:
+
+```bash
+python scripts/run_formal.py \
+  --jar /path/to/tla2tools.jar \
+  --output-dir results/formal/<run-name>
+```
+
+The runner verifies the expected result for every case and records tool, model,
+configuration, state-space, runtime, Git, host, and counterexample evidence.
+See `docs/formal/conformance.md` for the explicit runtime mapping and gaps.
+
 ## Safety and disclosure
 
 Use only public, synthetic, or specifically authorized data and simulated assets. See `SECURITY.md`. Report vulnerabilities privately through the repository security advisory process when available.

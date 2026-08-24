@@ -26,3 +26,27 @@ jobs:
       - run: mypy src
       - run: python scripts/export_schemas.py --check
       - run: pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
+
+  formal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download pinned TLC
+        run: |
+          curl -L --fail --silent --show-error \
+            https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar \
+            --output /tmp/tla2tools.jar
+          echo "eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a  /tmp/tla2tools.jar" \
+            | sha256sum --check
+      - name: Check intended and weakened formal models
+        run: >-
+          python scripts/run_formal.py
+          --jar /tmp/tla2tools.jar
+          --output-dir /tmp/aegis-formal-ci

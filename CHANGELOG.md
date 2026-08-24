@@ -16,3 +16,5 @@ All notable changes are recorded here. Dates describe actual repository activity
 - Trust-boundary validation rejects non-finite values, unknown or operation-inconsistent parameters, extra fields, invalid voltage ordering, and naive timestamps.
 - Reproducible ActionProposal schema generation with CI drift detection.
 - Expanded security-focused suite to 62 tests and 95 percent branch-aware coverage, with a 90 percent CI floor.
+- Expanded the bounded TLA+ state machine and added reproducible intended and weakened model-check automation.
+- Added explicit formal-to-runtime conformance tests and a mapping that preserves unimplemented gaps.

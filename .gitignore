@@ -18,6 +18,9 @@ build/
 results/**/raw/
 research/rendered/
 research/*.pdf
+research/~$*.docx
+formal/*_TTrace_*
+formal/states/
 .vagrant/
 *.vdi
 *.pcap
