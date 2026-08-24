@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "WireOperation": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "WireOperation",
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "$ref": "#/$defs/WireOperation"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "modbus-wire-request-v1",
+      "default": "modbus-wire-request-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "transaction_id": {
+      "exclusiveMaximum": 18446744073709551616,
+      "minimum": 0,
+      "title": "Transaction Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "transaction_id",
+    "operation",
+    "payload"
+  ],
+  "title": "WireRequest",
+  "type": "object"
+}

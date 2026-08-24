@@ -28,7 +28,14 @@ dev = [
   "pytest-cov>=6,<8",
   "ruff>=0.9,<1",
 ]
-docs = ["python-docx>=1.1.2,<2"]
+docs = [
+  "Pillow>=11,<13",
+  "python-docx>=1.1.2,<2",
+]
+simulation = [
+  "pandapower==3.5.4",
+  "pymodbus==3.15.0",
+]
 
 [project.scripts]
 aegis-ot = "aegis_ot.cli:app"
@@ -39,6 +46,11 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers --strict-config"
+
+[tool.coverage.run]
+branch = true
+concurrency = ["multiprocessing"]
+parallel = true
 
 [tool.ruff]
 target-version = "py311"

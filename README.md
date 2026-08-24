@@ -18,12 +18,26 @@ telemetry -> bounded agent -> ActionProposal -> AegisGateway
                                            |-> replay protection
                                            `-> evidence chain
                                                     |
-                                  authorization -> command adapter
+                                  signed execution permit
                                                     |
-                                      simulated PLC/process only
+                                      command translator
+                                                    |
+                              signed Modbus mailbox on loopback
+                                                    |
+                           spawned virtual-device/plant process
+                              |-> permit-aware PyModbus device
+                              `-> pandapower CIGRE MV model
+                                                    |
+                                 signed acknowledgment + readback
 ```
 
-The gateway is the sole authorization route. Development-mode in-process components preserve interface boundaries but are not equivalent to independently deployed SPIRE, OPA, PLC, evidence, or simulation services.
+The gateway is the sole authorization route. The current M3 increment places the
+virtual device and physical model in a spawned child process and carries commands
+through a signed application mailbox over Modbus TCP bound to host loopback. This
+is a real process and protocol boundary in the tested local configuration, but it
+is not network segmentation, OpenPLC, a physical PLC, HELICS coordination, or a
+multi-VM deployment. Development-mode identity, policy, and evidence components
+also remain in process.
 
 ## Quick start
 
@@ -31,7 +45,7 @@ The gateway is the sole authorization route. Development-mode in-process compone
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e ".[dev,docs]"
+python -m pip install -e ".[dev,docs,simulation]"
 python scripts/export_schemas.py --check
 pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 ruff check .
@@ -41,6 +55,57 @@ python -m aegis_ot experiment --trials-per-seed 36 --seed-count 30 \
 ```
 
 Windows PowerShell activation is `.venv\Scripts\Activate.ps1`.
+
+### PyCharm local setup
+
+Create the environment from the repository root, then select
+`.venv/bin/python` as the project interpreter in PyCharm. On Windows, select
+`.venv\Scripts\python.exe`. Set the run configuration working directory to the
+repository root so configuration, schemas, policy, and result paths resolve
+consistently.
+
+A PyCharm terminal can run a one-session M3 smoke check with the installed
+console entry point:
+
+```bash
+.venv/bin/aegis-ot physical-experiment \
+  --seed-count 1 \
+  --seed 20260824 \
+  --output-dir /private/tmp/aegis-m3-smoke
+```
+
+The equivalent PyCharm Python run configuration uses the script path
+`.venv/bin/aegis-ot`, parameters `physical-experiment --seed-count 1 --seed
+20260824 --output-dir /private/tmp/aegis-m3-smoke`, and the repository root as
+its working directory. Use `.venv\Scripts\aegis-ot.exe` and a suitable temporary
+directory on Windows. When the environment is activated, the same entry point
+can be invoked as `aegis-ot physical-experiment`.
+
+The current local M3 implementation has 264 passing tests and 91.57 percent
+branch-aware coverage. Ruff, strict mypy, schema-drift, bounded formal-model,
+and Compose-configuration checks are also clean locally. These are local
+implementation-verification results; they are not an observed remote CI run,
+independent replication, physical validation, or the pending controlled M3
+experiment.
+
+Run the same local verification path with:
+
+```bash
+.venv/bin/python scripts/export_schemas.py --check
+.venv/bin/ruff check .
+.venv/bin/mypy src
+.venv/bin/python -m pytest \
+  --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
+docker compose config --quiet
+AEGIS_TLA_JAR=/absolute/path/to/tla2tools-1.8.0.jar
+.venv/bin/python scripts/run_formal.py \
+  --jar "$AEGIS_TLA_JAR" \
+  --output-dir /private/tmp/aegis-formal-check
+```
+
+Compose configuration validation proves that the file resolves; it does not
+prove that the services started, that the M3 process ran in containers, or that
+network trust boundaries were enforced.
 
 ## Containers
 
@@ -57,7 +122,10 @@ Copy `.env.example` to `.env` only when deliberately overriding an image. Overri
 
 ## Trust-boundary schemas
 
-`ActionProposal` is the authoritative validation model. Regenerate and verify its public JSON Schema with:
+`ActionProposal` and the M3 physical-state, command, candidate, permit,
+acknowledgment, closed-loop-result, and Modbus mailbox models are the
+authoritative validation contracts. Regenerate and verify their public JSON
+Schemas with:
 
 ```bash
 python scripts/export_schemas.py
@@ -65,6 +133,45 @@ python scripts/export_schemas.py --check
 ```
 
 Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, non-finite values, out-of-range percentages, extra message fields, and timezone-naive timestamps are rejected before authorization evaluation.
+
+## M3 physical and virtual-device experiment
+
+The current M3 implementation uses the packaged pandapower 3.5.4 CIGRE MV
+network with an Aegis-OT synthetic mission-priority load subset. It performs a
+balanced steady-state AC Newton-Raphson power flow. A signed, short-lived,
+single-use execution permit binds the exact proposal, command, candidate
+assessment, model, topology, pre-state, expected post-state, policy, safety
+version, evidence record, and device audience. The child process validates the
+permit, independently repeats the candidate calculation, applies an accepted
+command transactionally, and returns a signed acknowledgment. The parent
+accepts completion only after acknowledgment verification and state readback.
+
+The controlled experiment starts one fresh child process per master seed and
+runs five fixed conformance conditions: unknown identity, stale state, wrong
+permit audience, nominal permitted execution, and permit replay. The seeds vary
+session identifiers and process instances, not the deterministic power-flow
+physics. The intended 30-session run, which will produce 150 trial records, is
+still pending. Run it only from a clean committed implementation into a new
+result directory:
+
+```bash
+.venv/bin/aegis-ot physical-experiment \
+  --seed-count 30 \
+  --seed 20260824 \
+  --output-dir results/m3-physical-modbus
+```
+
+The resulting package includes the manifest, raw trial and evidence JSONL,
+scenario and summary files, per-session component health, evidence verification,
+benchmark provenance, solver configuration, artifact hashes, and a
+timing-independent deterministic outcome hash. Until that controlled run is
+completed and retained, no M3 empirical result should be reported.
+
+M3 remains bounded to localhost, a PyModbus virtual device, and steady-state
+simulation. It does not model electromagnetic transients, subcycle protection,
+relay timing, hardware I/O, field dynamics, or production OT. HELICS, OpenPLC,
+SPIFFE/SPIRE, service-backed OPA enforcement, multi-VM isolation, field data,
+hardware-in-the-loop testing, and external validation have not been completed.
 
 ## Bounded formal model
 

@@ -1,0 +1,168 @@
+{
+  "$defs": {
+    "CommandStatus": {
+      "enum": [
+        "applied",
+        "rejected",
+        "unknown_effect"
+      ],
+      "title": "CommandStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Integrity-protected virtual-device disposition and simulator readback.",
+  "properties": {
+    "acknowledged_at": {
+      "format": "date-time",
+      "title": "Acknowledged At",
+      "type": "string"
+    },
+    "acknowledgment_id": {
+      "minLength": 1,
+      "title": "Acknowledgment Id",
+      "type": "string"
+    },
+    "assessment_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Assessment Digest",
+      "type": "string"
+    },
+    "command_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Command Digest",
+      "type": "string"
+    },
+    "command_id": {
+      "minLength": 1,
+      "title": "Command Id",
+      "type": "string"
+    },
+    "decision_id": {
+      "minLength": 1,
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "device_id": {
+      "minLength": 1,
+      "title": "Device Id",
+      "type": "string"
+    },
+    "device_scan": {
+      "minimum": 1,
+      "title": "Device Scan",
+      "type": "integer"
+    },
+    "permit_id": {
+      "minLength": 1,
+      "title": "Permit Id",
+      "type": "string"
+    },
+    "permit_nonce": {
+      "minLength": 16,
+      "title": "Permit Nonce",
+      "type": "string"
+    },
+    "post_actuator_setpoint": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Post Actuator Setpoint"
+    },
+    "post_state_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Post State Digest"
+    },
+    "post_state_version": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Post State Version"
+    },
+    "pre_actuator_setpoint": {
+      "title": "Pre Actuator Setpoint",
+      "type": "number"
+    },
+    "pre_state_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pre State Digest",
+      "type": "string"
+    },
+    "proposal_id": {
+      "minLength": 1,
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "command-ack-v1",
+      "default": "command-ack-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    },
+    "signing_key_id": {
+      "minLength": 1,
+      "title": "Signing Key Id",
+      "type": "string"
+    },
+    "simulation_time_s": {
+      "minimum": 0,
+      "title": "Simulation Time S",
+      "type": "number"
+    },
+    "status": {
+      "$ref": "#/$defs/CommandStatus"
+    }
+  },
+  "required": [
+    "permit_id",
+    "permit_nonce",
+    "command_id",
+    "command_digest",
+    "assessment_digest",
+    "proposal_id",
+    "decision_id",
+    "device_id",
+    "device_scan",
+    "status",
+    "reason",
+    "acknowledged_at",
+    "pre_state_digest",
+    "pre_actuator_setpoint",
+    "simulation_time_s",
+    "signing_key_id"
+  ],
+  "title": "CommandAcknowledgment",
+  "type": "object"
+}

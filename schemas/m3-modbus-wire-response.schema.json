@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "WireOperation": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "WireOperation",
+      "type": "integer"
+    },
+    "WireResultCode": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "title": "WireResultCode",
+      "type": "integer"
+    },
+    "WireStatus": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "title": "WireStatus",
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "boot_epoch": {
+      "minLength": 16,
+      "title": "Boot Epoch",
+      "type": "string"
+    },
+    "device_id": {
+      "minLength": 1,
+      "title": "Device Id",
+      "type": "string"
+    },
+    "device_key_id": {
+      "minLength": 1,
+      "title": "Device Key Id",
+      "type": "string"
+    },
+    "device_transaction_counter": {
+      "minimum": 1,
+      "title": "Device Transaction Counter",
+      "type": "integer"
+    },
+    "operation": {
+      "$ref": "#/$defs/WireOperation"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "request_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Digest",
+      "type": "string"
+    },
+    "result_code": {
+      "$ref": "#/$defs/WireResultCode"
+    },
+    "schema_version": {
+      "const": "modbus-wire-response-v1",
+      "default": "modbus-wire-response-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/WireStatus"
+    },
+    "transaction_id": {
+      "exclusiveMaximum": 18446744073709551616,
+      "minimum": 0,
+      "title": "Transaction Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "transaction_id",
+    "operation",
+    "request_digest",
+    "status",
+    "result_code",
+    "payload",
+    "payload_digest",
+    "device_id",
+    "device_key_id",
+    "boot_epoch",
+    "device_transaction_counter"
+  ],
+  "title": "SignedWireResponse",
+  "type": "object"
+}

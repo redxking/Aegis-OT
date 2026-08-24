@@ -11,6 +11,12 @@ import typer
 from .experiment import derive_master_seeds, write_multiseed_experiment
 from .factory import build_local_lab
 from .lab import SimulatedCommandAdapter, nominal_state
+from .m3_experiment import (
+    MAX_M3_SESSIONS,
+    default_master_seeds,
+    verify_m3_package,
+    write_m3_experiment,
+)
 from .models import ActionProposal, Operation
 
 app = typer.Typer(no_args_is_help=True)
@@ -51,13 +57,47 @@ def demo(output_dir: Path = Path("results/demo")) -> None:
 @app.command()
 def experiment(
     trials_per_seed: int = typer.Option(36, min=1),
-    seed_count: int = typer.Option(30, min=1),
+    seed_count: int = typer.Option(30, min=1, max=MAX_M3_SESSIONS),
     seed: int = 20260824,
     output_dir: Path = Path("results/m2-independent-oracle"),
 ) -> None:
     master_seeds = derive_master_seeds(seed, seed_count)
     manifest = write_multiseed_experiment(output_dir, trials_per_seed, master_seeds)
     typer.echo(json.dumps(manifest["summary"], indent=2))
+
+
+@app.command("physical-experiment")
+def physical_experiment(
+    seed_count: int = typer.Option(30, min=1),
+    seed: int = 20260824,
+    output_dir: Path = Path("results/m3-physical-modbus"),
+) -> None:
+    """Run the bounded M3 pandapower/PyModbus process experiment."""
+
+    master_seeds = default_master_seeds(seed, seed_count)
+
+    def progress(completed: int, total: int) -> None:
+        typer.echo(f"M3 process sessions complete: {completed}/{total}")
+
+    manifest = write_m3_experiment(
+        output_dir,
+        master_seeds,
+        root_seed=seed,
+        progress=progress,
+    )
+    typer.echo(json.dumps(manifest["summary"], indent=2))
+
+
+@app.command("verify-physical-evidence")
+def verify_physical_evidence(
+    output_dir: Path = Path("results/m3-physical-modbus"),
+) -> None:
+    """Verify retained M3 package integrity and internal consistency."""
+
+    report = verify_m3_package(output_dir)
+    typer.echo(json.dumps(report, indent=2))
+    if not report["valid"]:
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

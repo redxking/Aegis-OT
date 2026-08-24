@@ -1,0 +1,999 @@
+{
+  "$defs": {
+    "ActionProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "delegation_chain": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Delegation Chain",
+          "type": "array"
+        },
+        "human_approval_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Approval Id"
+        },
+        "mission_id": {
+          "minLength": 1,
+          "title": "Mission Id",
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Nonce",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "observed_state_version": {
+          "minimum": 0,
+          "title": "Observed State Version",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "mission_id",
+        "resource",
+        "operation",
+        "observed_state_version",
+        "observed_at",
+        "nonce",
+        "confidence",
+        "risk_score",
+        "delegation_chain"
+      ],
+      "title": "ActionProposal",
+      "type": "object"
+    },
+    "CandidateAssessment": {
+      "additionalProperties": false,
+      "description": "Independent candidate power-flow result used before permit issuance.",
+      "properties": {
+        "assessment_id": {
+          "minLength": 1,
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "post_state": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        "pre_state": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "safe": {
+          "title": "Safe",
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": "candidate-assessment-v1",
+          "default": "candidate-assessment-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_digest",
+        "pre_state",
+        "post_state",
+        "safe",
+        "reasons"
+      ],
+      "title": "CandidateAssessment",
+      "type": "object"
+    },
+    "ClosedLoopStatus": {
+      "enum": [
+        "not_dispatched",
+        "candidate_rejected",
+        "device_rejected",
+        "completed",
+        "unknown_effect"
+      ],
+      "title": "ClosedLoopStatus",
+      "type": "string"
+    },
+    "CommandAcknowledgment": {
+      "additionalProperties": false,
+      "description": "Integrity-protected virtual-device disposition and simulator readback.",
+      "properties": {
+        "acknowledged_at": {
+          "format": "date-time",
+          "title": "Acknowledged At",
+          "type": "string"
+        },
+        "acknowledgment_id": {
+          "minLength": 1,
+          "title": "Acknowledgment Id",
+          "type": "string"
+        },
+        "assessment_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Assessment Digest",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "command_id": {
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "minLength": 1,
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "device_id": {
+          "minLength": 1,
+          "title": "Device Id",
+          "type": "string"
+        },
+        "device_scan": {
+          "minimum": 1,
+          "title": "Device Scan",
+          "type": "integer"
+        },
+        "permit_id": {
+          "minLength": 1,
+          "title": "Permit Id",
+          "type": "string"
+        },
+        "permit_nonce": {
+          "minLength": 16,
+          "title": "Permit Nonce",
+          "type": "string"
+        },
+        "post_actuator_setpoint": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post Actuator Setpoint"
+        },
+        "post_state_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post State Digest"
+        },
+        "post_state_version": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post State Version"
+        },
+        "pre_actuator_setpoint": {
+          "title": "Pre Actuator Setpoint",
+          "type": "number"
+        },
+        "pre_state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pre State Digest",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "command-ack-v1",
+          "default": "command-ack-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "signing_key_id": {
+          "minLength": 1,
+          "title": "Signing Key Id",
+          "type": "string"
+        },
+        "simulation_time_s": {
+          "minimum": 0,
+          "title": "Simulation Time S",
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/$defs/CommandStatus"
+        }
+      },
+      "required": [
+        "permit_id",
+        "permit_nonce",
+        "command_id",
+        "command_digest",
+        "assessment_digest",
+        "proposal_id",
+        "decision_id",
+        "device_id",
+        "device_scan",
+        "status",
+        "reason",
+        "acknowledged_at",
+        "pre_state_digest",
+        "pre_actuator_setpoint",
+        "simulation_time_s",
+        "signing_key_id"
+      ],
+      "title": "CommandAcknowledgment",
+      "type": "object"
+    },
+    "CommandStatus": {
+      "enum": [
+        "applied",
+        "rejected",
+        "unknown_effect"
+      ],
+      "title": "CommandStatus",
+      "type": "string"
+    },
+    "Decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "evidence_record_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Record Hash"
+        },
+        "outcome": {
+          "$ref": "#/$defs/DecisionOutcome"
+        },
+        "policy_version": {
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "safety_version": {
+          "title": "Safety Version",
+          "type": "string"
+        },
+        "state_version": {
+          "title": "State Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "outcome",
+        "reasons",
+        "policy_version",
+        "safety_version",
+        "state_version"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "DecisionOutcome": {
+      "enum": [
+        "permit",
+        "deny",
+        "modify",
+        "defer",
+        "simulate",
+        "require_approval",
+        "quarantine",
+        "revoke"
+      ],
+      "title": "DecisionOutcome",
+      "type": "string"
+    },
+    "ExecutionPermit": {
+      "additionalProperties": false,
+      "description": "Integrity-protected, one-time authorization for one exact control command.",
+      "properties": {
+        "assessment_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Assessment Digest",
+          "type": "string"
+        },
+        "audience": {
+          "minLength": 1,
+          "title": "Audience",
+          "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/PhysicalControlCommand"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "decision_id": {
+          "minLength": 1,
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_outcome": {
+          "const": "permit",
+          "default": "permit",
+          "title": "Decision Outcome",
+          "type": "string"
+        },
+        "evidence_record_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Record Hash",
+          "type": "string"
+        },
+        "expected_post_state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post State Digest",
+          "type": "string"
+        },
+        "expected_post_state_version": {
+          "minimum": 1,
+          "title": "Expected Post State Version",
+          "type": "integer"
+        },
+        "expected_post_topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post Topology Digest",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "model_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Digest",
+          "type": "string"
+        },
+        "observation_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Digest",
+          "type": "string"
+        },
+        "permit_id": {
+          "minLength": 1,
+          "title": "Permit Id",
+          "type": "string"
+        },
+        "permit_nonce": {
+          "minLength": 16,
+          "title": "Permit Nonce",
+          "type": "string"
+        },
+        "policy_version": {
+          "minLength": 1,
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "proposal_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Proposal Digest",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "safety_version": {
+          "minLength": 1,
+          "title": "Safety Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "execution-permit-v1",
+          "default": "execution-permit-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "signing_key_id": {
+          "minLength": 1,
+          "title": "Signing Key Id",
+          "type": "string"
+        },
+        "state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Digest",
+          "type": "string"
+        },
+        "state_version": {
+          "minimum": 0,
+          "title": "State Version",
+          "type": "integer"
+        },
+        "topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Topology Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "proposal_id",
+        "proposal_digest",
+        "command",
+        "command_digest",
+        "assessment_digest",
+        "state_version",
+        "state_digest",
+        "observation_digest",
+        "topology_digest",
+        "model_digest",
+        "expected_post_state_version",
+        "expected_post_state_digest",
+        "expected_post_topology_digest",
+        "evidence_record_hash",
+        "policy_version",
+        "safety_version",
+        "audience",
+        "issued_at",
+        "expires_at",
+        "signing_key_id"
+      ],
+      "title": "ExecutionPermit",
+      "type": "object"
+    },
+    "Operation": {
+      "enum": [
+        "isolate_asset",
+        "restore_asset",
+        "shed_load",
+        "dispatch_battery"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "PhysicalCommandType": {
+      "enum": [
+        "set_line_service",
+        "set_battery_injection"
+      ],
+      "title": "PhysicalCommandType",
+      "type": "string"
+    },
+    "PhysicalControlCommand": {
+      "additionalProperties": false,
+      "description": "Exact actuator command derived by a trusted resource mapping.",
+      "properties": {
+        "command_id": {
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "command_type": {
+          "$ref": "#/$defs/PhysicalCommandType"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "physical-command-v1",
+          "default": "physical-command-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "setpoint": {
+          "title": "Setpoint",
+          "type": "number"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "target_index": {
+          "minimum": 0,
+          "title": "Target Index",
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "boolean",
+            "MW"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "operation",
+        "resource",
+        "command_type",
+        "target",
+        "target_index",
+        "setpoint",
+        "unit"
+      ],
+      "title": "PhysicalControlCommand",
+      "type": "object"
+    },
+    "PhysicalStateSnapshot": {
+      "additionalProperties": false,
+      "description": "Authoritative, versioned steady-state result returned by the plant model.",
+      "properties": {
+        "battery_injection_mw": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Battery Injection Mw",
+          "type": "object"
+        },
+        "bus_voltage_pu": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Bus Voltage Pu",
+          "type": "array"
+        },
+        "converged": {
+          "title": "Converged",
+          "type": "boolean"
+        },
+        "input_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "isolated_resources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Isolated Resources",
+          "type": "array"
+        },
+        "line_loading_pct": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Line Loading Pct",
+          "type": "array"
+        },
+        "maximum_line_loading_pct": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Line Loading Pct"
+        },
+        "maximum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Voltage Pu"
+        },
+        "minimum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Voltage Pu"
+        },
+        "model_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Digest",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "observation_clock_domain": {
+          "minLength": 1,
+          "title": "Observation Clock Domain",
+          "type": "string"
+        },
+        "observation_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Digest",
+          "type": "string"
+        },
+        "observation_sequence": {
+          "minimum": 0,
+          "title": "Observation Sequence",
+          "type": "integer"
+        },
+        "observation_source_id": {
+          "minLength": 1,
+          "title": "Observation Source Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "priority_load_demand_mw": {
+          "minimum": 0,
+          "title": "Priority Load Demand Mw",
+          "type": "number"
+        },
+        "priority_load_served_mw": {
+          "minimum": 0,
+          "title": "Priority Load Served Mw",
+          "type": "number"
+        },
+        "priority_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority Load Served Pct",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "physical-state-v1",
+          "default": "physical-state-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "served_load_mw": {
+          "minimum": 0,
+          "title": "Served Load Mw",
+          "type": "number"
+        },
+        "simulation_time_s": {
+          "minimum": 0,
+          "title": "Simulation Time S",
+          "type": "number"
+        },
+        "simulator_version": {
+          "minLength": 1,
+          "title": "Simulator Version",
+          "type": "string"
+        },
+        "state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Digest",
+          "type": "string"
+        },
+        "state_version": {
+          "minimum": 0,
+          "title": "State Version",
+          "type": "integer"
+        },
+        "thermal_violation_count": {
+          "minimum": 0,
+          "title": "Thermal Violation Count",
+          "type": "integer"
+        },
+        "topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Topology Digest",
+          "type": "string"
+        },
+        "total_load_demand_mw": {
+          "minimum": 0,
+          "title": "Total Load Demand Mw",
+          "type": "number"
+        },
+        "total_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Load Served Pct",
+          "type": "number"
+        },
+        "unsafe_state": {
+          "title": "Unsafe State",
+          "type": "boolean"
+        },
+        "unserved_load_mw": {
+          "minimum": 0,
+          "title": "Unserved Load Mw",
+          "type": "number"
+        },
+        "voltage_violation_count": {
+          "minimum": 0,
+          "title": "Voltage Violation Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "simulator_version",
+        "model_digest",
+        "input_digest",
+        "topology_digest",
+        "state_digest",
+        "observation_digest",
+        "observation_sequence",
+        "observation_source_id",
+        "observation_clock_domain",
+        "state_version",
+        "simulation_time_s",
+        "observed_at",
+        "converged",
+        "total_load_demand_mw",
+        "served_load_mw",
+        "unserved_load_mw",
+        "total_load_served_pct",
+        "priority_load_demand_mw",
+        "priority_load_served_mw",
+        "priority_load_served_pct",
+        "voltage_violation_count",
+        "thermal_violation_count",
+        "unsafe_state",
+        "bus_voltage_pu",
+        "line_loading_pct"
+      ],
+      "title": "PhysicalStateSnapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Complete correlated disposition for one proposed physical action.",
+  "properties": {
+    "acknowledgment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CommandAcknowledgment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "assessment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CandidateAssessment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "command": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PhysicalControlCommand"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "decision": {
+      "$ref": "#/$defs/Decision"
+    },
+    "execution_evidence_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Evidence Hash",
+      "type": "string"
+    },
+    "last_observed_state": {
+      "$ref": "#/$defs/PhysicalStateSnapshot"
+    },
+    "permit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExecutionPermit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "post_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pre_state": {
+      "$ref": "#/$defs/PhysicalStateSnapshot"
+    },
+    "proposal": {
+      "$ref": "#/$defs/ActionProposal"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "closed-loop-result-v1",
+      "default": "closed-loop-result-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ClosedLoopStatus"
+    }
+  },
+  "required": [
+    "status",
+    "reasons",
+    "proposal",
+    "pre_state",
+    "decision",
+    "post_state",
+    "last_observed_state",
+    "execution_evidence_hash"
+  ],
+  "title": "ClosedLoopResult",
+  "type": "object"
+}

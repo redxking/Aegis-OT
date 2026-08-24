@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import math
 from pathlib import Path
+from statistics import median
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -15,6 +18,13 @@ LIGHT = "#EAF2F8"
 GOLD = "#B7791F"
 RED = "#A61B1B"
 GREEN = "#1B7F5A"
+M3_CONDITIONS = (
+    "unknown_identity",
+    "stale_state",
+    "wrong_audience_permit",
+    "nominal_permitted_execution",
+    "permit_replay",
+)
 
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -152,11 +162,122 @@ def baseline_results() -> None:
     image.save(ASSETS / "baseline_results.png", dpi=(220, 220))
 
 
+def percentile(values: list[float], quantile: float) -> float:
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+
+def m3_physical_results() -> None:
+    trials_path = ROOT / "results" / "m3-physical-modbus" / "trials.jsonl"
+    if not trials_path.is_file():
+        return
+    trials = [json.loads(line) for line in trials_path.read_text(encoding="utf-8").splitlines()]
+    by_condition = {
+        condition: [item for item in trials if item["condition"] == condition]
+        for condition in M3_CONDITIONS
+    }
+    image = Image.new("RGB", (2100, 1500), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((80, 55), "M3 closed-loop conformance and host latency", font=font(46, True), fill=INK)
+    draw.text((80, 115), "Thirty fresh virtual-device processes; five fixed conditions per process", font=font(25), fill=BLUE)
+
+    draw.text((80, 205), "Observed state effects and device applications", font=font(30, True), fill=INK)
+    table_x = 90
+    row_y = 285
+    headers = ("Condition", "Trials", "State effects", "Device applied", "Unknown effect")
+    widths = (760, 220, 290, 300, 300)
+    x = table_x
+    for header, width in zip(headers, widths, strict=True):
+        draw.rectangle((x, row_y, x + width, row_y + 70), fill=LIGHT, outline="#9FB3C8", width=2)
+        centered(draw, (x, row_y, x + width, row_y + 70), header, 22, bold=True)
+        x += width
+    condition_labels = {
+        "unknown_identity": "Unknown identity",
+        "stale_state": "Stale state",
+        "wrong_audience_permit": "Wrong-audience permit",
+        "nominal_permitted_execution": "Nominal permitted execution",
+        "permit_replay": "Permit replay",
+    }
+    for row_index, condition in enumerate(M3_CONDITIONS, start=1):
+        subset = by_condition[condition]
+        values = (
+            condition_labels[condition],
+            str(len(subset)),
+            str(sum(bool(item["state_changed"]) for item in subset)),
+            str(sum(bool(item["device_applied"]) for item in subset)),
+            str(sum(item["terminal_status"] == "unknown_effect" for item in subset)),
+        )
+        x = table_x
+        y = row_y + row_index * 70
+        for value, width in zip(values, widths, strict=True):
+            draw.rectangle((x, y, x + width, y + 70), fill="white", outline="#CBD5E1", width=2)
+            centered(draw, (x, y, x + width, y + 70), value, 22, bold=condition == "nominal_permitted_execution")
+            x += width
+
+    chart_top = 800
+    chart_left = 540
+    chart_right = 1970
+    draw.text((80, 720), "End-to-end latency distribution by condition", font=font(30, True), fill=INK)
+    latencies = {
+        condition: [float(item["latency_ms"]["end_to_end_ms"]) for item in subset]
+        for condition, subset in by_condition.items()
+    }
+    maximum = max(value for values in latencies.values() for value in values)
+    scale_max = max(1.0, math.ceil(maximum / 10.0) * 10.0)
+    for tick in range(6):
+        value = scale_max * tick / 5
+        x = chart_left + int((chart_right - chart_left) * tick / 5)
+        draw.line((x, chart_top, x, 1280), fill="#E2E8F0", width=2)
+        draw.text((x - 30, 1300), f"{value:.0f}", font=font(19), fill=INK)
+    draw.text((chart_right - 75, 1345), "ms", font=font(20, True), fill=INK)
+    for row_index, condition in enumerate(M3_CONDITIONS):
+        values = latencies[condition]
+        y = chart_top + 55 + row_index * 90
+        draw.text((80, y - 18), condition_labels[condition], font=font(22), fill=INK)
+        low, q1, middle, q3, high = (
+            min(values),
+            percentile(values, 0.25),
+            median(values),
+            percentile(values, 0.75),
+            max(values),
+        )
+
+        def x_position(value: float) -> int:
+            return chart_left + int((chart_right - chart_left) * value / scale_max)
+
+        draw.line((x_position(low), y, x_position(high), y), fill=BLUE, width=4)
+        draw.rectangle((x_position(q1), y - 23, x_position(q3), y + 23), fill="#D9EAF7", outline=BLUE, width=3)
+        draw.line((x_position(middle), y - 25, x_position(middle), y + 25), fill=INK, width=4)
+        for value in values:
+            draw.ellipse((x_position(value) - 4, y - 4, x_position(value) + 4, y + 4), fill=GOLD)
+    draw.text((80, 1410), "Latency is a single-host process measurement and is excluded from the deterministic outcome hash.", font=font(21), fill=RED)
+    draw.text((80, 1450), "The figure is conformance evidence for the retained fixtures, not field validation or an OT performance bound.", font=font(21), fill=RED)
+    image.save(ASSETS / "m3_physical_results.png", dpi=(220, 220))
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Build reproducible Aegis-OT figures")
+    parser.add_argument(
+        "--figure",
+        choices=("all", "architecture", "decision", "baseline", "m3"),
+        default="all",
+    )
+    args = parser.parse_args()
     ASSETS.mkdir(parents=True, exist_ok=True)
-    architecture()
-    decision_sequence()
-    baseline_results()
+    builders = {
+        "architecture": architecture,
+        "decision": decision_sequence,
+        "baseline": baseline_results,
+        "m3": m3_physical_results,
+    }
+    selected = tuple(builders) if args.figure == "all" else (args.figure,)
+    for name in selected:
+        builders[name]()
 
 
 if __name__ == "__main__":

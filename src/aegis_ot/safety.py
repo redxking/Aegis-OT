@@ -26,8 +26,10 @@ class SafetyResult:
 class SafetyKernel:
     version = "surrogate-safety-v1"
 
-    def __init__(self, limits: SafetyLimits | None = None) -> None:
+    def __init__(self, limits: SafetyLimits | None = None, *, version: str | None = None) -> None:
         self.limits = limits or SafetyLimits()
+        if version is not None:
+            self.version = version
 
     def evaluate(self, proposal: ActionProposal, state: SystemState) -> SafetyResult:
         predicted = self._transition(proposal, state)

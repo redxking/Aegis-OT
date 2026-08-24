@@ -20,3 +20,14 @@ All notable changes are recorded here. Dates describe actual repository activity
 - Added explicit formal-to-runtime conformance tests and a mapping that preserves unimplemented gaps.
 - Replaced the circular experiment oracle path with an independently implemented reference transition model and conservative guardbands.
 - Added a 12-scenario reviewed synthetic truth catalog, four stronger comparison/ablation baselines, 30-seed execution support, Wilson intervals, and timing-independent outcome hashes.
+- Added the bounded M3 pandapower CIGRE MV plant, trusted command translation,
+  short-lived signed execution permits, and a separate-process PyModbus virtual-device
+  boundary with signed acknowledgments, replay rejection, readback correlation,
+  candidate re-attestation, atomic state commits, and explicit unknown-effect handling.
+- Added the five-condition M3 controlled runner, public trust-boundary schemas,
+  source/configuration/schema/artifact hashes, retained per-session verification keys,
+  descriptive and interval statistics, and a reproducible M3 results figure.
+- Added a fail-closed offline M3 evidence verifier covering safe package traversal,
+  strict JSON, event-chain and exact payload correlation, state digests, registered
+  fixtures, replay relationships, permit and acknowledgment signatures, summaries,
+  deterministic outcomes, and current-checkout bindings.
