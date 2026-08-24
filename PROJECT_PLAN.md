@@ -6,9 +6,9 @@ The original package is unavailable. This repository is a clean reconstruction b
 
 | Work package | State | Current exit evidence |
 |---|---|---|
-| WP0 Governance and reproducibility | In progress | Canonical study revision 0.1, revision log, manifest, and raw hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | 62 tests pass; strict typing and linting clean; 95 percent branch-aware coverage; critical gateway, policy, model, replay, and evidence paths at 100 percent |
-| WP2 Formal specification | Started | Initial bounded model scaffold |
+| WP0 Governance and reproducibility | In progress | Canonical study revision 0.3, revision log, experiment and formal manifests, and raw hashes established |
+| WP1 Executable assurance kernel | Initial implementation complete | 73 tests pass; strict typing and linting clean; 95 percent branch-aware coverage; critical gateway, policy, model, replay, and evidence paths at 100 percent |
+| WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Surrogate operational | Shared-seed 200-trial smoke run complete; physical independence and multi-seed analysis remain open |
 | WP4 Power-system and OT integration | Planned | No closed-loop PLC or power-flow evidence |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |

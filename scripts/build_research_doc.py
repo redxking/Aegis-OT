@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "research" / "Aegis-OT_Research_Study.docx"
 REVISION = json.loads((ROOT / "research" / "revision_log.json").read_text())
 MANIFEST = json.loads((ROOT / "results" / "reproduction-v0.1" / "manifest.json").read_text())
+FORMAL_MANIFEST = json.loads(
+    (ROOT / "results" / "formal" / "m1-authorization-conformance" / "manifest.json").read_text()
+)
+FORMAL_INTENDED = next(case for case in FORMAL_MANIFEST["cases"] if case["name"] == "intended")
 CURRENT_REVISION = REVISION["revisions"][-1]
 REVISION_NUMBER = CURRENT_REVISION["revision"]
 BLUE = RGBColor(23, 105, 170)
@@ -253,7 +257,12 @@ def build() -> None:
     heading(doc, "Revision History", 2)
     revision_rows = []
     for revision in REVISION["revisions"]:
-        evidence_link = revision.get("experiment_manifest") or "ActionProposal schema"
+        evidence_link = (
+            revision.get("evidence_label")
+            or revision.get("experiment_manifest")
+            or revision.get("evidence_artifact")
+            or "No linked artifact"
+        )
         revision_rows.append(
             [
                 revision["revision"],
@@ -267,7 +276,7 @@ def build() -> None:
         doc,
         ["Revision", "UTC timestamp", "Editor", "Substantive change", "Evidence link"],
         revision_rows,
-        [0.55, 1.15, 0.9, 2.35, 1.55],
+        [0.55, 1.15, 0.9, 2.7, 1.2],
     )
     add_paragraph(doc, "Control statement: This DOCX is the single authoritative editable manuscript. Git history and research/revision_log.json preserve its revision trail. Supporting Markdown, figures, renders, and data are not alternate manuscripts.")
 
@@ -292,10 +301,11 @@ def build() -> None:
     heading(doc, "2. Executive Summary")
     add_paragraph(doc, "The central engineering decision is that identity is necessary but insufficient. An agent never receives direct simulated-control authority; it receives authority to propose a bounded action. The gateway remains the policy-enforcement point and fails closed when identity, delegation, state, replay, policy, safety, or required approval cannot be established.")
     add_bullets(doc, [
-        "Current verified implementation evidence: 62 passing tests, clean static type checking, clean linting, and 95 percent branch-aware coverage on the local Python 3.14 host. Gateway, policy, trust-boundary model, replay, and evidence paths each measure 100 percent coverage in this suite; coverage is implementation-conformance evidence, not independent validation.",
+        "Current verified implementation evidence: 73 passing tests, clean static type checking, clean linting, and 95 percent branch-aware coverage on the local Python 3.14 host. Gateway, policy, trust-boundary model, replay, and evidence paths each measure 100 percent coverage in this suite; coverage is implementation-conformance evidence, not independent validation.",
+        f"Current formal evidence: TLC explored {FORMAL_INTENDED['states_generated']:,} generated and {FORMAL_INTENDED['distinct_states']:,} distinct states to depth {FORMAL_INTENDED['search_depth']} in the intended bounded configuration without an invariant or liveness violation. Sixteen targeted weakened configurations each produced the expected counterexample. This is bounded model evidence, not proof of the Python implementation or physical process.",
         "Current experiment evidence: 200 synthetic trials per baseline using a shared seed set and master seed 20260824.",
         "Current limitation: perfect performance by the assured baseline is expected under the simplified rules and cannot support a claim of field effectiveness.",
-        "Next decision gate: run the TLA+ model and deliberately weakened variants, map modeled transitions to implementation-conformance tests, and replace the shared transition model with an independently executed power-system reference.",
+        "Next decision gate: replace the shared transition model with an independently executed power-system reference, strengthen comparison baselines, and run multi-seed analysis with uncertainty estimates.",
     ])
 
     doc.add_page_break()
@@ -351,7 +361,8 @@ def build() -> None:
     figure(doc, "decision_sequence.png", "Figure 2. Authorization and execution evidence sequence.", "Sequence diagram with agent, gateway, trust services, safety kernel, adapter, and evidence lanes. It shows proposal submission, identity and delegation verification, candidate transition evaluation, evidence append, command authorization, and acknowledgment.")
 
     heading(doc, "10. Formal Specification Strategy")
-    add_paragraph(doc, "The initial TLA+ scaffold models submission, authorization, denial, execution, revocation, nonce use, and evidence existence. It includes invariants for authentication, scope, modeled safety, replay, evidence completeness, and revoked-grant execution. This document does not claim that TLC has been run. The next milestone must record the exact tool version, model hash, state count, runtime, invariant results, and counterexamples from deliberately weakened configurations.")
+    add_paragraph(doc, f"The expanded TLA+ state machine models submission, authorization or denial, approval, dispatch, acknowledgment, execution, delegation validity, ancestor revocation with an explicit propagation bound, expiry, replay, policy and state consistency, conflicting actions, evidence, compromise, quarantine, and decision liveness. TLC version {FORMAL_MANIFEST['tool_version']} checked the intended configuration at commit {FORMAL_MANIFEST['git_commit'][:7]} with model SHA-256 {FORMAL_MANIFEST['model_sha256']}. It generated {FORMAL_INTENDED['states_generated']:,} states, found {FORMAL_INTENDED['distinct_states']:,} distinct states, reached depth {FORMAL_INTENDED['search_depth']}, and reported no invariant or liveness violation. All sixteen deliberately weakened cases reported their expected invariant violation. The result applies only to this abstraction, configuration, fairness condition, constants, tool build, and explored state space.")
+    add_paragraph(doc, "Initial model-check finding: The first TLC run against the earlier scaffold found a specification defect: its revocation invariant retroactively treated a later grant revocation as invalidating an execution that had already completed. Revision 0.3 corrects this by recording whether revocation, expiry, state staleness, acknowledgment absence, or quarantine was effective at execution time. This was a defect in the specification, not evidence of a corresponding runtime exploit.", bold_lead="Initial model-check finding:")
 
     heading(doc, "11. Experimental Methodology")
     add_paragraph(doc, "The reconstructed smoke experiment executes four baselines against the same 200 seeded isolation scenarios. The scenario generator varies critical-load impact and classifies the resulting candidate state using a post-decision oracle implemented outside the gateway. Direct access, identity-only, and static resource/risk policy baselines execute the proposed action; the assured baseline also evaluates delegation, contextual policy, freshness, replay, and modeled safety.")
@@ -364,7 +375,8 @@ def build() -> None:
         ["Gateway", "Fail-closed decision path with replay and freshness", "Single process"],
         ["Safety and oracle", "Separate rule evaluators using a shared surrogate transition", "Not independent physical validation"],
         ["Evidence", "Hash-chained decision records", "Tamper-evident while trusted head is preserved"],
-        ["Verification", "62 tests; ruff and strict mypy clean; 95 percent branch-aware coverage", "Python 3.14 local host; CI not yet observed"],
+        ["Verification", "73 tests; ruff and strict mypy clean; 95 percent branch-aware coverage", "Python 3.14 local host; CI not yet observed"],
+        ["Formal model", "17 safety/type invariants and one decision-liveness property checked; 16 weakened cases produced expected violations", "Bounded abstraction; not implementation or physical proof"],
     ], [1.55, 2.25, 2.7])
 
     heading(doc, "13. Preliminary Controlled Results")
@@ -413,7 +425,7 @@ def build() -> None:
     add_paragraph(doc, "The project advances through controlled governance, executable-kernel, formal-conformance, single-host experiment, physical and PLC integration, multi-node trust-boundary, operate-through-compromise, fleet-scale/economics, and independent-validation gates. A demonstration, green test suite, or perfect synthetic baseline does not satisfy the final completion definition.")
 
     heading(doc, "20. Conclusions")
-    add_paragraph(doc, "The reconstructed v0.1 foundation is sufficient to test a narrow proposition: under its explicit synthetic rules, the gateway can distinguish safe from unsafe isolation proposals and preserve evidence of the decision. It is not sufficient to conclude that autonomous agents can be trusted on real critical infrastructure. The next defensible advance is independent model checking and physical outcome evaluation, followed by stronger baselines and deployed trust boundaries.")
+    add_paragraph(doc, "The reconstructed v0.1 foundation is sufficient to test a narrow proposition: under its explicit synthetic rules, the gateway can distinguish safe from unsafe isolation proposals and preserve evidence of the decision. The bounded formal model now adds state-space evidence for its explicit abstraction, but it is not sufficient to conclude that autonomous agents can be trusted on real critical infrastructure. The next defensible advance is independently executed physical outcome evaluation, followed by stronger baselines and deployed trust boundaries.")
 
     heading(doc, "21. References")
     references = [
@@ -443,6 +455,7 @@ def build() -> None:
         "Create and activate a clean Python 3.11-or-later virtual environment.",
         "Install with pip install -e \".[dev,docs]\"; do not rely on PYTHONPATH.",
         "Run python scripts/export_schemas.py --check, ruff check ., mypy src, and pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90.",
+        "Acquire the pinned TLC 1.8.0 JAR, verify SHA-256 eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a, and run python scripts/run_formal.py --jar /path/to/tla2tools.jar --output-dir results/formal/<run-name>.",
         "Run python -m aegis_ot demo --output-dir results/demo.",
         "Run python -m aegis_ot experiment --trials 200 --seed 20260824 --output-dir results/reproduction-v0.1.",
         "Verify the manifest raw-data hash and dirty-tree declaration before reporting results.",
@@ -450,7 +463,7 @@ def build() -> None:
     ])
 
     heading(doc, "25. Version-Control Audit Trail Appendix")
-    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation. The current trust-boundary hardening milestone remains uncommitted at document-build time and is recorded as pending in the revision log. A clean post-commit experiment reproduction remains required before any tagged release.")
+    add_paragraph(doc, "This reconstruction begins a new Git history because the original package and its local uncommitted state were unavailable. No earlier commit hash is represented as an ancestor of this repository. Commit e94e47f records the reconstructed v0.1 foundation, c906ae7 records trust-boundary hardening, and 3b5f129 records the bounded formal model, weakened-check automation, CI gate, and implementation-conformance mapping. The committed formal evidence was then generated from a clean 3b5f129 worktree. A clean post-commit experiment reproduction remains required before any tagged release.")
 
     add_header_footer(doc)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

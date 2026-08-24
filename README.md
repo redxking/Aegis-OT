@@ -82,6 +82,7 @@ python scripts/run_formal.py \
 The runner verifies the expected result for every case and records tool, model,
 configuration, state-space, runtime, Git, host, and counterexample evidence.
 See `docs/formal/conformance.md` for the explicit runtime mapping and gaps.
+The committed M1 run is under `results/formal/m1-authorization-conformance`.
 
 ## Safety and disclosure
 

@@ -1,0 +1,160 @@
+TLC2 Version 2026.08.21.155922 (rev: 9787e65)
+Running breadth-first search Model-Checking with fp 104 and seed -1413214335325949142 with 1 worker on 10 cores with 3641MB heap and 64MB offheap memory [pid: 24671] (Mac OS X 26.6.2 aarch64, Homebrew 26.0.2 64bit, MSBDiskFPSet, DiskStateQueue).
+Parsing file /Users/angelispseftis/Desktop/Research/Aegis-OT/formal/AegisAuthorization.tla
+Parsing file /private/var/folders/_t/stmc8cgx1dbdqmkpsrtsrn480000gn/T/tlc-15223749844668147596/Naturals.tla (jar:file:/private/tmp/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Naturals.tla)
+Parsing file /private/var/folders/_t/stmc8cgx1dbdqmkpsrtsrn480000gn/T/tlc-15223749844668147596/FiniteSets.tla (jar:file:/private/tmp/tla2tools-1.8.0.jar!/tla2sany/StandardModules/FiniteSets.tla)
+Parsing file /private/var/folders/_t/stmc8cgx1dbdqmkpsrtsrn480000gn/T/tlc-15223749844668147596/TLC.tla (jar:file:/private/tmp/tla2tools-1.8.0.jar!/tla2sany/StandardModules/TLC.tla)
+Parsing file /private/var/folders/_t/stmc8cgx1dbdqmkpsrtsrn480000gn/T/tlc-15223749844668147596/Sequences.tla (jar:file:/private/tmp/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Sequences.tla)
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module TLC
+Semantic processing of module AegisAuthorization
+Linting of module AegisAuthorization
+Starting... (2026-08-24 11:26:14)
+Implied-temporal checking--satisfiability problem has 2 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-08-24 11:26:14.
+Error: Invariant NoUnsafeModeledExecution is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {}
+/\ submitted = {}
+/\ decisionEvidence = {}
+/\ executionEvidence = {}
+/\ acknowledged = {}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {}
+
+State 2: <Submit(action1) line 104, col 3 to line 111, col 44 of module AegisAuthorization>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {}
+/\ submitted = {action1}
+/\ decisionEvidence = {}
+/\ executionEvidence = {}
+/\ acknowledged = {}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {}
+
+State 3: <Authorize(action1) line 126, col 3 to line 148, col 44 of module AegisAuthorization>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {action1}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {}
+/\ submitted = {action1}
+/\ decisionEvidence = {action1}
+/\ executionEvidence = {}
+/\ acknowledged = {}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {nonce1}
+
+State 4: <Dispatch(action1) line 167, col 3 to line 175, col 44 of module AegisAuthorization>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {action1}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {action1}
+/\ submitted = {action1}
+/\ decisionEvidence = {action1}
+/\ executionEvidence = {}
+/\ acknowledged = {}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {nonce1}
+
+State 5: <Acknowledge(action1) line 178, col 3 to line 186, col 44 of module AegisAuthorization>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {action1}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {action1}
+/\ submitted = {action1}
+/\ decisionEvidence = {action1}
+/\ executionEvidence = {}
+/\ acknowledged = {action1}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {nonce1}
+
+State 6: <Execute(action1) line 189, col 3 to line 218, col 69 of module AegisAuthorization>
+/\ quarantined = {}
+/\ compromised = {}
+/\ approvals = {}
+/\ authorized = {action1}
+/\ executedWhileQuarantined = {}
+/\ executedWhenRevoked = {}
+/\ executedWhenExpired = {}
+/\ executedWhenStale = {}
+/\ executed = {action1}
+/\ revokedAt = (rootGrant :> 5 @@ leafGrant :> 5)
+/\ time = 0
+/\ scenario = unsafe
+/\ currentFresh = (action1 :> TRUE @@ action2 :> TRUE)
+/\ dispatched = {action1}
+/\ submitted = {action1}
+/\ decisionEvidence = {action1}
+/\ executionEvidence = {action1}
+/\ acknowledged = {action1}
+/\ executedWithoutAck = {}
+/\ denied = {}
+/\ usedNonces = {nonce1}
+
+425 states generated, 222 distinct states found, 129 states left on queue.
+The depth of the complete state graph search is 6.
+Finished in 00s at (2026-08-24 11:26:14)

@@ -9,17 +9,28 @@
       "revision": "0.1",
       "timestamp_utc": "2026-08-24T14:39:38Z",
       "editor": "Angelis Pseftis",
-      "description": "Established the reconstructed research protocol, evidence boundary, requirements, architecture, threat model, formal strategy, experimental method, current implementation evidence, and completion gates.",
+      "description": "Established the reconstructed protocol, evidence boundary, requirements, architecture, threat model, experimental method, and completion gates.",
       "git_commit": "e94e47fb911a14e3e49f3fe875672138a8eb267b",
+      "evidence_label": "Reproduction manifest",
       "experiment_manifest": "results/reproduction-v0.1/manifest.json"
     },
     {
       "revision": "0.2",
       "timestamp_utc": "2026-08-24T15:03:20Z",
       "editor": "Angelis Pseftis",
-      "description": "Hardened trust-boundary validation, synchronized the generated schema, expanded rejection tests, and raised the branch-aware coverage floor.",
-      "git_commit": "pending trust-boundary hardening commit",
+      "description": "Hardened trust-boundary validation, generated schema, rejection tests, and branch-coverage floor.",
+      "git_commit": "c906ae7f6446e92e2f115c7c0a15f00a18dbb4ce",
+      "evidence_label": "ActionProposal schema",
       "evidence_artifact": "schemas/action-proposal.schema.json"
+    },
+    {
+      "revision": "0.3",
+      "timestamp_utc": "2026-08-24T15:26:42Z",
+      "editor": "Angelis Pseftis",
+      "description": "Model checked the expanded authorization state machine, captured weakened-case counterexamples, and mapped runtime conformance.",
+      "git_commit": "3b5f12997f0e9b72aac1fe59e4743af148deaada",
+      "evidence_label": "Formal M1 manifest",
+      "evidence_artifact": "results/formal/m1-authorization-conformance/manifest.json"
     }
   ]
 }

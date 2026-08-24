@@ -1,0 +1,305 @@
+{
+  "all_expectations_met": true,
+  "analyst": "Angelis Pseftis",
+  "base_config_path": "formal/AegisAuthorization.cfg",
+  "base_config_sha256": "0b0019e195fdc8f1e318420417fc7a7e25724d9c9941082357375a1d403ea413",
+  "cases": [
+    {
+      "config_sha256": "0b0019e195fdc8f1e318420417fc7a7e25724d9c9941082357375a1d403ea413",
+      "distinct_states": 55512,
+      "expected_invariant": null,
+      "name": "intended",
+      "observed_invariant": null,
+      "override": null,
+      "passed_expectation": true,
+      "return_code": 0,
+      "runtime_seconds": 4.306063,
+      "scenario": null,
+      "search_depth": 20,
+      "states_generated": 167193
+    },
+    {
+      "config_sha256": "a41ffb349b26bd3fbf441819b7bea9e684d428f64671a38d6d18ed0ebdc4f551",
+      "distinct_states": 222,
+      "expected_invariant": "NoUnauthenticatedExecution",
+      "name": "weak-authentication",
+      "observed_invariant": "NoUnauthenticatedExecution",
+      "override": [
+        "EnforceAuthentication",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.50765,
+      "scenario": "unauthenticated",
+      "search_depth": 6,
+      "states_generated": 425
+    },
+    {
+      "config_sha256": "04b403ef57b653db696c4fe6bba70291ba65265f03200a74466e886e23f6b676",
+      "distinct_states": 8,
+      "expected_invariant": "NoDelegationAmplification",
+      "name": "weak-delegation",
+      "observed_invariant": "NoDelegationAmplification",
+      "override": [
+        "EnforceDelegation",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.426813,
+      "scenario": "delegation",
+      "search_depth": 3,
+      "states_generated": 8
+    },
+    {
+      "config_sha256": "147b1674a52fc550dc7462f3bc7a2a42d495c2586928ac8745b8aeccb154c1e5",
+      "distinct_states": 222,
+      "expected_invariant": "NoOutOfScopeExecution",
+      "name": "weak-scope",
+      "observed_invariant": "NoOutOfScopeExecution",
+      "override": [
+        "EnforceScope",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.489253,
+      "scenario": "scope",
+      "search_depth": 6,
+      "states_generated": 425
+    },
+    {
+      "config_sha256": "89818c3d7436bd613f4a3367205497d18b37277c47957bfc0b20b8084439b707",
+      "distinct_states": 222,
+      "expected_invariant": "NoUnsafeModeledExecution",
+      "name": "weak-safety",
+      "observed_invariant": "NoUnsafeModeledExecution",
+      "override": [
+        "EnforceSafety",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.516958,
+      "scenario": "unsafe",
+      "search_depth": 6,
+      "states_generated": 425
+    },
+    {
+      "config_sha256": "4bc198ca6ad8e9411af065628567ab2158d0049107b10781061a04ea64895421",
+      "distinct_states": 1714,
+      "expected_invariant": "NoReplay",
+      "name": "weak-replay",
+      "observed_invariant": "NoReplay",
+      "override": [
+        "EnforceReplay",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.625058,
+      "scenario": "replay",
+      "search_depth": 11,
+      "states_generated": 4057
+    },
+    {
+      "config_sha256": "b14dd5d636a5b2e158c807a0282cadba0bb1700069394ef3dfafb2e7bb2bb76a",
+      "distinct_states": 818,
+      "expected_invariant": "NoExecutionAfterEffectiveRevocation",
+      "name": "weak-revocation",
+      "observed_invariant": "NoExecutionAfterEffectiveRevocation",
+      "override": [
+        "EnforceRevocation",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.551929,
+      "scenario": "revoked",
+      "search_depth": 8,
+      "states_generated": 1889
+    },
+    {
+      "config_sha256": "58708d1af6bcfad1002a2833240a9f2c3caf7b2dadc0eb6dfe5d8bb19b2f05d4",
+      "distinct_states": 825,
+      "expected_invariant": "NoExecutionAfterExpiry",
+      "name": "weak-expiry",
+      "observed_invariant": "NoExecutionAfterExpiry",
+      "override": [
+        "EnforceExpiry",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.556717,
+      "scenario": "expired",
+      "search_depth": 8,
+      "states_generated": 1771
+    },
+    {
+      "config_sha256": "249963c13cbaeb2893354609a71232a85e5b0bff09a0e1853cb0c66626584446",
+      "distinct_states": 8,
+      "expected_invariant": "PolicyVersionConsistency",
+      "name": "weak-policy",
+      "observed_invariant": "PolicyVersionConsistency",
+      "override": [
+        "EnforcePolicy",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.406397,
+      "scenario": "policy",
+      "search_depth": 3,
+      "states_generated": 8
+    },
+    {
+      "config_sha256": "72e81db940983dc5d7bdfd5b8462b42891e53dc08fdc9cc60720acafb6902f07",
+      "distinct_states": 8,
+      "expected_invariant": "FreshProposalRequired",
+      "name": "weak-freshness",
+      "observed_invariant": "FreshProposalRequired",
+      "override": [
+        "EnforceFreshness",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.407088,
+      "scenario": "stale",
+      "search_depth": 3,
+      "states_generated": 8
+    },
+    {
+      "config_sha256": "29210178084155e6613e8fda079040d0e4250073410b22cabc1695dd68a62856",
+      "distinct_states": 300,
+      "expected_invariant": "HumanApprovalRequired",
+      "name": "weak-approval",
+      "observed_invariant": "HumanApprovalRequired",
+      "override": [
+        "EnforceApproval",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.496975,
+      "scenario": "approval",
+      "search_depth": 6,
+      "states_generated": 612
+    },
+    {
+      "config_sha256": "dd2270225bdada6c55c864eb12763f485da32ae2e160417a224a90a995620a05",
+      "distinct_states": 1714,
+      "expected_invariant": "NoConflictingExecution",
+      "name": "weak-conflict",
+      "observed_invariant": "NoConflictingExecution",
+      "override": [
+        "EnforceConflict",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.629555,
+      "scenario": "conflict",
+      "search_depth": 11,
+      "states_generated": 4057
+    },
+    {
+      "config_sha256": "d5eb704382af93c20815bf73053134bb6139dfe19ff3aa5942c8d8cd13f97317",
+      "distinct_states": 545,
+      "expected_invariant": "NoTOCTOUExecution",
+      "name": "weak-toctou",
+      "observed_invariant": "NoTOCTOUExecution",
+      "override": [
+        "EnforceTOCTOU",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.626503,
+      "scenario": "toctou",
+      "search_depth": 7,
+      "states_generated": 1143
+    },
+    {
+      "config_sha256": "66e6710e0adac7f257b87b6a399a4c8b24fda8f1aa2d7f8330c6a65127155028",
+      "distinct_states": 93,
+      "expected_invariant": "AcknowledgmentRequired",
+      "name": "weak-acknowledgment",
+      "observed_invariant": "AcknowledgmentRequired",
+      "override": [
+        "EnforceAcknowledgment",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.513839,
+      "scenario": "acknowledgment",
+      "search_depth": 5,
+      "states_generated": 156
+    },
+    {
+      "config_sha256": "2834745e8327b230a4ef77e6985b772dfe93e12d208f2a8001bd275185e056e7",
+      "distinct_states": 8,
+      "expected_invariant": "EvidenceCompleteness",
+      "name": "weak-decision-evidence",
+      "observed_invariant": "EvidenceCompleteness",
+      "override": [
+        "WriteDecisionEvidence",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.430604,
+      "scenario": "evidence",
+      "search_depth": 3,
+      "states_generated": 8
+    },
+    {
+      "config_sha256": "6d3d62a173623ae0c46f390432485b3e6b50fb53fdac925f384acd385ad4b391",
+      "distinct_states": 222,
+      "expected_invariant": "EvidenceCompleteness",
+      "name": "weak-execution-evidence",
+      "observed_invariant": "EvidenceCompleteness",
+      "override": [
+        "WriteExecutionEvidence",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.529548,
+      "scenario": "evidence",
+      "search_depth": 6,
+      "states_generated": 425
+    },
+    {
+      "config_sha256": "075d95d1236eaae645eff111491e6299456a1c711a7b4b415af3146c2fc96ec2",
+      "distinct_states": 2635,
+      "expected_invariant": "NoQuarantinedExecution",
+      "name": "weak-quarantine",
+      "observed_invariant": "NoQuarantinedExecution",
+      "override": [
+        "EnforceQuarantine",
+        "FALSE"
+      ],
+      "passed_expectation": true,
+      "return_code": 12,
+      "runtime_seconds": 0.827221,
+      "scenario": "compromise",
+      "search_depth": 8,
+      "states_generated": 7509
+    }
+  ],
+  "evidence_class": "bounded-formal-model-check",
+  "failed_cases": [],
+  "git_commit": "3b5f12997f0e9b72aac1fe59e4743af148deaada",
+  "git_dirty_at_start": false,
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "java_version": "openjdk version \"26.0.2\" 2026-07-21",
+  "model_path": "formal/AegisAuthorization.tla",
+  "model_sha256": "ab3839100a5cc5037551c95731fd7fc91d71e2b9847bcae9afb16ff2d19156dd",
+  "tool": "TLC",
+  "tool_jar_sha256": "eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a",
+  "tool_version": "2026.08.21.155922"
+}
