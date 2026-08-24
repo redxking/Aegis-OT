@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from .experiment import write_experiment
+from .experiment import derive_master_seeds, write_multiseed_experiment
 from .factory import build_local_lab
 from .lab import SimulatedCommandAdapter, nominal_state
 from .models import ActionProposal, Operation
@@ -50,11 +50,13 @@ def demo(output_dir: Path = Path("results/demo")) -> None:
 
 @app.command()
 def experiment(
-    trials: int = typer.Option(200, min=1),
+    trials_per_seed: int = typer.Option(36, min=1),
+    seed_count: int = typer.Option(30, min=1),
     seed: int = 20260824,
-    output_dir: Path = Path("results/reproduction-v0.1"),
+    output_dir: Path = Path("results/m2-independent-oracle"),
 ) -> None:
-    manifest = write_experiment(output_dir, trials, seed)
+    master_seeds = derive_master_seeds(seed, seed_count)
+    manifest = write_multiseed_experiment(output_dir, trials_per_seed, master_seeds)
     typer.echo(json.dumps(manifest["summary"], indent=2))
 
 

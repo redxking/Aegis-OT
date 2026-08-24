@@ -11,11 +11,35 @@ from aegis_ot.safety import SafetyKernel
 
 @given(st.floats(min_value=0, max_value=40, allow_nan=False, allow_infinity=False))
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-def test_kernel_and_oracle_agree_for_isolation_load_impact(proposal, state, impact) -> None:
+def test_oracle_independently_recomputes_isolation_transition(proposal, state, impact) -> None:
     candidate = proposal.model_copy(update={"parameters": {"critical_load_impact_pct": impact}})
     kernel_result = SafetyKernel().evaluate(candidate, state)
-    oracle_result = ReferenceOutcomeOracle().assess(kernel_result.predicted_state)
-    assert kernel_result.safe == oracle_result.acceptable
+    oracle_result = ReferenceOutcomeOracle().assess(candidate, state)
+    assert oracle_result.predicted_state.critical_load_served_pct == pytest.approx(
+        kernel_result.predicted_state.critical_load_served_pct
+    )
+    assert (
+        oracle_result.predicted_state.isolated_assets
+        == kernel_result.predicted_state.isolated_assets
+    )
+
+
+def test_reference_guardband_exposes_kernel_disagreement(proposal, state) -> None:
+    candidate = proposal.model_copy(update={"parameters": {"critical_load_impact_pct": 19.0}})
+    kernel_result = SafetyKernel().evaluate(candidate, state)
+    oracle_result = ReferenceOutcomeOracle().assess(candidate, state)
+    assert kernel_result.safe
+    assert not oracle_result.acceptable
+    assert oracle_result.violations == ("critical_load_guardband",)
+
+
+def test_oracle_does_not_call_safety_kernel(proposal, state, monkeypatch) -> None:
+    def fail_if_called(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("safety kernel must not be called by the reference oracle")
+
+    monkeypatch.setattr(SafetyKernel, "evaluate", fail_if_called)
+    result = ReferenceOutcomeOracle().assess(proposal, state)
+    assert result.acceptable
 
 
 def test_isolation_limit_is_enforced(proposal, state) -> None:

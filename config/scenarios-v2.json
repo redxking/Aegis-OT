@@ -1,0 +1,106 @@
+{
+  "catalog_version": "synthetic-microgrid-v2",
+  "evidence_class": "human-reviewed synthetic scenario truth set",
+  "scenarios": [
+    {
+      "name": "nominal_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "authorization_expected": true,
+      "rationale": "Known actor, delegated feeder, fresh state, and low modeled consequence."
+    },
+    {
+      "name": "load_guardband_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 19.0},
+      "authorization_expected": true,
+      "rationale": "Creates a deliberate kernel/reference guardband disagreement for sensitivity analysis."
+    },
+    {
+      "name": "critical_load_loss",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 25.0},
+      "authorization_expected": true,
+      "rationale": "The candidate state violates both critical-load envelopes."
+    },
+    {
+      "name": "thermal_guardband_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 3.0, "line_loading_delta_pct": 25.0},
+      "authorization_expected": true,
+      "rationale": "Produces 97 percent loading: within the kernel limit but outside the reference guardband."
+    },
+    {
+      "name": "thermal_overload_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 3.0, "line_loading_delta_pct": 32.0},
+      "authorization_expected": true,
+      "rationale": "Produces loading above both modeled thermal limits."
+    },
+    {
+      "name": "nominal_battery_dispatch",
+      "operation": "dispatch_battery",
+      "resource": "battery-1",
+      "parameters": {"mw": 2.0, "minimum_voltage_delta_pu": 0.002, "maximum_voltage_delta_pu": 0.002},
+      "authorization_expected": true,
+      "rationale": "Delegated battery action within the independent operating envelope."
+    },
+    {
+      "name": "undervoltage_guardband_dispatch",
+      "operation": "dispatch_battery",
+      "resource": "battery-1",
+      "parameters": {"mw": -2.0, "minimum_voltage_delta_pu": -0.035},
+      "authorization_expected": true,
+      "rationale": "Produces 0.955 pu: within the kernel limit but outside the reference guardband."
+    },
+    {
+      "name": "unknown_identity",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "proposal_updates": {"actor_id": "agent:unknown"},
+      "authorization_expected": false,
+      "rationale": "Physically acceptable proposal from an unrecognized actor."
+    },
+    {
+      "name": "resource_scope_violation",
+      "operation": "isolate_asset",
+      "resource": "feeder-2",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "authorization_expected": false,
+      "rationale": "The root covers feeder-2 but the leaf grant does not."
+    },
+    {
+      "name": "stale_safe_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "evaluation_delay_seconds": 6,
+      "authorization_expected": false,
+      "rationale": "Physically acceptable proposal evaluated outside the five-second freshness window."
+    },
+    {
+      "name": "low_confidence_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "proposal_updates": {"confidence": 0.4},
+      "authorization_expected": false,
+      "rationale": "Known actor and safe state but confidence is below contextual policy."
+    },
+    {
+      "name": "unapproved_high_risk_isolation",
+      "operation": "isolate_asset",
+      "resource": "feeder-1",
+      "parameters": {"critical_load_impact_pct": 5.0},
+      "proposal_updates": {"risk_score": 80.0},
+      "authorization_expected": false,
+      "rationale": "Risk exceeds the leaf grant and requires human approval."
+    }
+  ]
+}

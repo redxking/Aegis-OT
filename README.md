@@ -36,7 +36,8 @@ python scripts/export_schemas.py --check
 pytest --cov=aegis_ot --cov-branch --cov-report=term-missing --cov-fail-under=90
 ruff check .
 python -m aegis_ot demo --output-dir results/demo
-python -m aegis_ot experiment --trials 200 --seed 20260824 --output-dir results/reproduction-v0.1
+python -m aegis_ot experiment --trials-per-seed 36 --seed-count 30 \
+  --seed 20260824 --output-dir results/m2-independent-oracle
 ```
 
 Windows PowerShell activation is `.venv\Scripts\Activate.ps1`.
@@ -83,6 +84,16 @@ The runner verifies the expected result for every case and records tool, model,
 configuration, state-space, runtime, Git, host, and counterexample evidence.
 See `docs/formal/conformance.md` for the explicit runtime mapping and gaps.
 The committed M1 run is under `results/formal/m1-authorization-conformance`.
+
+## Synthetic experiment
+
+The M2 experiment uses 12 reviewed synthetic scenarios, eight control-path
+baselines and ablations, 30 deterministic master seeds, Wilson 95 percent
+intervals, and a separately implemented reference transition model. The
+reference model uses conservative guardbands so kernel-oracle disagreements are
+visible rather than forced to zero. It is independent at the code-path level;
+it is not a power-flow simulator or evidence of field effectiveness. See
+`docs/experiments/m2-method.md` for baseline and metric definitions.
 
 ## Safety and disclosure
 

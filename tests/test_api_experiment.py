@@ -7,7 +7,15 @@ from fastapi.testclient import TestClient
 
 import aegis_ot.api as api_module
 from aegis_ot.api import app
-from aegis_ot.experiment import BASELINES, run_experiment, write_experiment
+from aegis_ot.experiment import (
+    BASELINES,
+    derive_master_seeds,
+    load_scenarios,
+    run_experiment,
+    run_multiseed_experiment,
+    write_experiment,
+    write_multiseed_experiment,
+)
 
 
 def test_api_health() -> None:
@@ -65,9 +73,10 @@ def test_experiment_is_deterministic_in_outcomes() -> None:
         (item.seed, item.scenario, item.executed) for item in second
     ]
     for baseline in BASELINES:
-        assert first_summary[baseline]["unsafe_action_escape_rate"] == second_summary[baseline][
-            "unsafe_action_escape_rate"
-        ]
+        assert (
+            first_summary[baseline]["unsafe_action_escape_rate"]
+            == second_summary[baseline]["unsafe_action_escape_rate"]
+        )
 
 
 def test_experiment_writes_hashed_manifest(tmp_path) -> None:
@@ -76,3 +85,30 @@ def test_experiment_writes_hashed_manifest(tmp_path) -> None:
     persisted = json.loads((tmp_path / "manifest.json").read_text())
     assert persisted["raw_sha256"] == manifest["raw_sha256"]
     assert persisted["analyst"] == "Angelis Pseftis"
+
+
+def test_scenario_catalog_is_unique_and_exercised() -> None:
+    version, scenarios = load_scenarios()
+    results, _ = run_experiment(len(scenarios), 19)
+    assert version == "synthetic-microgrid-v2"
+    assert len({scenario.name for scenario in scenarios}) == len(scenarios)
+    assert {item.scenario for item in results if item.baseline == BASELINES[0]} == {
+        scenario.name for scenario in scenarios
+    }
+
+
+def test_multiseed_summary_has_all_baselines_and_bounded_intervals() -> None:
+    seeds = derive_master_seeds(7, 3)
+    results, summary = run_multiseed_experiment(12, seeds)
+    assert len(results) == 3 * 12 * len(BASELINES)
+    assert set(summary) == set(BASELINES)
+    for baseline in BASELINES:
+        interval = summary[baseline]["mission_success_ci95"]
+        assert 0.0 <= interval["lower"] <= interval["estimate"] <= interval["upper"] <= 1.0
+
+
+def test_deterministic_outcome_hash_excludes_host_timing(tmp_path) -> None:
+    seeds = derive_master_seeds(11, 2)
+    first = write_multiseed_experiment(tmp_path / "first", 12, seeds)
+    second = write_multiseed_experiment(tmp_path / "second", 12, seeds)
+    assert first["deterministic_outcome_sha256"] == second["deterministic_outcome_sha256"]

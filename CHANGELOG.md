@@ -18,3 +18,5 @@ All notable changes are recorded here. Dates describe actual repository activity
 - Expanded security-focused suite to 62 tests and 95 percent branch-aware coverage, with a 90 percent CI floor.
 - Expanded the bounded TLA+ state machine and added reproducible intended and weakened model-check automation.
 - Added explicit formal-to-runtime conformance tests and a mapping that preserves unimplemented gaps.
+- Replaced the circular experiment oracle path with an independently implemented reference transition model and conservative guardbands.
+- Added a 12-scenario reviewed synthetic truth catalog, four stronger comparison/ablation baselines, 30-seed execution support, Wilson intervals, and timing-independent outcome hashes.
