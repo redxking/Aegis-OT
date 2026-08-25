@@ -85,7 +85,9 @@ from .physical_models import (
     CandidateAssessment,
     CommandStatus,
     PhysicalControlCommand,
+    PhysicalStateSnapshot,
 )
+from .plant_checkpoint import DurablePlantCheckpointStore, PlantCheckpointError
 from .safety import SafetyKernel, SafetyLimits
 from .segmented_capability_models import (
     GATEWAY_CAPABILITY_AUDIENCE,
@@ -343,6 +345,8 @@ class CapabilityPlantRuntime:
         trusted_callers: Mapping[PlantCallerRole, TrustedPlantCaller],
         boot_epoch: str | None = None,
         clock: Clock = utc_now,
+        checkpoint_required: bool = False,
+        checkpoint_store: DurablePlantCheckpointStore | None = None,
     ) -> None:
         expected_roles = {
             PlantCallerRole.OBSERVER,
@@ -363,6 +367,15 @@ class CapabilityPlantRuntime:
                 },
             }
         )
+        if checkpoint_required and checkpoint_store is None:
+            raise ValueError("required plant checkpoint store is missing")
+        if not checkpoint_required and checkpoint_store is not None:
+            raise ValueError("disabled plant checkpoint mode cannot retain a store")
+        if checkpoint_store is not None and (
+            checkpoint_store.plant_key_id != key_id
+            or checkpoint_store.model_digest != plant.model_digest
+        ):
+            raise ValueError("plant checkpoint store identity does not match the runtime")
         self.plant = plant
         self.private_key = private_key
         self.public_key = private_key.public_key()
@@ -370,14 +383,56 @@ class CapabilityPlantRuntime:
         self.trusted_callers = dict(trusted_callers)
         self.boot_epoch = boot_epoch or str(uuid4())
         self.clock = clock
+        self.checkpoint_required = checkpoint_required
+        self.checkpoint_store = checkpoint_store
         self._lock = RLock()
         self._call_reservations: dict[str, _PlantCallReservation] = {}
         self.apply_requests = 0
         self.commit_count = 0
+        if self.checkpoint_required:
+            self._verified_checkpoint_state()
+
+    def _verified_checkpoint_state(
+        self,
+        state: PhysicalStateSnapshot | None = None,
+    ) -> PhysicalStateSnapshot:
+        """Return live state only when required durability still agrees with it."""
+
+        if not self.checkpoint_required:
+            return state if state is not None else self.plant.read_state()
+        checkpoint_store = self.checkpoint_store
+        if checkpoint_store is None:  # pragma: no cover - constructor invariant
+            raise CapabilityRuntimeUnavailable("plant_checkpoint_unavailable")
+        try:
+            live = state if state is not None else self.plant.read_state()
+            checkpoint_store.verify_current(live)
+        except (PhysicalSimulationError, PlantCheckpointError) as exc:
+            raise CapabilityRuntimeUnavailable("plant_checkpoint_unavailable") from exc
+        return live
+
+    def _commit_checkpoint_before_swap(
+        self,
+        current: PhysicalStateSnapshot,
+        next_state: PhysicalStateSnapshot,
+        *,
+        effect_deadline: datetime,
+    ) -> None:
+        checkpoint_store = self.checkpoint_store
+        if not self.checkpoint_required or checkpoint_store is None:
+            raise CapabilityRuntimeUnavailable("plant_checkpoint_unavailable")
+        try:
+            checkpoint_store.commit_next(
+                current=current,
+                next_state=next_state,
+                effect_deadline=effect_deadline,
+                effect_clock=self.clock,
+            )
+        except PlantCheckpointError as exc:
+            raise CapabilityRuntimeUnavailable("plant_checkpoint_unavailable") from exc
 
     def health(self) -> PlantHealthMetadata:
-        state = self.plant.read_state()
         with self._lock:
+            state = self._verified_checkpoint_state()
             apply_requests = self.apply_requests
             commit_count = self.commit_count
             reservations = len(self._call_reservations)
@@ -429,6 +484,7 @@ class CapabilityPlantRuntime:
         ):
             raise CapabilityAdmissionRejected("plant_call_authentication_rejected")
         with self._lock:
+            self._verified_checkpoint_state()
             prior = self._call_reservations.get(call.call_nonce)
             if prior is not None:
                 if prior.request_sha256 == call.digest and prior.terminal is not None:
@@ -476,21 +532,48 @@ class CapabilityPlantRuntime:
                             _PlantCallReservation(call.digest, terminal)
                         )
                         return terminal
-                    snapshot = self.plant.apply_authorized_command(
-                        request.command,
-                        expected_pre_state_version=request.expected_pre_state_version,
-                        expected_pre_state_digest=request.expected_pre_state_digest,
-                        expected_pre_observation_digest=(
-                            request.expected_pre_observation_digest
-                        ),
-                        expected_post_state_digest=request.expected_post_state_digest,
-                        expected_post_topology_digest=request.expected_post_topology_digest,
-                        effect_deadline=min(
-                            call.expires_at,
-                            request.authorization_expires_at,
-                        ),
-                        effect_clock=self.clock,
+                    effect_deadline = min(
+                        call.expires_at,
+                        request.authorization_expires_at,
                     )
+                    if self.checkpoint_required:
+                        snapshot = self.plant.apply_authorized_command(
+                            request.command,
+                            expected_pre_state_version=request.expected_pre_state_version,
+                            expected_pre_state_digest=request.expected_pre_state_digest,
+                            expected_pre_observation_digest=(
+                                request.expected_pre_observation_digest
+                            ),
+                            expected_post_state_digest=request.expected_post_state_digest,
+                            expected_post_topology_digest=(
+                                request.expected_post_topology_digest
+                            ),
+                            effect_deadline=effect_deadline,
+                            effect_clock=self.clock,
+                            durable_commit=lambda current, next_state: (
+                                self._commit_checkpoint_before_swap(
+                                    current,
+                                    next_state,
+                                    effect_deadline=effect_deadline,
+                                )
+                            ),
+                        )
+                        snapshot = self._verified_checkpoint_state()
+                    else:
+                        snapshot = self.plant.apply_authorized_command(
+                            request.command,
+                            expected_pre_state_version=request.expected_pre_state_version,
+                            expected_pre_state_digest=request.expected_pre_state_digest,
+                            expected_pre_observation_digest=(
+                                request.expected_pre_observation_digest
+                            ),
+                            expected_post_state_digest=request.expected_post_state_digest,
+                            expected_post_topology_digest=(
+                                request.expected_post_topology_digest
+                            ),
+                            effect_deadline=effect_deadline,
+                            effect_clock=self.clock,
+                        )
                     self.commit_count += 1
                     payload = PlantStateResponsePayload(snapshot=snapshot)
             except PhysicalSimulationError as exc:
@@ -2070,6 +2153,7 @@ def _discover_over_configured_transport(
 
 
 def _build_plant_runtime() -> CapabilityPlantRuntime:
+    checkpoint_required = effect_coordination_enabled()
     boot_epoch = str(uuid4())
     private_key = _load_private_key(
         _expected_environment("AEGIS_PLANT_PRIVATE_KEY_FILE")
@@ -2097,13 +2181,37 @@ def _build_plant_runtime() -> CapabilityPlantRuntime:
     plant = PandapowerCigreMVPlant(
         observation_source_id=f"segmented-capability-plant:{boot_epoch}"
     )
-    return CapabilityPlantRuntime(
-        plant=plant,
-        private_key=private_key,
-        key_id=_expected_environment("AEGIS_PLANT_KEY_ID"),
-        trusted_callers=callers,
-        boot_epoch=boot_epoch,
-    )
+    key_id = _expected_environment("AEGIS_PLANT_KEY_ID")
+    checkpoint_store: DurablePlantCheckpointStore | None = None
+    try:
+        if checkpoint_required:
+            checkpoint_store = DurablePlantCheckpointStore(
+                Path(_expected_environment("AEGIS_PLANT_CHECKPOINT_FILE")),
+                plant_key_id=key_id,
+                model_digest=plant.model_digest,
+            )
+            checkpoint = checkpoint_store.current()
+            if checkpoint is None:
+                checkpoint_store.install_baseline(plant.read_state())
+            else:
+                plant.restore_state(checkpoint)
+        return CapabilityPlantRuntime(
+            plant=plant,
+            private_key=private_key,
+            key_id=key_id,
+            trusted_callers=callers,
+            boot_epoch=boot_epoch,
+            checkpoint_required=checkpoint_required,
+            checkpoint_store=checkpoint_store,
+        )
+    except (PhysicalSimulationError, PlantCheckpointError) as exc:
+        if checkpoint_store is not None:
+            checkpoint_store.close()
+        raise CapabilityRuntimeUnavailable("plant_checkpoint_unavailable") from exc
+    except Exception:
+        if checkpoint_store is not None:
+            checkpoint_store.close()
+        raise
 
 
 def _build_observer_runtime() -> CapabilityObserverRuntime:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -286,6 +286,55 @@ def test_pre_replace_failure_keeps_old_disk_and_memory_and_poisons_writer(
         model_digest=plant.model_digest,
     ) as reopened:
         assert reopened.current() == baseline
+
+
+def test_deadline_expiry_after_temp_fsync_keeps_old_disk_and_memory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plant = _plant()
+    baseline = plant.read_state()
+    store = _provisioned_store(tmp_path, plant)
+    store.install_baseline(baseline)
+    deadline = NOW + timedelta(seconds=1)
+    regular_fsyncs = 0
+    clock_calls = 0
+    real_fsync = os.fsync
+
+    def track_fsync(descriptor: int) -> None:
+        nonlocal regular_fsyncs
+        if stat.S_ISREG(os.fstat(descriptor).st_mode):
+            regular_fsyncs += 1
+        real_fsync(descriptor)
+
+    def effect_clock() -> datetime:
+        nonlocal clock_calls
+        clock_calls += 1
+        if clock_calls == 1:
+            return NOW
+        assert regular_fsyncs == 1
+        return deadline
+
+    monkeypatch.setattr(checkpoint_module.os, "fsync", track_fsync)
+    with pytest.raises(PlantCheckpointError, match="deadline expired") as captured:
+        plant.apply_authorized_command(
+            _line_isolation(),
+            effect_deadline=deadline,
+            effect_clock=effect_clock,
+            durable_commit=lambda current, next_state: store.commit_next(
+                current=current,
+                next_state=next_state,
+                effect_deadline=deadline,
+                effect_clock=effect_clock,
+            ),
+        )
+
+    assert not isinstance(captured.value, PhysicalSimulationError)
+    assert clock_calls == 2
+    assert plant.read_state() == baseline
+    assert store.current() == baseline
+    assert tuple(store.path.parent.glob("*.tmp")) == ()
+    store.close()
 
 
 def test_callback_failure_cannot_be_reported_as_a_physical_rejection() -> None:

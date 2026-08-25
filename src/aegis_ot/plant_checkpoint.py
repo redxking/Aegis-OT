@@ -12,7 +12,9 @@ import json
 import os
 import re
 import stat
+from collections.abc import Callable
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from threading import RLock
 from types import TracebackType
@@ -374,7 +376,12 @@ class DurablePlantCheckpointStore:
             raise PlantCheckpointError("plant checkpoint encoding is not canonical")
         return checkpoint
 
-    def _persist(self, checkpoint: PhysicalStateSnapshot | None) -> None:
+    def _persist(
+        self,
+        checkpoint: PhysicalStateSnapshot | None,
+        *,
+        before_replace: Callable[[], None] | None = None,
+    ) -> None:
         self._assert_usable()
         self._check_parent()
         material = self._canonical_bytes(self._document(checkpoint))
@@ -403,6 +410,8 @@ class DurablePlantCheckpointStore:
             os.fsync(descriptor)
             os.close(descriptor)
             descriptor = -1
+            if before_replace is not None:
+                before_replace()
             os.replace(temporary, self.path)
             replaced = True
             directory_descriptor = os.open(
@@ -504,8 +513,37 @@ class DurablePlantCheckpointStore:
         *,
         current: PhysicalStateSnapshot,
         next_state: PhysicalStateSnapshot,
+        effect_deadline: datetime | None = None,
+        effect_clock: Callable[[], datetime] | None = None,
     ) -> PhysicalStateSnapshot:
         """Durably replace the current checkpoint with its exact next state."""
+
+        if (effect_deadline is None) is not (effect_clock is None):
+            raise PlantCheckpointError(
+                "plant checkpoint effect deadline and clock must be configured together"
+            )
+        if effect_deadline is not None and (
+            effect_deadline.tzinfo is None or effect_deadline.utcoffset() is None
+        ):
+            raise PlantCheckpointError(
+                "plant checkpoint effect deadline must be timezone-aware"
+            )
+
+        def require_live_deadline() -> None:
+            assert effect_deadline is not None
+            assert effect_clock is not None
+            try:
+                evaluated_at = effect_clock()
+                if evaluated_at.tzinfo is None or evaluated_at.utcoffset() is None:
+                    raise ValueError("effect clock returned a naive datetime")
+            except Exception as exc:
+                raise PlantCheckpointError(
+                    "plant checkpoint effect deadline check failed"
+                ) from exc
+            if evaluated_at >= effect_deadline:
+                raise PlantCheckpointError(
+                    "plant checkpoint effect deadline expired before replace"
+                )
 
         with self._mutex:
             expected = self._validate_snapshot(current)
@@ -534,7 +572,12 @@ class DurablePlantCheckpointStore:
                 raise PlantCheckpointError(
                     "plant checkpoint next state must advance simulation time"
                 )
-            self._persist(candidate)
+            self._persist(
+                candidate,
+                before_replace=(
+                    require_live_deadline if effect_deadline is not None else None
+                ),
+            )
             try:
                 retained = self._load()
             except PlantCheckpointError:
