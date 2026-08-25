@@ -638,7 +638,10 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             "-c",
             corrupt_command,
         )
-        m4d._run(*prefix, "start", "ot-adapter")
+        fault_container_id = identity_after.get("container_id")
+        if not isinstance(fault_container_id, str) or not fault_container_id:
+            raise m4d.ExperimentError("OT-adapter container ID was unavailable")
+        m4d._run("docker", "start", fault_container_id)
         ledger_fault = json.loads(
             m4d._run(
                 *prefix,
@@ -719,6 +722,8 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             == identities_after[service].get("started_at")
             for service in ("opa", "simulation", "observer", "segmented-gateway")
         )
+        prior_boot_epoch = prepare_health.get("boot_epoch")
+        restart_boot_epoch = restart_health.get("boot_epoch")
         acceptance = {
             "replay_volume_initialized_closed_and_private": (
                 initialization.get("ledger_reservations") == 0
@@ -749,7 +754,11 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 and unchanged_services
             ),
             "adapter_boot_epoch_changed": (
-                prepare_health.get("boot_epoch") != restart_health.get("boot_epoch")
+                isinstance(prior_boot_epoch, str)
+                and bool(prior_boot_epoch)
+                and isinstance(restart_boot_epoch, str)
+                and bool(restart_boot_epoch)
+                and prior_boot_epoch != restart_boot_epoch
             ),
             "durable_exact_replay_rejected_without_mutation": (
                 restart.get("accepted") is True
