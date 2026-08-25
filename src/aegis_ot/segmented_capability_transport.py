@@ -37,10 +37,12 @@ from .capability_models import (
 from .capability_plc import CapabilityPlcPlantPort
 from .coordination_journal import (
     CoordinationAttemptStatus,
+    CoordinationCollisionError,
     CoordinationJournalError,
     CoordinationJournalRecord,
     DurableGatewayCoordinationJournal,
     EffectCommitAttempt,
+    EffectPrepareAttempt,
     EffectQueryAttempt,
 )
 from .coordination_models import (
@@ -1609,6 +1611,10 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
             )
         try:
             self.coordination_journal.begin(request, recorded_at=issued_at)
+        except CoordinationCollisionError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "coordination action became retained with conflicting effect material"
+            ) from exc
         except CoordinationJournalError as exc:
             raise CapabilityPreDispatchUnavailable(
                 "gateway could not durably retain the prepare intent"
@@ -1753,6 +1759,10 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
         )
         try:
             self.coordination_journal.begin_commit(request, recorded_at=issued_at)
+        except CoordinationCollisionError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "a conflicting commit intent is already retained for this action"
+            ) from exc
         except CoordinationJournalError as exc:
             raise CapabilityPreDispatchUnavailable(
                 "gateway could not durably retain commit intent; commit was not sent"
@@ -1946,6 +1956,26 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
             "prepare did not produce a durable receipt; no commit was sent"
         )
 
+    @staticmethod
+    def _retains_exact_dispatch(
+        record: CoordinationJournalRecord,
+        *,
+        dispatch: SegmentedCapabilityDispatch,
+        effect: EffectIdentity,
+    ) -> bool:
+        """Require every retained prepare to bind the same complete dispatch."""
+
+        retained_dispatches = tuple(
+            attempt.request.dispatch
+            for attempt in record.attempts
+            if isinstance(attempt, EffectPrepareAttempt)
+        )
+        return (
+            record.effect == effect
+            and bool(retained_dispatches)
+            and all(retained == dispatch for retained in retained_dispatches)
+        )
+
     def _reconcile(self, record: CoordinationJournalRecord) -> PlcCommandAcknowledgment:
         """Recover retained state without ever initiating a new commit."""
 
@@ -1985,12 +2015,44 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
         )
         effect = EffectIdentity.from_dispatch(dispatch)
         try:
+            retained_action = self.coordination_journal.find_action(
+                request.digest,
+                request.proposal.actor_id,
+                request.proposal.nonce,
+            )
+        except CoordinationCollisionError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "agent action replay conflicts with a retained coordination effect"
+            ) from exc
+        except CoordinationJournalError as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "gateway coordination journal is unavailable"
+            ) from exc
+        if retained_action is not None:
+            if not self._retains_exact_dispatch(
+                retained_action,
+                dispatch=dispatch,
+                effect=effect,
+            ):
+                raise ConsequentialTransportOutcomeUnknown(
+                    "agent action replay differs from its retained full dispatch"
+                )
+            return self._resume(retained_action)
+        try:
             existing = self.coordination_journal.get(effect)
         except CoordinationJournalError as exc:
             raise CapabilityPreDispatchUnavailable(
                 "gateway coordination journal is unavailable"
             ) from exc
         if existing is not None:
+            if not self._retains_exact_dispatch(
+                existing,
+                dispatch=dispatch,
+                effect=effect,
+            ):
+                raise ConsequentialTransportOutcomeUnknown(
+                    "coordination effect differs from its retained full dispatch"
+                )
             return self._resume(existing)
         receipt = self._prepare(dispatch)
         return self._commit(receipt)

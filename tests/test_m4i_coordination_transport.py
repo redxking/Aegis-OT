@@ -20,7 +20,11 @@ from test_m4i_models import (
     artifacts as m4i_artifacts_fixture,
 )
 
-from aegis_ot.capability_models import PlcCommandAcknowledgment
+from aegis_ot.capability_models import (
+    CapabilityActionRequest,
+    CapabilityExecutionPermit,
+    PlcCommandAcknowledgment,
+)
 from aegis_ot.coordination_journal import (
     CoordinationAttemptStatus,
     CoordinationJournalError,
@@ -34,6 +38,7 @@ from aegis_ot.coordination_models import (
     CoordinationState,
     DurableCommitAcceptance,
     EffectDisposition,
+    EffectIdentity,
     SignedEffectCommitRequest,
     SignedEffectOutcome,
     SignedEffectPrepareRequest,
@@ -347,6 +352,34 @@ def _execute(
     )
 
 
+def _regenerated_permit(
+    artifacts: M4iArtifacts,
+    *,
+    request: CapabilityActionRequest,
+    target_plc_id: str,
+) -> CapabilityExecutionPermit:
+    private_key = Ed25519PrivateKey.generate()
+    signing_key_id = workload_key_id(private_key.public_key())
+    base_permit = artifacts.dispatch.permit.base_permit.model_copy(
+        update={
+            "audience": target_plc_id,
+            "signing_key_id": signing_key_id,
+            "signature": "",
+        }
+    ).signed(private_key)
+    return artifacts.dispatch.permit.model_copy(
+        update={
+            "base_permit": base_permit,
+            "request_digest": request.digest,
+            "target_plc_id": target_plc_id,
+            "target_plc_key_id": "m4i-regenerated-plc-key-0002",
+            "target_plc_boot_epoch": "m4i-regenerated-plc-boot-epoch-0002",
+            "signing_key_id": signing_key_id,
+            "signature": "",
+        }
+    ).signed(private_key)
+
+
 def _restart_with_rotated_ot(
     harness: PortHarness,
     *,
@@ -420,6 +453,108 @@ def test_prepare_commit_applied_response_is_durable_before_return(
     assert record.state is CoordinationState.APPLIED
     assert record.latest_acceptance is not None
     assert record.terminal_outcome is not None
+    harness.journal.close()
+
+
+def test_exact_retained_dispatch_resumes_without_effect_lookup_or_http(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts)
+    assert _execute(harness, artifacts) == artifacts.acknowledgment
+    calls_before_duplicate = tuple(harness.exchange.paths)
+
+    def reject_effect_lookup(*_: Any, **__: Any) -> Any:
+        raise AssertionError("exact action replay must resume from the action index")
+
+    monkeypatch.setattr(harness.journal, "get", reject_effect_lookup)
+    acknowledgment = _execute(harness, artifacts)
+
+    assert acknowledgment == artifacts.acknowledgment
+    assert tuple(harness.exchange.paths) == calls_before_duplicate
+    harness.journal.close()
+
+
+def test_regenerated_permit_for_retained_action_does_not_expose_old_ack_or_send_http(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts, lose_commit_response=True)
+    with pytest.raises(ConsequentialTransportOutcomeUnknown):
+        _execute(harness, artifacts)
+    calls_before_replay = tuple(harness.exchange.paths)
+    original = artifacts.dispatch
+    regenerated_permit = _regenerated_permit(
+        artifacts,
+        request=original.request,
+        target_plc_id="plc:m4i-regenerated-target-0002",
+    )
+    replay_effect = EffectIdentity.from_dispatch(
+        original.model_copy(update={"permit": regenerated_permit})
+    )
+    assert replay_effect != harness.journal.records()[0].effect
+
+    with pytest.raises(
+        ConsequentialTransportOutcomeUnknown,
+        match="differs from its retained full dispatch",
+    ) as caught:
+        harness.port.execute(
+            request=original.request,
+            permit=regenerated_permit,
+            pre_observation=original.pre_observation,
+            decision=original.decision,
+            assessment=original.assessment,
+        )
+
+    assert getattr(caught.value, "known_no_effect", False) is False
+    assert tuple(harness.exchange.paths) == calls_before_replay
+    assert harness.exchange.paths.count("/v1/effects/commit") == 1
+    assert harness.exchange.paths.count("/v1/effects/query") == 0
+    assert len(harness.journal.records()) == 1
+    assert harness.journal.records()[0].latest_acceptance is None
+    harness.journal.close()
+
+
+def test_reused_actor_nonce_with_different_request_is_unknown_and_sends_zero_http(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts, lose_commit_response=True)
+    with pytest.raises(ConsequentialTransportOutcomeUnknown):
+        _execute(harness, artifacts)
+    calls_before_replay = tuple(harness.exchange.paths)
+    original = artifacts.dispatch
+    replay_request = original.request.model_copy(
+        update={"request_id": "m4i-request-replayed-action-0002"}
+    )
+    assert replay_request.digest != original.request.digest
+    assert replay_request.proposal.actor_id == original.request.proposal.actor_id
+    assert replay_request.proposal.nonce == original.request.proposal.nonce
+    regenerated_permit = _regenerated_permit(
+        artifacts,
+        request=replay_request,
+        target_plc_id=original.permit.target_plc_id,
+    )
+
+    with pytest.raises(
+        ConsequentialTransportOutcomeUnknown,
+        match="conflicts with a retained coordination effect",
+    ) as caught:
+        harness.port.execute(
+            request=replay_request,
+            permit=regenerated_permit,
+            pre_observation=original.pre_observation,
+            decision=original.decision,
+            assessment=original.assessment,
+        )
+
+    assert getattr(caught.value, "known_no_effect", False) is False
+    assert tuple(harness.exchange.paths) == calls_before_replay
+    assert harness.exchange.paths.count("/v1/effects/commit") == 1
+    assert harness.exchange.paths.count("/v1/effects/query") == 0
+    assert len(harness.journal.records()) == 1
+    assert harness.journal.records()[0].latest_acceptance is None
     harness.journal.close()
 
 
