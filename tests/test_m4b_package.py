@@ -46,12 +46,16 @@ def test_writer_emits_externally_rooted_package_that_verifies_offline(
     assert result["valid"] is True, result["errors"]
     assert result["root_trusted"] is True
     assert result["package_valid"] is True
-    assert result["experiment_accepted"] is False
     assert result["checkout_matches"] is True, result["checkout_errors"]
     assert result["session_count"] == 1
     assert isinstance(result["package_id"], str)
     assert len(result["package_id"]) == 64
     manifest = json.loads((package / "manifest.json").read_bytes())
+    dirty_provenance = (
+        manifest["git"]["working_tree_dirty_at_start"]
+        or manifest["git"]["working_tree_dirty_at_end"]
+    )
+    assert result["experiment_accepted"] is (not dirty_provenance)
     assert manifest["transaction_record_count"] == 3
     assert manifest["probe_record_count"] == 4
     assert manifest["independent_evaluation_count"] == 1
