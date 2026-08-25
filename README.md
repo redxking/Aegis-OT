@@ -113,14 +113,16 @@ mode, use `.venv/bin/python` as the script path and `-m aegis_ot.cli
 capability-smoke` as the parameters, with `src` marked as a Sources Root or
 `PYTHONPATH=src` in the run configuration.
 
-The isolated candidate tree has 478 passing tests and 92.05 percent branch-aware
+The current clean checkout has 708 passing tests and 91.61 percent branch-aware
 coverage. The run preserved the user-modified retained-result files in the main
 working tree and used their committed counterparts for evidence-package checks.
-Ruff, strict mypy, and schema-drift checks are also clean locally. The previously
-verified bounded formal-model evidence remains unchanged. These are local
-implementation-verification results; they are not an observed remote CI run,
-independent replication, physical validation, or operational validation. The
-retained controlled M3 experiment described below is a separate evidence set.
+Ruff, strict mypy across 50 source files, schema drift, public-demo drift,
+topology-fixture drift, and the base and M4f-overlay Compose resolutions are also
+clean locally. One upstream Starlette/httpx deprecation warning remains. These
+are local implementation-verification results; they are not an observed remote
+CI run, independent replication, physical validation, or operational
+validation. The retained controlled experiments described below are separate
+evidence sets.
 
 Run the same local verification path with:
 

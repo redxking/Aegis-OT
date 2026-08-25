@@ -7,7 +7,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.7, revision log, experiment and formal manifests, and reproducible outcome hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | Exact M4d commit suite: 528 tests pass; strict typing, linting, schema-drift, public-demo-drift, and Compose checks are clean |
+| WP1 Executable assurance kernel | Initial implementation complete | Current clean suite: 708 tests pass at 91.61 percent branch-aware coverage; strict typing across 50 source files, linting, schema drift, public-demo drift, topology-fixture drift, and base/M4f-overlay Compose checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
 | WP4 Power-system and OT integration | In progress | M3/M4b retain bounded physical/capability evidence; M4d adds reproduced Docker segmentation/service loss; M4e adds reproduced Ed25519 gateway/OT message authentication; M4f adds reproduced exact-envelope replay rejection across one orderly OT-adapter replacement with an intact trusted volume; workload identity and revocation, the full capability contract, hostile-host rollback resistance, HELICS/OpenPLC, hardware, multi-host isolation, and external validation remain open |
@@ -473,6 +473,13 @@ Implemented and locally reproduced from clean detached checkout
   source. Both record removal of their Compose project, replay and probe
   volumes, and private-key directory, with
   `private_key_material_retained: false`.
+- The subsequent clean verification suite passed 708 tests at 91.61 percent
+  branch-aware coverage without coverage exclusions or a reduced threshold.
+  The M4f initializer and segmented runtime each reached 100 percent in that
+  aggregate run; the M4b package verifier reached 91 percent. Ruff, strict mypy
+  across 50 source files, schema, public-demo, topology-fixture, and base/M4f
+  Compose-resolution checks were also clean. The one warning is an upstream
+  Starlette/httpx deprecation warning.
 
 Evidence boundary and next hypothesis-critical gate:
 
