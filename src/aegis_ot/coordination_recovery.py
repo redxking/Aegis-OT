@@ -16,8 +16,18 @@ from enum import StrEnum
 from typing import Protocol
 
 from .capability_models import PlcCommandAcknowledgment
-from .coordination_journal import CoordinationJournalRecord
-from .coordination_models import CoordinationState, EffectDisposition, SignedEffectOutcome
+from .coordination_journal import (
+    CoordinationJournalRecord,
+    EffectCommitAttempt,
+    EffectQueryAttempt,
+)
+from .coordination_models import (
+    CoordinationState,
+    EffectDisposition,
+    SignedEffectCommitRequest,
+    SignedEffectOutcome,
+    SignedEffectQueryRequest,
+)
 from .physical_models import CommandStatus
 
 MAX_RECOVERY_RECORDS = 8192
@@ -183,7 +193,21 @@ def _result(
 def _applied_link(
     record: CoordinationJournalRecord,
 ) -> tuple[_AppliedLink | None, CoordinationRecoveryReason | None]:
-    outcome = record.terminal_outcome
+    transition_outcome = next(
+        (
+            attempt.outcome
+            for attempt in reversed(record.attempts)
+            if isinstance(attempt, (EffectCommitAttempt, EffectQueryAttempt))
+            and attempt.outcome is not None
+            and attempt.outcome.digest == record.latest_evidence_sha256
+        ),
+        None,
+    )
+    outcome = (
+        record.terminal_outcome
+        if transition_outcome is None
+        else transition_outcome
+    )
     acknowledgment = None if outcome is None else outcome.acknowledgment
     if outcome is None or acknowledgment is None:
         return None, CoordinationRecoveryReason.APPLIED_ACKNOWLEDGMENT_MISSING
@@ -221,10 +245,59 @@ def _applied_evidence_valid(link: _AppliedLink) -> bool:
     prepare = receipt.prepare_request
     dispatch = prepare.dispatch
     coordinator_public_key = acceptance.coordinator_credential.credential.public_key
+    terminal_attempts = tuple(
+        attempt
+        for attempt in link.record.attempts
+        if isinstance(attempt, (EffectCommitAttempt, EffectQueryAttempt))
+        and attempt.outcome is not None
+        and attempt.outcome.disposition is EffectDisposition.APPLIED
+    )
+    transition_attempt = next(
+        (
+            attempt for attempt in terminal_attempts if attempt.outcome == outcome
+        ),
+        None,
+    )
+    if transition_attempt is None:
+        return False
+
+    def attempt_binds_outcome(
+        attempt: EffectCommitAttempt | EffectQueryAttempt,
+        retained_outcome: SignedEffectOutcome,
+    ) -> bool:
+        request: SignedEffectCommitRequest | SignedEffectQueryRequest
+        if isinstance(attempt, EffectCommitAttempt):
+            request = attempt.request
+            expected_kind = "commit"
+            commit_binding = (
+                attempt.acceptance == retained_outcome.acceptance
+                and retained_outcome.receipt == request.receipt
+            )
+        else:
+            request = attempt.request
+            expected_kind = "query"
+            commit_binding = True
+        return (
+            request.verify()
+            and retained_outcome.verify()
+            and retained_outcome.request_kind == expected_kind
+            and retained_outcome.request_sha256 == request.digest
+            and retained_outcome.effect == request.effect == link.record.effect
+            and commit_binding
+        )
+
     return (
         link.record.effect == outcome.effect == acceptance.effect == commit.effect
         and commit.effect == receipt.effect == prepare.effect
-        and link.record.latest_evidence_sha256 == outcome.digest
+        and outcome.digest == link.record.latest_evidence_sha256
+        and link.record.latest_acceptance == acceptance
+        and all(
+            attempt.outcome is not None
+            and attempt_binds_outcome(attempt, attempt.outcome)
+            and attempt.outcome.acceptance == acceptance
+            and attempt.outcome.acknowledgment == acknowledgment
+            for attempt in terminal_attempts
+        )
         and prepare.verify()
         and receipt.verify()
         and commit.verify()

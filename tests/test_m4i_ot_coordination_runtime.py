@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -326,6 +327,7 @@ def _runtime(
     *,
     boot_epoch: str = OT_BOOT,
     observer_boot_epoch: str = OBSERVER_BOOT,
+    plant_at_post: bool = False,
     hook: Any = None,
 ) -> tuple[CapabilityOtRuntime, CoordinatedDevice, CountingReplay]:
     device = CoordinatedDevice(
@@ -337,6 +339,25 @@ def _runtime(
         clock=clock,
     )
     replay = CountingReplay()
+    plant_info = _plant_health(artifacts)
+
+    def load_current_plant_health() -> Any:
+        at_post = plant_at_post or (device.calls > 0 and not device.fail_after_call)
+        if not at_post:
+            return plant_info
+        acknowledgment = artifacts.acknowledgment
+        assert acknowledgment.post_state_version is not None
+        assert acknowledgment.post_state_digest is not None
+        return plant_info.model_copy(
+            update={
+                "state_version": acknowledgment.post_state_version,
+                "state_digest": acknowledgment.post_state_digest,
+                "apply_requests": max(1, device.calls),
+                "commit_count": 1,
+            }
+        )
+
+    loader: Callable[[], Any] = load_current_plant_health
     observer = replace(
         _observer_info(artifacts),
         boot_epoch=observer_boot_epoch,
@@ -353,12 +374,13 @@ def _runtime(
         key_id=identities.local_signer.credential.credential.key_id,
         plc_id=PLC_ID,
         boot_epoch=boot_epoch,
-        plant_info=_plant_health(artifacts),
+        plant_info=plant_info,
         semantic_replay=cast(Any, CountingReplay()),
         gateway_workload_identity=identities.gateway_binding,
         local_workload_identity=identities.local_identity,
         coordination_required=True,
         coordination_journal=journal,
+        plant_health_loader=loader,
         after_coordination_terminal_persist=hook,
         clock=clock,
     )
@@ -578,7 +600,10 @@ def test_post_acceptance_device_failure_retains_signed_unknown_once(
     record = harness.journal.get(prepare.effect)
     assert record is not None and record.state is CoordinationState.UNKNOWN_EFFECT
     assert harness.device.calls == 1
-    with pytest.raises(EffectCommitIndeterminate, match="query_required"):
+    with pytest.raises(
+        CapabilityAdmissionRejected,
+        match="effect_reconciliation_required",
+    ):
         harness.runtime.commit_effect(commit)
     assert harness.device.calls == 1
 
@@ -619,6 +644,7 @@ def test_finish_persistence_failure_reopens_without_reexecution(
         harness.dispatch,
         reopened,
         harness.clock,
+        plant_at_post=True,
     )
     restarted_harness = replace(
         harness,
@@ -626,7 +652,10 @@ def test_finish_persistence_failure_reopens_without_reexecution(
         device=restarted_device,
         journal=reopened,
     )
-    with pytest.raises(EffectCommitIndeterminate, match="query_required"):
+    with pytest.raises(
+        CapabilityAdmissionRejected,
+        match="effect_reconciliation_required",
+    ):
         restarted_runtime.commit_effect(commit)
     harness.clock.value = NOW + timedelta(milliseconds=1250)
     queried = restarted_runtime.query_effect(
@@ -699,6 +728,7 @@ def test_terminal_fsync_hook_survives_restart_with_new_boots(
         harness.clock,
         boot_epoch=RESTARTED_OT_BOOT,
         observer_boot_epoch=RESTARTED_OBSERVER_BOOT,
+        plant_at_post=True,
     )
     restarted_harness = replace(
         harness,
@@ -744,6 +774,7 @@ def test_restart_query_accepts_historical_effect_after_leaf_rotation(
         harness.clock,
         boot_epoch=RESTARTED_OT_BOOT,
         observer_boot_epoch=RESTARTED_OBSERVER_BOOT,
+        plant_at_post=True,
     )
     restarted_harness = replace(
         harness,

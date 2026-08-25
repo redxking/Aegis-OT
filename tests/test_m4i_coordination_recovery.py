@@ -22,12 +22,14 @@ from aegis_ot.coordination_journal import (
     CoordinationTransition,
     EffectCommitAttempt,
     EffectPrepareAttempt,
+    EffectQueryAttempt,
 )
 from aegis_ot.coordination_models import (
     CoordinationState,
     EffectDisposition,
     EffectIdentity,
     SignedEffectOutcome,
+    SignedEffectQueryRequest,
 )
 from aegis_ot.coordination_recovery import (
     CoordinationRecoveryReason,
@@ -274,6 +276,54 @@ def test_coherent_applied_chain_matches_exact_durable_plant(
     assert result.latest_applied_state_digest == record.effect.expected_post_state_sha256
     assert result.aligned
     assert not result.fail_closed
+
+
+def test_query_bound_applied_history_preserves_terminal_transition_anchor(
+    artifacts: M4iArtifacts,
+) -> None:
+    record = _applied_record(artifacts)
+    commit_outcome = record.terminal_outcome
+    assert commit_outcome is not None
+    assert commit_outcome.acceptance is not None
+    query = SignedEffectQueryRequest.issue(
+        effect=record.effect,
+        signer=artifacts.gateway_signer,
+        request_nonce="recovery-query-nonce-0001",
+        issued_at=NOW + timedelta(seconds=3),
+        expires_at=NOW + timedelta(seconds=30),
+    )
+    query_outcome = SignedEffectOutcome.issue(
+        request=query,
+        disposition=EffectDisposition.APPLIED,
+        reason="durable_terminal_record",
+        signer=artifacts.coordinator_signer,
+        signed_at=NOW + timedelta(seconds=4),
+        acceptance=commit_outcome.acceptance,
+        acknowledgment=commit_outcome.acknowledgment,
+    )
+    query_attempt = EffectQueryAttempt(
+        sequence=3,
+        request=query,
+        request_sha256=query.digest,
+        status=CoordinationAttemptStatus.RESPONSE_RETAINED,
+        outcome=query_outcome,
+        retained_at=NOW + timedelta(seconds=3),
+        updated_at=query_outcome.signed_at,
+    )
+    queried = CoordinationJournalRecord.model_validate_json(
+        record.model_copy(
+            update={"attempts": (*record.attempts, query_attempt)}
+        ).model_dump_json()
+    )
+
+    assert queried.latest_evidence_sha256 == commit_outcome.digest
+    assert queried.terminal_outcome == query_outcome
+    assert query_outcome.digest != queried.latest_evidence_sha256
+
+    result = validate_coordination_recovery((queried,), _plant_at_post(queried))
+
+    assert result.status is CoordinationRecoveryStatus.ALIGNED
+    assert result.reason is CoordinationRecoveryReason.ALIGNED_APPLIED_CHAIN
 
 
 @pytest.mark.parametrize(

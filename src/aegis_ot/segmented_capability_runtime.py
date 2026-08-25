@@ -76,6 +76,12 @@ from .coordination_models import (
     SignedEffectQueryRequest,
     WorkloadAuthenticatedEffectReconciliation,
 )
+from .coordination_recovery import (
+    CoordinationRecoveryReason,
+    CoordinationRecoveryResult,
+    CoordinationRecoveryStatus,
+    validate_coordination_recovery,
+)
 from .factory import LocalLab, build_local_lab
 from .models import Decision
 from .pandapower_plant import PandapowerCigreMVPlant, PhysicalSimulationError
@@ -125,6 +131,7 @@ from .segmented_capability_transport import (
     CoordinatedWorkloadRemoteVirtualPlcPort,
     HttpExchange,
     ObserverHealthMetadata,
+    OtCoordinationRecoveryMetadata,
     OtHealthMetadata,
     PlantHealthMetadata,
     RemoteCandidatePlantClient,
@@ -255,6 +262,34 @@ class _EffectCoordinationContext:
     gateway: ResolvedWorkloadIdentity
     local: ResolvedWorkloadIdentity
     signer: WorkloadSigner
+
+
+@dataclass(frozen=True)
+class _LiveCommitMarker:
+    effect_id: str
+    prepare_request_sha256: str
+    receipt_sha256: str
+    runtime_boot_epoch: str
+
+    def matches_prepare(
+        self,
+        request: SignedEffectPrepareRequest,
+        *,
+        boot_epoch: str,
+    ) -> bool:
+        return (
+            self.effect_id == request.effect.effect_id
+            and self.prepare_request_sha256 == request.digest
+            and self.runtime_boot_epoch == boot_epoch
+        )
+
+    def matches(self, request: SignedEffectCommitRequest, *, boot_epoch: str) -> bool:
+        return (
+            self.effect_id == request.effect.effect_id
+            and self.prepare_request_sha256 == request.receipt.prepare_request.digest
+            and self.receipt_sha256 == request.receipt.digest
+            and self.runtime_boot_epoch == boot_epoch
+        )
 
 
 @dataclass(frozen=True)
@@ -824,6 +859,7 @@ class CapabilityOtRuntime:
         local_workload_identity: LocalWorkloadIdentity | None = None,
         coordination_required: bool = False,
         coordination_journal: DurableEffectCoordinationJournal | None = None,
+        plant_health_loader: Callable[[], PlantHealthMetadata] | None = None,
         after_coordination_terminal_persist: Callable[[], None] | None = None,
         clock: Clock = utc_now,
     ) -> None:
@@ -833,16 +869,20 @@ class CapabilityOtRuntime:
             gateway_workload_identity is None
             or local_workload_identity is None
             or coordination_journal is None
+            or plant_health_loader is None
         ):
             raise ValueError(
-                "required effect coordination needs workload identities and an OT journal"
+                "required effect coordination needs workload identities, an OT journal, "
+                "and a current plant-health loader"
             )
         if not coordination_required and (
             coordination_journal is not None
+            or plant_health_loader is not None
             or after_coordination_terminal_persist is not None
         ):
             raise ValueError(
-                "coordination journal and terminal hook require effect coordination"
+                "coordination journal, plant-health loader, and terminal hook require "
+                "effect coordination"
             )
         if device.acknowledgment_key_id != key_id or device.plc_id != plc_id:
             raise ValueError("OT runtime identity does not match its virtual PLC")
@@ -889,6 +929,10 @@ class CapabilityOtRuntime:
         self.local_workload_identity = local_workload_identity
         self.coordination_required = coordination_required
         self.coordination_journal = coordination_journal
+        self._plant_health_loader = plant_health_loader
+        self._coordination_recovery: CoordinationRecoveryResult | None = None
+        self._coordination_recovery_plant: PlantHealthMetadata | None = None
+        self._live_commit_marker: _LiveCommitMarker | None = None
         self._after_coordination_terminal_persist = after_coordination_terminal_persist
         self._coordination_terminal_hook_armed = (
             after_coordination_terminal_persist is not None
@@ -897,6 +941,135 @@ class CapabilityOtRuntime:
         self._lock = RLock()
         self._coordination_lock = RLock()
         self.execute_requests = 0
+        if coordination_required:
+            with self._coordination_lock:
+                self._refresh_coordination_recovery_locked()
+
+    @staticmethod
+    def _same_pinned_plant_identity(
+        current: PlantHealthMetadata,
+        expected: PlantHealthMetadata,
+    ) -> bool:
+        return (
+            current.boot_epoch,
+            current.key_id,
+            current.public_key_b64,
+            current.backend,
+            current.model_digest,
+            current.simulator_version,
+            current.observation_source_id,
+        ) == (
+            expected.boot_epoch,
+            expected.key_id,
+            expected.public_key_b64,
+            expected.backend,
+            expected.model_digest,
+            expected.simulator_version,
+            expected.observation_source_id,
+        )
+
+    def _refresh_coordination_recovery_locked(self) -> CoordinationRecoveryResult:
+        journal = self.coordination_journal
+        loader = self._plant_health_loader
+        if journal is None or loader is None:
+            raise CapabilityRuntimeUnavailable(
+                "effect_coordination_recovery_unavailable"
+            )
+        try:
+            plant = loader()
+            if not isinstance(plant, PlantHealthMetadata) or not (
+                self._same_pinned_plant_identity(plant, self.plant_info)
+            ):
+                raise ValueError("current plant health changed its pinned identity")
+            result = validate_coordination_recovery(journal.records(), plant)
+        except Exception as exc:
+            raise CapabilityRuntimeUnavailable(
+                "effect_coordination_recovery_unavailable"
+            ) from exc
+        self._coordination_recovery = result
+        self._coordination_recovery_plant = plant
+        marker = self._live_commit_marker
+        if marker is not None and not (
+            result.status is CoordinationRecoveryStatus.RECOVERY_REQUIRED
+            and result.reason
+            is CoordinationRecoveryReason.PENDING_EFFECT_AT_PRE_STATE
+            and result.pending_effect_id == marker.effect_id
+        ):
+            self._live_commit_marker = None
+        if result.status in {
+            CoordinationRecoveryStatus.INCONSISTENT,
+            CoordinationRecoveryStatus.UNAVAILABLE,
+        }:
+            raise CapabilityRuntimeUnavailable(
+                "effect_coordination_recovery_unavailable"
+            )
+        return result
+
+    def _require_coordination_alignment_locked(
+        self,
+        *,
+        query_only: bool = False,
+        prepare_request: SignedEffectPrepareRequest | None = None,
+        commit_request: SignedEffectCommitRequest | None = None,
+    ) -> CoordinationRecoveryResult:
+        result = self._refresh_coordination_recovery_locked()
+        if result.status is CoordinationRecoveryStatus.ALIGNED:
+            return result
+        if query_only:
+            return result
+        marker = self._live_commit_marker
+        if (
+            result.status is CoordinationRecoveryStatus.RECOVERY_REQUIRED
+            and result.reason
+            is CoordinationRecoveryReason.PENDING_EFFECT_AT_PRE_STATE
+            and marker is not None
+            and result.pending_effect_id == marker.effect_id
+            and (
+                (
+                    prepare_request is not None
+                    and marker.matches_prepare(
+                        prepare_request,
+                        boot_epoch=self.boot_epoch,
+                    )
+                )
+                or (
+                    commit_request is not None
+                    and marker.matches(commit_request, boot_epoch=self.boot_epoch)
+                )
+            )
+        ):
+            return result
+        raise CapabilityAdmissionRejected("effect_reconciliation_required")
+
+    def _coordination_recovery_projection_locked(
+        self,
+    ) -> OtCoordinationRecoveryMetadata:
+        result = self._coordination_recovery
+        plant = self._coordination_recovery_plant
+        if result is None or plant is None:
+            raise CapabilityRuntimeUnavailable(
+                "effect_coordination_recovery_unavailable"
+            )
+        return OtCoordinationRecoveryMetadata(
+            status=result.status,
+            reason=result.reason,
+            record_count=result.record_count,
+            applied_effect_count=result.applied_effect_count,
+            pending_effect_count=result.pending_effect_count,
+            plant_model_digest=plant.model_digest,
+            plant_state_version=result.plant_state_version,
+            plant_state_digest=result.plant_state_digest,
+            latest_applied_state_version=result.latest_applied_state_version,
+            latest_applied_state_digest=result.latest_applied_state_digest,
+            pending_effect_id=result.pending_effect_id,
+            pending_expected_post_state_version=(
+                result.pending_expected_post_state_version
+            ),
+            pending_expected_post_state_digest=(
+                result.pending_expected_post_state_digest
+            ),
+            live_commit_armed=self._live_commit_marker is not None,
+        )
 
     def _coordination_context(
         self,
@@ -1179,11 +1352,13 @@ class CapabilityOtRuntime:
             raise CapabilityAdmissionRejected("effect_prepare_authentication_rejected")
         try:
             with self._coordination_lock:
+                self._require_coordination_alignment_locked(prepare_request=request)
                 pending = context.journal.pending()
                 if any(record.effect != request.effect for record in pending):
                     raise CapabilityAdmissionRejected(
                         "effect_reconciliation_required"
                     )
+                existing = context.journal.get(request.effect)
                 receipt = context.journal.prepare_effect(
                     request,
                     lambda exact_request, retained_at: CoordinationReceipt.issue(
@@ -1201,6 +1376,13 @@ class CapabilityOtRuntime:
                 ):
                     raise CapabilityRuntimeUnavailable(
                         "effect_prepare_stored_receipt_rejected"
+                    )
+                if existing is None:
+                    self._live_commit_marker = _LiveCommitMarker(
+                        effect_id=request.effect.effect_id,
+                        prepare_request_sha256=request.digest,
+                        receipt_sha256=receipt.digest,
+                        runtime_boot_epoch=self.boot_epoch,
                     )
                 return receipt
         except CoordinationJournalError as exc:
@@ -1296,6 +1478,9 @@ class CapabilityOtRuntime:
             )
 
         with self._coordination_lock:
+            self._require_coordination_alignment_locked(
+                commit_request=request,
+            )
             try:
                 admission = context.journal.begin_commit(
                     request,
@@ -1303,11 +1488,14 @@ class CapabilityOtRuntime:
                     recorded_at=evaluated_at,
                 )
             except CoordinationJournalError as exc:
+                self._live_commit_marker = None
                 self._raise_coordination_journal_failure(exc)
             except (OSError, ValueError) as exc:
+                self._live_commit_marker = None
                 raise CapabilityRuntimeUnavailable(
                     "effect_commit_acceptance_unavailable"
                 ) from exc
+            self._live_commit_marker = None
 
             acceptance = admission.acceptance
             if (
@@ -1352,6 +1540,7 @@ class CapabilityOtRuntime:
                     raise EffectCommitIndeterminate(
                         "effect_commit_indeterminate_query_required"
                     )
+                self._refresh_coordination_recovery_locked()
                 return retained
             if admission.status is not CommitAdmissionStatus.NEW:
                 raise EffectCommitIndeterminate(
@@ -1398,6 +1587,7 @@ class CapabilityOtRuntime:
                 EffectDisposition.APPLIED,
                 EffectDisposition.REJECTED,
             }:
+                self._refresh_coordination_recovery_locked()
                 self._run_coordination_terminal_hook()
             return outcome
 
@@ -1513,6 +1703,7 @@ class CapabilityOtRuntime:
 
         try:
             with self._coordination_lock:
+                self._require_coordination_alignment_locked(query_only=True)
                 outcome = context.journal.answer_query(
                     request,
                     issue_outcome,
@@ -1527,6 +1718,16 @@ class CapabilityOtRuntime:
                     raise CapabilityRuntimeUnavailable(
                         "effect_query_stored_outcome_rejected"
                     )
+                final_record = context.journal.get(request.effect)
+                if final_record is None:
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_coordination_recovery_unavailable"
+                    )
+                if final_record.state.terminal:
+                    marker = self._live_commit_marker
+                    if marker is not None and marker.effect_id == request.effect.effect_id:
+                        self._live_commit_marker = None
+                    self._refresh_coordination_recovery_locked()
                 return outcome
         except CoordinationJournalError as exc:
             self._raise_coordination_journal_failure(exc)
@@ -1620,6 +1821,18 @@ class CapabilityOtRuntime:
             OSError,
         ) as exc:
             raise CapabilityRuntimeUnavailable("OT replay state is unavailable") from exc
+        recovery: OtCoordinationRecoveryMetadata | None = None
+        current_plant = self.plant_info
+        if self.coordination_required:
+            with self._coordination_lock:
+                self._refresh_coordination_recovery_locked()
+                recovery = self._coordination_recovery_projection_locked()
+                retained_plant = self._coordination_recovery_plant
+                if retained_plant is None:
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_coordination_recovery_unavailable"
+                    )
+                current_plant = retained_plant
         with self._lock:
             execute_requests = self.execute_requests
             scan_counter = self.device.scan_counter
@@ -1633,14 +1846,15 @@ class CapabilityOtRuntime:
             gateway_public_key_b64=_public_key_b64(gateway_public_key),
             permit_key_id=self.permit_key_id,
             permit_public_key_b64=_public_key_b64(self.permit_public_key),
-            plant_boot_epoch=self.plant_info.boot_epoch,
-            plant_model_digest=self.plant_info.model_digest,
-            plant=self.plant_info,
+            plant_boot_epoch=current_plant.boot_epoch,
+            plant_model_digest=current_plant.model_digest,
+            plant=current_plant,
             observer_boot_epoch=self.observer_info.boot_epoch,
             transport_replay_reservations=transport_count,
             semantic_replay_reservations=semantic_count,
             execute_requests=execute_requests,
             scan_counter=scan_counter,
+            coordination_recovery=recovery,
         )
 
     def execute(
@@ -2559,70 +2773,86 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
     semantic_replay = OrderlyRestartReplayReservations(
         Path(_expected_environment("AEGIS_SEMANTIC_REPLAY_LEDGER_FILE"))
     )
-    observer_info = _observer_process_info(observer)
-    plant_client = RemotePlcPlantClient(
-        plant_url,
-        plant=plant,
-        ot=provisional,
-        caller_private_key=private_key,
-        exchange=exchange,
-    )
-    device = CapabilityVirtualPlc(
-        plant_client,
-        plc_id=PLC_ID,
-        boot_epoch=boot_epoch,
-        permit_key_id=permit_key_id,
-        permit_public_key=permit_public,
-        observer_info=observer_info,
-        acknowledgment_private_key=private_key,
-        acknowledgment_key_id=key_id,
-        replay=semantic_replay,
-    )
-    if workload_verifier is not None:
-        assert gateway_workload_identity is not None
-        transport_replay: DurableTransportReplayLedger | DurableWorkloadReplayLedger = (
-            DurableWorkloadReplayLedger(
+    transport_replay: (
+        DurableTransportReplayLedger | DurableWorkloadReplayLedger | None
+    ) = None
+    coordination_journal: DurableEffectCoordinationJournal | None = None
+    try:
+        observer_info = _observer_process_info(observer)
+        plant_client = RemotePlcPlantClient(
+            plant_url,
+            plant=plant,
+            ot=provisional,
+            caller_private_key=private_key,
+            exchange=exchange,
+        )
+        device = CapabilityVirtualPlc(
+            plant_client,
+            plc_id=PLC_ID,
+            boot_epoch=boot_epoch,
+            permit_key_id=permit_key_id,
+            permit_public_key=permit_public,
+            observer_info=observer_info,
+            acknowledgment_private_key=private_key,
+            acknowledgment_key_id=key_id,
+            replay=semantic_replay,
+        )
+        if workload_verifier is not None:
+            assert gateway_workload_identity is not None
+            transport_replay = DurableWorkloadReplayLedger(
                 Path(_expected_environment("AEGIS_WORKLOAD_REPLAY_LEDGER_FILE")),
                 audience=OT_CAPABILITY_AUDIENCE,
                 trust_domain=workload_verifier.trust_domain,
                 workload_subject=gateway_workload_identity.expected_subject,
                 authority_key_id=workload_verifier.trust_root_key_id,
             )
-        )
-    else:
-        transport_replay = DurableTransportReplayLedger(
-            Path(_expected_environment("AEGIS_TRANSPORT_REPLAY_LEDGER_FILE")),
-            audience=OT_CAPABILITY_AUDIENCE,
+        else:
+            transport_replay = DurableTransportReplayLedger(
+                Path(_expected_environment("AEGIS_TRANSPORT_REPLAY_LEDGER_FILE")),
+                audience=OT_CAPABILITY_AUDIENCE,
+                gateway_key_id=gateway_key_id,
+                gateway_public_key_sha256=hashlib.sha256(
+                    gateway_public.public_bytes_raw()
+                ).hexdigest(),
+            )
+        if coordination_required:
+            coordination_journal = DurableEffectCoordinationJournal(
+                Path(_expected_environment("AEGIS_OT_COORDINATION_JOURNAL_FILE")),
+                owner_subject=_expected_environment("AEGIS_OT_WORKLOAD_SUBJECT"),
+            )
+
+        def load_current_plant_health() -> PlantHealthMetadata:
+            return _fetch_plant_over_configured_transport(plant_url, exchange)
+
+        return CapabilityOtRuntime(
+            device=device,
+            transport_replay=transport_replay,
+            gateway_public_key=gateway_public,
             gateway_key_id=gateway_key_id,
-            gateway_public_key_sha256=hashlib.sha256(
-                gateway_public.public_bytes_raw()
-            ).hexdigest(),
+            observer_info=observer_info,
+            permit_public_key=permit_public,
+            permit_key_id=permit_key_id,
+            private_key=private_key,
+            key_id=key_id,
+            plc_id=PLC_ID,
+            boot_epoch=boot_epoch,
+            plant_info=plant,
+            semantic_replay=semantic_replay,
+            gateway_workload_identity=gateway_workload_identity,
+            local_workload_identity=local_workload_identity,
+            coordination_required=coordination_required,
+            coordination_journal=coordination_journal,
+            plant_health_loader=(
+                load_current_plant_health if coordination_required else None
+            ),
         )
-    coordination_journal: DurableEffectCoordinationJournal | None = None
-    if coordination_required:
-        coordination_journal = DurableEffectCoordinationJournal(
-            Path(_expected_environment("AEGIS_OT_COORDINATION_JOURNAL_FILE")),
-            owner_subject=_expected_environment("AEGIS_OT_WORKLOAD_SUBJECT"),
-        )
-    return CapabilityOtRuntime(
-        device=device,
-        transport_replay=transport_replay,
-        gateway_public_key=gateway_public,
-        gateway_key_id=gateway_key_id,
-        observer_info=observer_info,
-        permit_public_key=permit_public,
-        permit_key_id=permit_key_id,
-        private_key=private_key,
-        key_id=key_id,
-        plc_id=PLC_ID,
-        boot_epoch=boot_epoch,
-        plant_info=plant,
-        semantic_replay=semantic_replay,
-        gateway_workload_identity=gateway_workload_identity,
-        local_workload_identity=local_workload_identity,
-        coordination_required=coordination_required,
-        coordination_journal=coordination_journal,
-    )
+    except Exception:
+        if coordination_journal is not None:
+            coordination_journal.close()
+        if transport_replay is not None:
+            transport_replay.close()
+        semantic_replay.close()
+        raise
 
 
 def _build_gateway_runtime() -> CapabilityGatewayRuntime:
@@ -2982,6 +3212,11 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
     def health() -> OtHealthMetadata | JSONResponse:
         try:
             return runtime().health()
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
         except Exception:
             return _failure_response(503, "ot_runtime_unavailable", status="error")
 
@@ -3007,6 +3242,11 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
             return _wire_rejection(exc)
         try:
             instance = runtime()
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
         except Exception:
             return _failure_response(503, "ot_runtime_unavailable", status="error")
         try:
@@ -3028,6 +3268,11 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
             return _wire_rejection(exc)
         try:
             instance = runtime()
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
         except Exception:
             return _failure_response(503, "ot_runtime_unavailable", status="error")
         try:
@@ -3035,6 +3280,11 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
         except CapabilityAdmissionRejected as exc:
             status_code = 409 if str(exc) == "effect_reconciliation_required" else 403
             return _failure_response(status_code, str(exc), status="rejected")
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "effect_prepare_unavailable", status="error")
         except Exception:
             return _failure_response(503, "effect_prepare_unavailable", status="error")
 
@@ -3049,6 +3299,11 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
             return _wire_rejection(exc)
         try:
             instance = runtime()
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
         except Exception:
             return _failure_response(503, "ot_runtime_unavailable", status="error")
         try:
@@ -3056,7 +3311,13 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
         except EffectCommitIndeterminate as exc:
             return _failure_response(409, str(exc), status="error")
         except CapabilityAdmissionRejected as exc:
-            return _failure_response(403, str(exc), status="rejected")
+            status_code = 409 if str(exc) == "effect_reconciliation_required" else 403
+            return _failure_response(status_code, str(exc), status="rejected")
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "effect_commit_unavailable", status="error")
         except Exception:
             return _failure_response(503, "effect_commit_unavailable", status="error")
 
@@ -3071,12 +3332,22 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
             return _wire_rejection(exc)
         try:
             instance = runtime()
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
         except Exception:
             return _failure_response(503, "ot_runtime_unavailable", status="error")
         try:
             return instance.query_effect(parsed)
         except CapabilityAdmissionRejected as exc:
             return _failure_response(403, str(exc), status="rejected")
+        except CapabilityRuntimeUnavailable as exc:
+            reason = str(exc)
+            if reason == "effect_coordination_recovery_unavailable":
+                return _failure_response(503, reason, status="error")
+            return _failure_response(503, "effect_query_unavailable", status="error")
         except Exception:
             return _failure_response(503, "effect_query_unavailable", status="error")
 

@@ -59,6 +59,10 @@ from .coordination_models import (
     SignedEffectPrepareRequest,
     SignedEffectQueryRequest,
 )
+from .coordination_recovery import (
+    CoordinationRecoveryReason,
+    CoordinationRecoveryStatus,
+)
 from .crypto import decode_urlsafe_b64
 from .models import Decision
 from .pandapower_plant import PhysicalSimulationError
@@ -245,6 +249,61 @@ class CandidateHealthMetadata(_StrictModel):
         return _public_key(self.public_key_b64)
 
 
+class OtCoordinationRecoveryMetadata(_StrictModel):
+    """Closed, read-only projection of journal-to-plant recovery alignment."""
+
+    schema_version: Literal["m4i-ot-coordination-recovery-v1"] = (
+        "m4i-ot-coordination-recovery-v1"
+    )
+    status: CoordinationRecoveryStatus
+    reason: CoordinationRecoveryReason
+    record_count: int = Field(ge=0)
+    applied_effect_count: int = Field(ge=0)
+    pending_effect_count: int = Field(ge=0, le=1)
+    plant_model_digest: str = Field(pattern=SHA256_PATTERN)
+    plant_state_version: int = Field(ge=0)
+    plant_state_digest: str = Field(pattern=SHA256_PATTERN)
+    latest_applied_state_version: int | None = Field(default=None, ge=0)
+    latest_applied_state_digest: str | None = Field(
+        default=None,
+        pattern=SHA256_PATTERN,
+    )
+    pending_effect_id: str | None = Field(default=None, min_length=1)
+    pending_expected_post_state_version: int | None = Field(default=None, ge=1)
+    pending_expected_post_state_digest: str | None = Field(
+        default=None,
+        pattern=SHA256_PATTERN,
+    )
+    live_commit_armed: bool = False
+    limitation: Literal["ordinary_single_volume_alignment_only"] = (
+        "ordinary_single_volume_alignment_only"
+    )
+
+    @model_validator(mode="after")
+    def require_consistent_projection(self) -> OtCoordinationRecoveryMetadata:
+        latest = (
+            self.latest_applied_state_version,
+            self.latest_applied_state_digest,
+        )
+        pending = (
+            self.pending_effect_id,
+            self.pending_expected_post_state_version,
+            self.pending_expected_post_state_digest,
+        )
+        if self.applied_effect_count + self.pending_effect_count > self.record_count:
+            raise ValueError("coordination recovery counts are inconsistent")
+        if (self.applied_effect_count == 0) != (latest == (None, None)):
+            raise ValueError("coordination recovery applied projection is inconsistent")
+        if (self.pending_effect_count == 0) != (pending == (None, None, None)):
+            raise ValueError("coordination recovery pending projection is inconsistent")
+        if self.live_commit_armed and (
+            self.status is not CoordinationRecoveryStatus.RECOVERY_REQUIRED
+            or self.pending_effect_count != 1
+        ):
+            raise ValueError("live commit marker requires one recoverable pending effect")
+        return self
+
+
 class OtHealthMetadata(_StrictModel):
     schema_version: Literal["m4g-ot-health-v1"] = "m4g-ot-health-v1"
     status: Literal["ready"] = "ready"
@@ -266,6 +325,7 @@ class OtHealthMetadata(_StrictModel):
     semantic_replay_reservations: int = Field(ge=0)
     execute_requests: int = Field(ge=0)
     scan_counter: int = Field(ge=0)
+    coordination_recovery: OtCoordinationRecoveryMetadata | None = None
 
     @model_validator(mode="after")
     def require_valid_key_and_counters(self) -> OtHealthMetadata:
