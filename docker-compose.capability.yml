@@ -1,0 +1,155 @@
+x-m4g-build: &m4g-build
+  context: .
+  args:
+    PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+    AEGIS_INSTALL_TARGET: ".[simulation]"
+
+services:
+  segmented-gateway:
+    build: *m4g-build
+    command:
+      - uvicorn
+      - aegis_ot.segmented_capability_runtime:capability_gateway_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8081"
+    environment:
+      AEGIS_CANDIDATE_URL: http://candidate:8085
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate_public
+      AEGIS_OBSERVER_URL: http://observer:8082
+      AEGIS_OT_URL: http://ot-adapter:8083
+      AEGIS_PERMIT_KEY_ID: m4g-permit-key-v1
+      AEGIS_PERMIT_PRIVATE_KEY_FILE: /run/secrets/permit_private
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant_public
+    depends_on: [opa, observer, candidate, ot-adapter]
+    secrets:
+      - gateway_private
+      - ot_public
+      - permit_private
+      - observer_public
+      - candidate_public
+      - plant_public
+
+  observer:
+    build: *m4g-build
+    command:
+      - uvicorn
+      - aegis_ot.segmented_capability_runtime:capability_observer_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8082"
+    environment:
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PRIVATE_KEY_FILE: /run/secrets/observer_private
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant_public
+      AEGIS_PLANT_URL: http://simulation:8084
+    secrets:
+      - observer_private
+      - plant_public
+
+  candidate:
+    build: *m4g-build
+    command:
+      - uvicorn
+      - aegis_ot.segmented_capability_runtime:capability_candidate_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8085"
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PRIVATE_KEY_FILE: /run/secrets/candidate_private
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant_public
+      AEGIS_PLANT_URL: http://simulation:8084
+    depends_on: [simulation]
+    networks: [control_dmz, simulation]
+    secrets:
+      - candidate_private
+      - plant_public
+
+  ot-adapter:
+    build: *m4g-build
+    command:
+      - uvicorn
+      - aegis_ot.segmented_capability_runtime:capability_ot_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8083"
+    environment:
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
+      AEGIS_PERMIT_KEY_ID: m4g-permit-key-v1
+      AEGIS_PERMIT_PUBLIC_KEY_FILE: /run/secrets/permit_public
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant_public
+      AEGIS_PLANT_URL: http://simulation:8084
+      AEGIS_SEMANTIC_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/semantic-replay.json
+      AEGIS_TRANSPORT_AUDIENCE: aegis-ot:m4g:ot-adapter
+    secrets:
+      - gateway_public
+      - ot_private
+      - permit_public
+      - observer_public
+      - plant_public
+
+  simulation:
+    build: *m4g-build
+    command:
+      - uvicorn
+      - aegis_ot.segmented_capability_runtime:capability_plant_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8084"
+    environment:
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate_public
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
+      AEGIS_OT_KEY_ID: m4e-ot-key-v1
+      AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot_public
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PRIVATE_KEY_FILE: /run/secrets/plant_private
+    secrets:
+      - observer_public
+      - candidate_public
+      - ot_public
+      - plant_private
+
+  replay-init:
+    environment:
+      AEGIS_SEMANTIC_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/semantic-replay.json
+      AEGIS_TRANSPORT_AUDIENCE: aegis-ot:m4g:ot-adapter
+
+  agent-probe:
+    build: *m4g-build
+    command: [python, -m, aegis_ot.m4g_probe]
+
+secrets:
+  permit_private:
+    file: ${AEGIS_PERMIT_PRIVATE_KEY_FILE:?set by the M4g runner}
+  permit_public:
+    file: ${AEGIS_PERMIT_PUBLIC_KEY_FILE:?set by the M4g runner}
+  observer_private:
+    file: ${AEGIS_OBSERVER_PRIVATE_KEY_FILE:?set by the M4g runner}
+  observer_public:
+    file: ${AEGIS_OBSERVER_PUBLIC_KEY_FILE:?set by the M4g runner}
+  candidate_private:
+    file: ${AEGIS_CANDIDATE_PRIVATE_KEY_FILE:?set by the M4g runner}
+  candidate_public:
+    file: ${AEGIS_CANDIDATE_PUBLIC_KEY_FILE:?set by the M4g runner}
+  plant_private:
+    file: ${AEGIS_PLANT_PRIVATE_KEY_FILE:?set by the M4g runner}
+  plant_public:
+    file: ${AEGIS_PLANT_PUBLIC_KEY_FILE:?set by the M4g runner}
