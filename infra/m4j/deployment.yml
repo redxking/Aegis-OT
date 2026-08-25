@@ -1,0 +1,392 @@
+schema_version: aegis-ot-m4j-deployment-v1
+deployment_status: configuration_only
+claim_boundary: no_live_deployment_or_multi_host_isolation_evidence
+
+topology_binding:
+  path: infra/m4j/topology.yml
+  schema_version: aegis-ot-m4j-topology-v1
+  canonical_sha256: 8dc931a741b7df304e9c36862a747bee9254d09716a9b7d11fc5c03c3a146f1e
+
+policy:
+  default_peer_policy: deny
+  management_purpose: orchestration_and_evidence_only
+  management_application_listeners_allowed: false
+  bootstrap_nat_purpose: vagrant_bootstrap_only
+  bootstrap_nat_application_bindings_allowed: false
+  agent_control_ingress_role: gateway
+  direct_agents_to_ot_allowed: false
+  direct_agents_to_simulation_allowed: false
+  spire_enrollment_network: trust_enrollment
+  spire_workload_api_socket: /run/spire/agent/public/api.sock
+
+roles:
+  management:
+    hostname: aegis-management
+    workloads: [orchestration, evidence-retention]
+    infrastructure_services: [sshd]
+  trust:
+    hostname: aegis-trust
+    workloads: [spire-server, spire-bootstrap]
+    infrastructure_services: [sshd]
+  agents:
+    hostname: aegis-agents
+    workloads: [agent-probe, spire-agent]
+    infrastructure_services: [sshd]
+  gateway:
+    hostname: aegis-gateway
+    workloads: [opa, segmented-gateway, spire-agent]
+    infrastructure_services: [sshd]
+  ot:
+    hostname: aegis-ot
+    workloads: [observer, candidate, ot-adapter, spire-agent]
+    infrastructure_services: [sshd]
+  simulation:
+    hostname: aegis-simulation
+    workloads: [plant, spire-agent]
+    infrastructure_services: [sshd]
+
+listeners:
+  management-sshd:
+    role: management
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.10
+    transport: tcp
+    port: 22
+  trust-sshd:
+    role: trust
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.11
+    transport: tcp
+    port: 22
+  agents-sshd:
+    role: agents
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.12
+    transport: tcp
+    port: 22
+  gateway-sshd:
+    role: gateway
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.13
+    transport: tcp
+    port: 22
+  ot-sshd:
+    role: ot
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.14
+    transport: tcp
+    port: 22
+  simulation-sshd:
+    role: simulation
+    service: sshd
+    scope: infrastructure
+    network: management
+    bind_address: 192.168.56.15
+    transport: tcp
+    port: 22
+  spire-server-enrollment:
+    role: trust
+    service: spire-server
+    scope: identity
+    network: trust_enrollment
+    bind_address: 192.168.57.11
+    transport: tcp
+    port: 8081
+  spire-server-admin:
+    role: trust
+    service: spire-server
+    scope: identity
+    network: local
+    bind_address: /run/spire/server/private/api.sock
+    transport: unix
+    port: null
+  agents-spire-workload-api:
+    role: agents
+    service: spire-agent
+    scope: identity
+    network: local
+    bind_address: /run/spire/agent/public/api.sock
+    transport: unix
+    port: null
+  gateway-spire-workload-api:
+    role: gateway
+    service: spire-agent
+    scope: identity
+    network: local
+    bind_address: /run/spire/agent/public/api.sock
+    transport: unix
+    port: null
+  ot-spire-workload-api:
+    role: ot
+    service: spire-agent
+    scope: identity
+    network: local
+    bind_address: /run/spire/agent/public/api.sock
+    transport: unix
+    port: null
+  simulation-spire-workload-api:
+    role: simulation
+    service: spire-agent
+    scope: identity
+    network: local
+    bind_address: /run/spire/agent/public/api.sock
+    transport: unix
+    port: null
+  segmented-gateway-api:
+    role: gateway
+    service: segmented-gateway
+    scope: application
+    network: agent_lane
+    bind_address: 192.168.58.13
+    transport: tcp
+    port: 8081
+  opa-api:
+    role: gateway
+    service: opa
+    scope: application
+    network: local
+    bind_address: 127.0.0.1
+    transport: tcp
+    port: 8181
+  observer-api:
+    role: ot
+    service: observer
+    scope: application
+    network: control_dmz
+    bind_address: 192.168.59.14
+    transport: tcp
+    port: 8082
+  candidate-api:
+    role: ot
+    service: candidate
+    scope: application
+    network: control_dmz
+    bind_address: 192.168.59.14
+    transport: tcp
+    port: 8085
+  ot-adapter-api:
+    role: ot
+    service: ot-adapter
+    scope: application
+    network: control_dmz
+    bind_address: 192.168.59.14
+    transport: tcp
+    port: 8083
+  plant-api:
+    role: simulation
+    service: plant
+    scope: application
+    network: simulation_lane
+    bind_address: 192.168.60.15
+    transport: tcp
+    port: 8084
+
+external_control_sources:
+  vagrant-host:
+    source_type: external_host
+    source_address: 192.168.56.1
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+    purpose: vagrant_control_provisioning_and_evidence
+    destination_listeners:
+      - management-sshd
+      - trust-sshd
+      - agents-sshd
+      - gateway-sshd
+      - ot-sshd
+      - simulation-sshd
+
+peer_edges:
+  - id: management-to-trust-ssh
+    source_role: management
+    source_service: orchestration
+    destination_listener: trust-sshd
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+  - id: management-to-agents-ssh
+    source_role: management
+    source_service: orchestration
+    destination_listener: agents-sshd
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+  - id: management-to-gateway-ssh
+    source_role: management
+    source_service: orchestration
+    destination_listener: gateway-sshd
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+  - id: management-to-ot-ssh
+    source_role: management
+    source_service: orchestration
+    destination_listener: ot-sshd
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+  - id: management-to-simulation-ssh
+    source_role: management
+    source_service: orchestration
+    destination_listener: simulation-sshd
+    network: management
+    protocol: ssh
+    authentication: ssh_public_key
+  - id: spire-bootstrap-to-server-admin
+    source_role: trust
+    source_service: spire-bootstrap
+    destination_listener: spire-server-admin
+    network: local
+    protocol: spire_admin_api
+    authentication: local_unix_permissions
+  - id: agents-spire-agent-to-server
+    source_role: agents
+    source_service: spire-agent
+    destination_listener: spire-server-enrollment
+    network: trust_enrollment
+    protocol: spire_node_api
+    authentication: join_token_bootstrap_then_mtls
+  - id: gateway-spire-agent-to-server
+    source_role: gateway
+    source_service: spire-agent
+    destination_listener: spire-server-enrollment
+    network: trust_enrollment
+    protocol: spire_node_api
+    authentication: join_token_bootstrap_then_mtls
+  - id: ot-spire-agent-to-server
+    source_role: ot
+    source_service: spire-agent
+    destination_listener: spire-server-enrollment
+    network: trust_enrollment
+    protocol: spire_node_api
+    authentication: join_token_bootstrap_then_mtls
+  - id: simulation-spire-agent-to-server
+    source_role: simulation
+    source_service: spire-agent
+    destination_listener: spire-server-enrollment
+    network: trust_enrollment
+    protocol: spire_node_api
+    authentication: join_token_bootstrap_then_mtls
+  - id: agent-probe-to-local-spire-agent
+    source_role: agents
+    source_service: agent-probe
+    destination_listener: agents-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: segmented-gateway-to-local-spire-agent
+    source_role: gateway
+    source_service: segmented-gateway
+    destination_listener: gateway-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: observer-to-local-spire-agent
+    source_role: ot
+    source_service: observer
+    destination_listener: ot-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: candidate-to-local-spire-agent
+    source_role: ot
+    source_service: candidate
+    destination_listener: ot-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: ot-adapter-to-local-spire-agent
+    source_role: ot
+    source_service: ot-adapter
+    destination_listener: ot-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: plant-to-local-spire-agent
+    source_role: simulation
+    source_service: plant
+    destination_listener: simulation-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
+  - id: agent-probe-to-segmented-gateway
+    source_role: agents
+    source_service: agent-probe
+    destination_listener: segmented-gateway-api
+    network: agent_lane
+    protocol: http
+    authentication: signed_workload_capability
+  - id: segmented-gateway-to-opa
+    source_role: gateway
+    source_service: segmented-gateway
+    destination_listener: opa-api
+    network: local
+    protocol: http
+    authentication: loopback_only
+  - id: segmented-gateway-to-observer
+    source_role: gateway
+    source_service: segmented-gateway
+    destination_listener: observer-api
+    network: control_dmz
+    protocol: https
+    authentication: spiffe_mtls
+  - id: segmented-gateway-to-candidate
+    source_role: gateway
+    source_service: segmented-gateway
+    destination_listener: candidate-api
+    network: control_dmz
+    protocol: https
+    authentication: spiffe_mtls
+  - id: segmented-gateway-to-ot-adapter
+    source_role: gateway
+    source_service: segmented-gateway
+    destination_listener: ot-adapter-api
+    network: control_dmz
+    protocol: https
+    authentication: spiffe_mtls
+  - id: ot-adapter-to-observer
+    source_role: ot
+    source_service: ot-adapter
+    destination_listener: observer-api
+    network: control_dmz
+    protocol: https
+    authentication: spiffe_mtls
+  - id: observer-to-plant
+    source_role: ot
+    source_service: observer
+    destination_listener: plant-api
+    network: simulation_lane
+    protocol: https
+    authentication: spiffe_mtls
+  - id: candidate-to-plant
+    source_role: ot
+    source_service: candidate
+    destination_listener: plant-api
+    network: simulation_lane
+    protocol: https
+    authentication: spiffe_mtls
+  - id: ot-adapter-to-plant
+    source_role: ot
+    source_service: ot-adapter
+    destination_listener: plant-api
+    network: simulation_lane
+    protocol: https
+    authentication: spiffe_mtls
+
+unresolved_gates:
+  - gate_id: multi_host_spire_bootstrap
+    status: unresolved
+    blocks: live_multi_host_deployment_evidence
+    current_limitation: current_single_host_bootstrap_uses_one_shared_agent_identity_and_shared_bootstrap_material
+    required_resolution: issue_distinct_node_attestation_identity_and_non_shared_bootstrap_material_per_host_then_bind_and_validate_each_workload_registration_parent
