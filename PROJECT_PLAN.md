@@ -214,15 +214,16 @@ Evidence boundary and next hypothesis-critical gate:
 - M4b is not external custody, independent replication, segmented or multi-host
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
-- The next shortest claim-critical increment after M4c is abrupt process-crash
-  consistency for the replay ledger. After that, identity/policy/control
-  separation must move across an actual segmented deployment before the central
-  system claim can be tested beyond a single-host process-capability boundary.
+- The next shortest local claim-critical increment after M4c is a competing
+  stale-state transaction against the live PLC compare-and-swap boundary.
+  Identity/policy/control separation must then move across an actual segmented
+  deployment before the central system claim can be tested beyond a single-host
+  process-capability boundary.
 
 ## Active M4c fault and adversarial increment
 
-Implemented and locally reproduced in its stronger v4 form from clean detached
-checkout `6f49c2a176f3b4db4540c45827f7ac4749e86d68`:
+Implemented and locally reproduced in its stronger v5 form from clean detached
+checkout `2d1ee1e5c5102f8e3d181a1e9a8bc845b12f7196`:
 
 - A five-condition live-process campaign, with a fresh capability-separated
   plant, observer, virtual PLC, and controller stack for every condition.
@@ -260,11 +261,19 @@ checkout `6f49c2a176f3b4db4540c45827f7ac4749e86d68`:
   prior request, permit, observation, decision, and assessment. The new PLC
   returned a validly signed `transaction_replayed` rejection before dispatch;
   the fresh plant state and ledger contents were unchanged.
-- The v1-v3 reports remain retained as historical increments. Two separately
-  retained read-only v4 reports both met all registered criteria and reproduced
+- The ledger persistence path now uses exclusive temporary-file creation,
+  complete writes, file fsync, atomic replace, and parent-directory fsync. Two
+  actual spawned crash workers exited immediately before replace and immediately
+  after replace but before directory fsync. Before replace, the prior ledger was
+  byte-for-byte unchanged and the uncommitted reservation absent. After replace,
+  the reloaded ledger was valid and contained both reservations. The loader also
+  rejects symlinks, oversize files, duplicate keys, extra/missing fields, and
+  duplicate or noncanonical reservation sets.
+- The v1-v4 reports remain retained as historical increments. Two separately
+  retained read-only v5 reports both met all registered criteria and reproduced
   deterministic projection hash
-  `c21e1aeae1e3a0772abbd797cddd3cf25e7af7df2dfce47a1b10c1f4b8727499`.
-- The clean checkout passed 520 tests; ruff, strict mypy across 44 source files,
+  `27661b46593292a8deb76895f3217d2984489ac37b77d4a2816af09e377a2571`.
+- The clean checkout passed 522 tests; ruff, strict mypy across 44 source files,
   schema drift, and topology-fixture drift checks were clean.
 
 Evidence boundary and remaining critical tests:
@@ -284,9 +293,11 @@ Evidence boundary and remaining critical tests:
   shutdown and restart when the ledger directory remains available. It does not
   establish atomic durability under process kill during write, OS crash, power
   loss, filesystem corruption, rollback, deletion, or hostile-host tampering.
-- Concurrent state transition, process crash during dispatch or ledger
-  persistence, hostile coordinator/host, segmentation, HELICS/OpenPLC, and
-  hardware conditions remain untested or lack retained experimental evidence.
+- The crash workers test the two registered write boundaries, not arbitrary
+  instruction-level termination, kernel/filesystem defects, or whole-host power
+  loss. Concurrent state transition, process crash during command dispatch,
+  hostile coordinator/host, segmentation, HELICS/OpenPLC, and hardware
+  conditions remain untested or lack retained experimental evidence.
 
 ## Read-only public demonstration increment
 
