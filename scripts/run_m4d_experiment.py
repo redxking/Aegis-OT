@@ -358,13 +358,26 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
     evidence["accepted"] = all(evidence["acceptance"].values())
     semantic_probe = dict(probe)
     semantic_probe.pop("agent_hostname", None)
+    policy_decision = policy_result.get("decision", {})
+    semantic_faults = {
+        "policy_service_loss": {
+            "http_status": policy_status,
+            "outcome": policy_decision.get("outcome"),
+            "reasons": policy_decision.get("reasons"),
+            "execution_present": policy_result.get("execution") is not None,
+            "state_version_before": policy_state.version,
+            "state_version_after": after_policy.get("version"),
+        },
+        "observer_service_loss": service_faults["observer_service_loss"],
+        "ot_adapter_service_loss": service_faults["ot_adapter_service_loss"],
+    }
     evidence["semantic_outcome_sha256"] = _canonical_sha256(
         {
             "git_commit": commit,
             "resolved_compose_sha256": evidence["resolved_compose_sha256"],
             "network_inventory": networks,
             "probe": semantic_probe,
-            "service_faults": service_faults,
+            "service_faults": semantic_faults,
             "acceptance": evidence["acceptance"],
             "accepted": evidence["accepted"],
         }
