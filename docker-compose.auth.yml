@@ -17,6 +17,23 @@ services:
       AEGIS_OT_PRIVATE_KEY_FILE: /run/secrets/ot_private
     secrets: [gateway_public, ot_private]
 
+  transport-probe:
+    profiles: ["experiment"]
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+    command: ["python", "-m", "aegis_ot.m4e_transport_probe"]
+    read_only: true
+    cap_drop: ["ALL"]
+    environment:
+      AEGIS_GATEWAY_KEY_ID: m4e-gateway-key-v1
+      AEGIS_GATEWAY_PRIVATE_KEY_FILE: /run/secrets/gateway_private
+      AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot_public
+    secrets: [gateway_private, ot_public]
+    depends_on: [observer, ot-adapter]
+    networks: [control_dmz]
+
 secrets:
   gateway_private:
     file: ${AEGIS_GATEWAY_PRIVATE_KEY_FILE:?set by the M4e runner}
