@@ -173,6 +173,22 @@ retains the exact commit, resolved Compose digest, image IDs, network membership
 raw outcomes, and a timing/UUID-independent semantic outcome hash. This is
 single-host Docker evidence, not multi-host or production-OT validation.
 
+Run the M4e authenticated-transport experiment separately:
+
+```bash
+.venv/bin/python scripts/run_m4e_experiment.py \
+  --output results/m4e-authenticated-local.json \
+  --project-name aegis-ot-m4e-local
+```
+
+The M4e runner generates fresh gateway and OT-adapter Ed25519 keypairs, supplies
+them through the authenticated Compose overlay as Docker secrets, runs the
+signed agent campaign plus unsigned, forged-signature, controlled valid-key,
+transport-replay, and post-signature-tamper probes, stops the keyed services,
+and deletes the temporary private-key directory. Evidence retains public-key
+hashes, not private keys. This authenticates bounded messages; it is not
+SPIFFE/SPIRE identity, TLS peer authentication, or durable replay protection.
+
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
 
 ## Public demonstration

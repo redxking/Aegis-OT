@@ -10,7 +10,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 | WP1 Executable assurance kernel | Initial implementation complete | Exact M4d commit suite: 528 tests pass; strict typing, linting, schema-drift, public-demo-drift, and Compose checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | M3/M4b retain the bounded pandapower/virtual-device and capability evidence; M4d adds reproduced single-host Docker network placement, bypass denial, service-backed OPA, and service-loss behavior, but not SPIFFE, signed interservice permits, HELICS/OpenPLC, hardware, multi-host isolation, or external validation |
+| WP4 Power-system and OT integration | In progress | M3/M4b retain bounded physical/capability evidence; M4d adds reproduced Docker segmentation/service loss, and M4e adds reproduced Ed25519 gateway/OT message authentication and transport replay rejection; SPIFFE, TLS peer identity, durable restart replay, HELICS/OpenPLC, hardware, multi-host isolation, and external validation remain open |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
 | WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
 | WP7 Scale and economics | Planned | No measurements |
@@ -31,10 +31,11 @@ The original package is unavailable. This repository is a clean reconstruction b
 7. M4c: same-host fault, contradiction, restart, ledger-crash, and stale-permit
    campaign for the capability loop.
 8. M4d: bounded single-host Docker network segmentation and service-loss campaign.
-9. M4: SPIFFE/SPIRE identity, signed interservice authorization, and six-node deployment.
-10. M5: operate-through-compromise and degraded-mode evaluation.
-11. M6: logical fleet scaling and economic sensitivity model.
-12. M7-M8: independent review, replication package, publication, and release.
+9. M4e: ephemeral-key signed gateway/OT transport and hostile-peer/replay tests.
+10. M4: SPIFFE/SPIRE identity, durable signed interservice authorization, and six-node deployment.
+11. M5: operate-through-compromise and degraded-mode evaluation.
+12. M6: logical fleet scaling and economic sensitivity model.
+13. M7-M8: independent review, replication package, publication, and release.
 
 ## Immediate acceptance gates
 
@@ -369,6 +370,64 @@ Evidence boundary and next hypothesis-critical gate:
   cryptographically verified workload/service identity and signed permit and
   acknowledgment validation, then repeat bypass, service-loss, replay, stale-
   state, and hostile-peer tests before moving to the six-node deployment.
+
+## Active M4e authenticated-transport increment
+
+Implemented and locally reproduced from clean detached checkout
+`0cd353c9eae9025c2515f845d09c2d3ad6c5e43c`:
+
+- The optional authenticated Compose overlay provisions distinct ephemeral
+  Ed25519 gateway and OT-adapter keypairs through Docker secrets. The gateway
+  receives its private key and the OT public key; the OT adapter receives the
+  gateway public key and its own private key. Private key bytes are not written
+  into the repository or retained evidence.
+- The gateway signs a closed, versioned execution envelope that binds the exact
+  proposal and decision, OT audience, gateway key ID, unique transport nonce,
+  issuance time, and five-second expiry. Authenticated OT mode rejects unsigned,
+  wrong-key, altered-after-signing, wrong-audience, expired, or replayed
+  envelopes before simulation dispatch.
+- The OT adapter signs its execution result and binds it to the SHA-256 of the
+  exact signed gateway request. The gateway verifies the expected OT key ID,
+  request binding, and signature before returning the execution result.
+- The normal agent-only campaign passed through this signed transport while
+  preserving the M4d bypass, unsafe-denial, one-effect nominal, and proposal-
+  replay results.
+- A separate control-DMZ transport probe verified unsigned rejection (HTTP 403),
+  forged-signature rejection (403), one valid controlled key-holder execution
+  with a verified OT response signature (200), exact signed-envelope replay
+  rejection (409), and post-signature nonce alteration rejection (403).
+- Two read-only clean-checkout reports use separately generated keypairs but the
+  same normalized Compose SHA-256
+  `9247d5724d0abfccd9870d63d544f1be6ad3eadd43cec6fa112b55a9fee4a2f1`
+  and semantic outcome SHA-256
+  `5b5bb62a04702a8c45a75f728c2ced7e5e4221abe8ba25dd01843757c2a88dbd`.
+  Both passed all six registered M4e criteria. Each retains only the public-key
+  hashes and records `private_key_material_retained: false`; the runner stopped
+  the keyed services and deleted the temporary key directory after each run.
+
+Evidence boundary and next hypothesis-critical gate:
+
+- M4e authenticates messages from possession of experiment-provisioned Ed25519
+  keys. It does not establish SPIFFE/SPIRE workload identity, certificate
+  lifecycle, TLS peer authentication, key revocation, protected key storage, or
+  independent administrative domains.
+- The controlled valid-key probe demonstrates the authority and replay behavior
+  of a gateway-key holder; it is not an untrusted peer. Gateway-key compromise
+  remains a trusted-boundary compromise with authority to issue signed permits.
+- The OT transport replay set is process memory. Exact replay after OT restart,
+  crash durability, rollback protection, multi-instance coordination, and key
+  rotation during in-flight transactions remain untested.
+- The signed envelope wraps the v0.1 `Decision` and synthetic command path. It
+  does not yet carry the full M4a/M4b signed observation, candidate assessment,
+  capability permit, PLC acknowledgment, or root-signed evidence package across
+  containers.
+- The retained JSON files are local experiment summaries, not raw signed-message
+  packages, independent replication, external validation, production readiness,
+  operational effectiveness, or WP4 exit.
+- The next gate is durable transport replay state across OT restart plus
+  workload-bound key/certificate issuance and revocation. The complete M4
+  capability transaction can then be migrated across authenticated channels and
+  retested under stale identity, hostile-peer, partition, and restart conditions.
 
 ## Read-only public demonstration increment
 

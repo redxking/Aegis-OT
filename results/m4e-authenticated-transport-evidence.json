@@ -1,0 +1,169 @@
+{
+  "acceptance": {
+    "exact_transport_replay_rejected": true,
+    "forged_signature_rejected": true,
+    "post_signature_tamper_rejected": true,
+    "signed_agent_campaign_accepted": true,
+    "unsigned_request_rejected": true,
+    "valid_key_holder_executed_once": true
+  },
+  "accepted": true,
+  "agent_probe": {
+    "accepted": true,
+    "agent_hostname": "5bf566e6f3e5",
+    "agent_network_direct_reachability": {
+      "observer": false,
+      "ot-adapter": false,
+      "simulation": false
+    },
+    "final_isolated_assets": [
+      "feeder-1"
+    ],
+    "final_state_version": 2,
+    "initial_state_version": 1,
+    "replay": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "replayed_nonce"
+      ]
+    },
+    "safe": {
+      "decision": "permit",
+      "executed": true,
+      "resulting_state_version": 2
+    },
+    "schema_version": "m4d-segmented-probe-v1",
+    "unsafe": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "critical_load_below_limit"
+      ]
+    }
+  },
+  "analyst": "Angelis Pseftis",
+  "clean_checkout": true,
+  "ephemeral_public_key_sha256": {
+    "gateway": "f6557763b878f0257e090d2262efd49d9655c65a8bedd2f8044a4c103c00f13d",
+    "ot_adapter": "64be4989b25c51f6e679dda037036cfe070de413e9281ff343b0732e69974d6f"
+  },
+  "evidence_boundary": [
+    "Ephemeral Ed25519 service keys and Docker secrets, not SPIFFE/SPIRE",
+    "Message signatures inside local HTTP, not TLS peer authentication",
+    "Controlled key-holder replay injector, not an untrusted peer",
+    "Synthetic supervisory state, not pandapower, HELICS, OpenPLC, or hardware",
+    "Single local Docker host and local execution, not independent validation"
+  ],
+  "generated_at": "2026-08-25T14:38:35.453851+00:00",
+  "git_commit": "0cd353c9eae9025c2515f845d09c2d3ad6c5e43c",
+  "images": [
+    {
+      "ContainerName": "aegis-ot-m4e-clean-observer-1",
+      "Created": "2026-08-25T14:38:28.925315589Z",
+      "ID": "sha256:cb282c63322ffedc73f858ad7e65c7ced3ef69a9704bdd56d318fedb41a2b1c9",
+      "LastTagTime": "2026-08-25T14:38:30.586419257Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4e-clean-observer",
+      "Size": 64119719,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4e-clean-ot-adapter-1",
+      "Created": "2026-08-25T14:38:28.925315589Z",
+      "ID": "sha256:41e86ca80003651ff54f07e2c1f83ac25facd9f74b1239badbf8c08442f5b001",
+      "LastTagTime": "2026-08-25T14:38:30.591546298Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4e-clean-ot-adapter",
+      "Size": 64119721,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4e-clean-simulation-1",
+      "Created": "2026-08-25T14:38:28.925315589Z",
+      "ID": "sha256:9a2e5bc977c42b6b107425ceb22aad3139b74a0dd3a7d4336037eebea6a5a20e",
+      "LastTagTime": "2026-08-25T14:38:30.590580132Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4e-clean-simulation",
+      "Size": 64119721,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4e-clean-opa-1",
+      "Created": "2026-08-17T12:59:25.488711271Z",
+      "ID": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "LastTagTime": "2026-08-24T14:44:50.847063844Z",
+      "Platform": "linux/arm64",
+      "Repository": "openpolicyagent/opa",
+      "Size": 26229794,
+      "Tag": ""
+    },
+    {
+      "ContainerName": "aegis-ot-m4e-clean-segmented-gateway-1",
+      "Created": "2026-08-25T14:38:28.925315589Z",
+      "ID": "sha256:aa8ba9984fd2571ce90ddc748e8f0d14a3a21944167cd878a5309c8ade345503",
+      "LastTagTime": "2026-08-25T14:38:30.58709584Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4e-clean-segmented-gateway",
+      "Size": 64119728,
+      "Tag": "latest"
+    }
+  ],
+  "network_inventory": {
+    "agent": [
+      "aegis-ot-m4e-clean-segmented-gateway-1"
+    ],
+    "control_dmz": [
+      "aegis-ot-m4e-clean-observer-1",
+      "aegis-ot-m4e-clean-ot-adapter-1",
+      "aegis-ot-m4e-clean-segmented-gateway-1"
+    ],
+    "simulation": [
+      "aegis-ot-m4e-clean-observer-1",
+      "aegis-ot-m4e-clean-ot-adapter-1",
+      "aegis-ot-m4e-clean-simulation-1"
+    ],
+    "trust": [
+      "aegis-ot-m4e-clean-opa-1",
+      "aegis-ot-m4e-clean-segmented-gateway-1"
+    ]
+  },
+  "normalized_compose_sha256": "9247d5724d0abfccd9870d63d544f1be6ad3eadd43cec6fa112b55a9fee4a2f1",
+  "private_key_material_retained": false,
+  "project_name": "aegis-ot-m4e-clean",
+  "schema_version": "m4e-authenticated-transport-experiment-v1",
+  "semantic_outcome_sha256": "5b5bb62a04702a8c45a75f728c2ced7e5e4221abe8ba25dd01843757c2a88dbd",
+  "transport_probe": {
+    "accepted": true,
+    "exact_transport_replay": {
+      "http_status": 409,
+      "response": {
+        "detail": "transport request replayed"
+      }
+    },
+    "forged_signature": {
+      "http_status": 403,
+      "response": {
+        "detail": "gateway signature rejected"
+      }
+    },
+    "post_signature_tamper": {
+      "http_status": 403,
+      "response": {
+        "detail": "gateway signature rejected"
+      }
+    },
+    "schema_version": "m4e-transport-probe-v1",
+    "unsigned": {
+      "http_status": 403,
+      "response": {
+        "detail": "signed gateway request required"
+      }
+    },
+    "valid_key_holder": {
+      "executed": true,
+      "http_status": 200,
+      "response_signature_verified": true
+    }
+  }
+}
