@@ -11,6 +11,7 @@ import os
 import shutil
 import stat
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -102,6 +103,55 @@ def _assert_project_absent(project_name: str) -> None:
         raise m4d.ExperimentError(
             f"M4f project name is already in use; refusing cleanup: {project_name}"
         )
+
+
+def _assert_checkout(commit: str) -> None:
+    if m4d._run("git", "rev-parse", "HEAD").stdout.strip() != commit:
+        raise m4d.ExperimentError("checkout HEAD changed during the M4f experiment")
+    if m4d._run("git", "status", "--porcelain").stdout:
+        raise m4d.ExperimentError("checkout changed during the M4f experiment")
+
+
+def _await_gateway_stack() -> None:
+    last_error: Exception | None = None
+    for _ in range(60):
+        try:
+            status, _ = m4d._http_json(
+                "GET",
+                "http://127.0.0.1:8081/v1/observation",
+            )
+            if status == 200:
+                return
+        except m4d.ExperimentError as exc:
+            last_error = exc
+        time.sleep(0.25)
+    raise m4d.ExperimentError(
+        "segmented gateway stack did not become ready"
+    ) from last_error
+
+
+def _await_durable_ot_health(compose_prefix: tuple[str, ...]) -> None:
+    command = (
+        "import json; from urllib.request import urlopen; "
+        "value=json.loads(urlopen('http://127.0.0.1:8083/health', timeout=1).read()); "
+        "assert value.get('status') == 'ok'; "
+        "assert value.get('replay_mode') == 'durable'"
+    )
+    for _ in range(60):
+        completed = m4d._run(
+            *compose_prefix,
+            "exec",
+            "-T",
+            "ot-adapter",
+            "python",
+            "-c",
+            command,
+            check=False,
+        )
+        if completed.returncode == 0:
+            return
+        time.sleep(0.25)
+    raise m4d.ExperimentError("durable OT-adapter health did not become ready")
 
 
 def _container_identity(
@@ -430,29 +480,16 @@ def _crash_checks() -> dict[str, Any]:
 
 def _campaign(project_name: str, commit: str) -> dict[str, Any]:
     _assert_project_absent(project_name)
+    _assert_checkout(commit)
+    source_checkout_binding = _assert_source_checkout()
     key_directory = Path(tempfile.mkdtemp(prefix="aegis-ot-m4f-keys-"))
-    gateway_private = Ed25519PrivateKey.generate()
-    ot_private = Ed25519PrivateKey.generate()
-    gateway_public_raw = _raw_public(gateway_private)
-    ot_public_raw = _raw_public(ot_private)
     key_material = {
         "AEGIS_GATEWAY_PRIVATE_KEY_FILE": key_directory / "gateway.private",
         "AEGIS_GATEWAY_PUBLIC_KEY_FILE": key_directory / "gateway.public",
         "AEGIS_OT_PRIVATE_KEY_FILE": key_directory / "ot.private",
         "AEGIS_OT_PUBLIC_KEY_FILE": key_directory / "ot.public",
     }
-    key_material["AEGIS_GATEWAY_PRIVATE_KEY_FILE"].write_bytes(
-        _raw_private(gateway_private)
-    )
-    key_material["AEGIS_GATEWAY_PUBLIC_KEY_FILE"].write_bytes(gateway_public_raw)
-    key_material["AEGIS_OT_PRIVATE_KEY_FILE"].write_bytes(_raw_private(ot_private))
-    key_material["AEGIS_OT_PUBLIC_KEY_FILE"].write_bytes(ot_public_raw)
-    for path in key_material.values():
-        path.chmod(0o600)
-
-    prior_environment = {name: os.environ.get(name) for name in key_material}
-    for name, path in key_material.items():
-        os.environ[name] = str(path)
+    prior_environment: dict[str, str | None] = {}
     prefix = (
         "docker",
         "compose",
@@ -469,7 +506,21 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
     evidence: dict[str, Any] | None = None
     cleanup: dict[str, bool] = {}
     try:
-        source_checkout_binding = _assert_source_checkout()
+        gateway_private = Ed25519PrivateKey.generate()
+        ot_private = Ed25519PrivateKey.generate()
+        gateway_public_raw = _raw_public(gateway_private)
+        ot_public_raw = _raw_public(ot_private)
+        key_material["AEGIS_GATEWAY_PRIVATE_KEY_FILE"].write_bytes(
+            _raw_private(gateway_private)
+        )
+        key_material["AEGIS_GATEWAY_PUBLIC_KEY_FILE"].write_bytes(gateway_public_raw)
+        key_material["AEGIS_OT_PRIVATE_KEY_FILE"].write_bytes(_raw_private(ot_private))
+        key_material["AEGIS_OT_PUBLIC_KEY_FILE"].write_bytes(ot_public_raw)
+        for path in key_material.values():
+            path.chmod(0o600)
+        prior_environment = {name: os.environ.get(name) for name in key_material}
+        for name, path in key_material.items():
+            os.environ[name] = str(path)
         compose = json.loads(
             m4d._run(
                 *prefix,
@@ -495,7 +546,9 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             "ot-adapter",
             "segmented-gateway",
         )
-        m4d._await_gateway_observation()
+        _await_gateway_stack()
+        m4d._await_opa(prefix)
+        _await_durable_ot_health(prefix)
         initialization = _parse_init_log(prefix)
         agent = json.loads(
             m4d._run(
@@ -623,12 +676,41 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             gateway_public_raw,
             ot_public_raw,
         )
+        fault_request = SignedSegmentedExecutionRequest.model_validate(
+            ledger_fault.get("request", {}).get("signed_request")
+        )
+        offline_verification.update(
+            {
+                "corrupt_fault_request_audience_verified_offline": (
+                    fault_request.audience == AUDIENCE
+                ),
+                "corrupt_fault_request_key_id_verified_offline": (
+                    fault_request.gateway_key_id == GATEWAY_KEY_ID
+                ),
+                "corrupt_fault_request_signature_verified_offline": (
+                    fault_request.verify(
+                        Ed25519PublicKey.from_public_bytes(gateway_public_raw)
+                    )
+                ),
+            }
+        )
         prepare_health = prepare.get("health_after", {})
         restart_health = restart.get("health_before", {})
         replay_health = restart.get("health_after_replay", {})
         fresh_health = restart.get("health_after_fresh", {})
         exact_prepared = prepare.get("prepared_request", {})
         exact_restart = restart.get("exact_restart_replay", {})
+        prepared_request = SignedSegmentedExecutionRequest.model_validate(
+            exact_prepared.get("signed_request")
+        )
+        prepared_reservation = {
+            "nonce": prepared_request.transport_nonce,
+            "signed_request_sha256": _sha256(prepared_request),
+        }
+        ledger_reservations = ledger_before_restart.get("document", {}).get(
+            "reservations",
+            [],
+        )
         same_volume = _replay_volume_name(identity_before) == replay_volume
         unchanged_services = all(
             identities_before[service].get("container_id")
@@ -659,6 +741,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                     "gateway_public_key_sha256"
                 )
                 == hashlib.sha256(gateway_public_raw).hexdigest()
+                and prepared_reservation in ledger_reservations
             ),
             "only_ot_adapter_was_replaced": (
                 identity_before.get("container_id") != identity_after.get("container_id")
@@ -684,6 +767,16 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             ),
             "corrupt_ledger_failed_closed_without_effect": (
                 ledger_fault.get("accepted") is True
+                and fault_request.request.decision.state_version
+                == ledger_fault.get("state_before", {}).get("version")
+                and all(
+                    offline_verification[name]
+                    for name in (
+                        "corrupt_fault_request_audience_verified_offline",
+                        "corrupt_fault_request_key_id_verified_offline",
+                        "corrupt_fault_request_signature_verified_offline",
+                    )
+                )
             ),
         }
         semantic_agent = dict(agent)
@@ -705,7 +798,6 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                     - ledger_fault.get("state_before", {}).get("version", 0)
                 ),
             },
-            "supplemental_host_process_exit_checks": crash_checks,
             "offline_verification": offline_verification,
             "acceptance": acceptance,
         }
@@ -778,6 +870,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 ),
             ],
         }
+        _assert_checkout(commit)
         if evidence["accepted"] is not True:
             raise m4d.ExperimentError("M4f acceptance criteria were not all satisfied")
     finally:
@@ -832,6 +925,8 @@ def run_pair(
     reproduction_project: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     _assert_source_checkout()
+    if output.resolve() == reproduction_output.resolve():
+        raise m4d.ExperimentError("M4f evidence outputs must resolve to distinct files")
     if (
         output.exists()
         or output.is_symlink()
@@ -842,16 +937,18 @@ def run_pair(
     if m4d._run("git", "status", "--porcelain").stdout:
         raise m4d.ExperimentError("M4f retained evidence requires a clean checkout")
     commit = m4d._run("git", "rev-parse", "HEAD").stdout.strip()
+    _assert_checkout(commit)
     primary = _campaign(primary_project, commit)
+    _assert_checkout(commit)
     reproduction = _campaign(reproduction_project, commit)
+    _assert_checkout(commit)
     hashes_match = (
         primary["semantic_outcome_sha256"]
         == reproduction["semantic_outcome_sha256"]
     )
     if not hashes_match:
         raise m4d.ExperimentError("M4f paired semantic outcomes did not reproduce")
-    if m4d._run("git", "status", "--porcelain").stdout:
-        raise m4d.ExperimentError("checkout changed during the M4f paired experiment")
+    _assert_checkout(commit)
     comparison = {
         "semantic_outcomes_match": True,
         "primary_semantic_outcome_sha256": primary["semantic_outcome_sha256"],
@@ -864,7 +961,11 @@ def run_pair(
     primary["reproduction_comparison"] = {**comparison, "role": "primary"}
     reproduction["reproduction_comparison"] = {**comparison, "role": "reproduction"}
     m4d._atomic_write_json(output, primary)
-    m4d._atomic_write_json(reproduction_output, reproduction)
+    try:
+        m4d._atomic_write_json(reproduction_output, reproduction)
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
     return primary, reproduction
 
 

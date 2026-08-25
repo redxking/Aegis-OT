@@ -257,17 +257,25 @@ def _full() -> dict[str, Any]:
     after_count = health_after.get("replay_reservations")
     output["accepted"] = (
         health_before.get("replay_mode") == "durable"
+        and isinstance(health_before.get("boot_epoch"), str)
+        and bool(health_before.get("boot_epoch"))
+        and health_after.get("boot_epoch") == health_before.get("boot_epoch")
+        and health_after.get("pid") == health_before.get("pid")
         and isinstance(before_count, int)
         and after_count == before_count + 2
         and unsigned_status == 403
+        and unsigned_body.get("detail") == "signed gateway request required"
         and forged_status == 403
+        and forged_body.get("detail") == "gateway signature rejected"
         and valid_status == 200
         and valid_response.execution.executed
         and response_verified
         and state_after_valid.version == state_before.version + 1
         and replay_status == 409
+        and replay_body.get("detail") == "transport request replayed"
         and _state_projection(state_after_replay) == _state_projection(state_after_valid)
         and altered_status == 403
+        and altered_body.get("detail") == "gateway signature rejected"
         and resigned_status == 200
         and not resigned_response.execution.executed
         and resigned_response.execution.reason == "time_of_check_time_of_use_state_change"
@@ -386,10 +394,12 @@ def _restart(path: Path) -> dict[str, Any]:
     return output
 
 
-def _ledger_fault(path: Path) -> dict[str, Any]:
-    exact = _load_exact_request(path)
+def _ledger_fault() -> dict[str, Any]:
     state_before = _state()
-    status, body = _await_exchange(exact.model_dump(mode="json"))
+    request = _signed_request(state_before, ttl_seconds=30)
+    sent_at = datetime.now(UTC)
+    status, body = _await_exchange(request.model_dump(mode="json"))
+    received_at = datetime.now(UTC)
     state_after = _state()
     output: dict[str, Any] = {
         "schema_version": "m4f-transport-probe-v1",
@@ -400,13 +410,31 @@ def _ledger_fault(path: Path) -> dict[str, Any]:
         "request": {
             "http_status": status,
             "response": body,
-            "signed_request": exact.model_dump(mode="json"),
-            "request_sha256": _sha256(exact),
+            "signed_request": request.model_dump(mode="json"),
+            "request_sha256": _sha256(request),
+            "sent_at": sent_at.isoformat(),
+            "received_at": received_at.isoformat(),
+            "response_within_validity_window": received_at < request.expires_at,
+            "request_signature_verified": request.verify(
+                _load_private_key(
+                    os.environ["AEGIS_GATEWAY_PRIVATE_KEY_FILE"]
+                ).public_key()
+            ),
         },
     }
     output["accepted"] = (
         status == 503
         and body.get("detail") == "transport replay ledger unavailable"
+        and received_at < request.expires_at
+        and request.audience == "aegis-ot:ot-adapter"
+        and request.gateway_key_id == os.environ["AEGIS_GATEWAY_KEY_ID"]
+        and request.request.decision.outcome.value == "permit"
+        and request.request.decision.state_version == state_before.version
+        and request.verify(
+            _load_private_key(
+                os.environ["AEGIS_GATEWAY_PRIVATE_KEY_FILE"]
+            ).public_key()
+        )
         and _state_projection(state_after) == _state_projection(state_before)
     )
     return output
@@ -422,7 +450,7 @@ def main() -> None:
     elif mode == "restart_replay":
         output = _restart(path)
     elif mode == "ledger_fault":
-        output = _ledger_fault(path)
+        output = _ledger_fault()
     else:
         raise RuntimeError(f"unsupported M4f transport probe mode: {mode}")
     print(json.dumps(output, sort_keys=True, indent=2))
