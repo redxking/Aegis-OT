@@ -1,0 +1,4155 @@
+{
+  "acceptance": {
+    "bundle_faults_failed_closed_without_effect": true,
+    "clean_source_bound_to_images_and_containers": true,
+    "cross_leaf_reused_transport_nonce_rejected": true,
+    "fresh_request_after_rotation_accepted": true,
+    "gateway_leaf_rotated_same_subject_and_old_leaf_revoked": true,
+    "identity_and_replay_initialized_private": true,
+    "only_gateway_recreated_for_leaf_rotation": true,
+    "primary_agent_campaign_accepted": true,
+    "stable_replay_subject_survived_leaf_rotation": true
+  },
+  "accepted": true,
+  "analyst": "Angelis Pseftis",
+  "bundle_fault_cases": {
+    "corrupt": {
+      "accepted": true,
+      "bundle_restored": true,
+      "condition": "corrupt_trust_bundle",
+      "effect_absent": true,
+      "mutation": {
+        "operation": "replace",
+        "present": true
+      },
+      "plant_after": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "plant_before": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "probe_exit_code": 1,
+      "probe_stderr_tail": " Container aegis-ot-m4g-a800a5c-agent-probe-run-56e6fa3609f7 Creating \n Container aegis-ot-m4g-a800a5c-agent-probe-run-56e6fa3609f7 Created \nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 195, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 191, in main\n    print(json.dumps(run_probe(), sort_keys=True, separators=(\",\", \":\")))\n                     ~~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 160, in run_probe\n    health = _await_gateway(url)\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 57, in _await_gateway\n    raise RuntimeError(\"M4g gateway did not become ready\")\nRuntimeError: M4g gateway did not become ready\n\n",
+      "probe_stdout_tail": ""
+    },
+    "missing": {
+      "accepted": true,
+      "bundle_restored": true,
+      "condition": "missing_trust_bundle",
+      "effect_absent": true,
+      "mutation": {
+        "operation": "missing",
+        "present": false
+      },
+      "plant_after": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "plant_before": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "probe_exit_code": 1,
+      "probe_stderr_tail": " Container aegis-ot-m4g-a800a5c-agent-probe-run-56aae5f9fece Creating \n Container aegis-ot-m4g-a800a5c-agent-probe-run-56aae5f9fece Created \nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 195, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 191, in main\n    print(json.dumps(run_probe(), sort_keys=True, separators=(\",\", \":\")))\n                     ~~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 160, in run_probe\n    health = _await_gateway(url)\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 57, in _await_gateway\n    raise RuntimeError(\"M4g gateway did not become ready\")\nRuntimeError: M4g gateway did not become ready\n\n",
+      "probe_stdout_tail": ""
+    },
+    "rollback": {
+      "accepted": true,
+      "bundle_restored": true,
+      "condition": "same_process_trust_bundle_rollback",
+      "effect_absent": true,
+      "mutation": {
+        "operation": "replace",
+        "present": true
+      },
+      "plant_after": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "plant_before": {
+        "apply_requests": 3,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 22,
+        "commit_count": 3,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "state_version": 3,
+        "status": "ready"
+      },
+      "probe_exit_code": 1,
+      "probe_stderr_tail": " Container aegis-ot-m4g-a800a5c-agent-probe-run-5c5d00384377 Creating \n Container aegis-ot-m4g-a800a5c-agent-probe-run-5c5d00384377 Created \nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 195, in <module>\n    main()\n    ~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 191, in main\n    print(json.dumps(run_probe(), sort_keys=True, separators=(\",\", \":\")))\n                     ~~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 160, in run_probe\n    health = _await_gateway(url)\n  File \"/usr/local/lib/python3.13/site-packages/aegis_ot/m4g_probe.py\", line 57, in _await_gateway\n    raise RuntimeError(\"M4g gateway did not become ready\")\nRuntimeError: M4g gateway did not become ready\n\n",
+      "probe_stdout_tail": ""
+    }
+  },
+  "campaign_environment": {
+    "AEGIS_AGENT_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/agent.private",
+    "AEGIS_AGENT_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/agent.public",
+    "AEGIS_AGENT_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:agent-probe",
+    "AEGIS_CANDIDATE_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/candidate.private",
+    "AEGIS_CANDIDATE_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/candidate.public",
+    "AEGIS_GATEWAY_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/gateway.private",
+    "AEGIS_GATEWAY_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/gateway.public",
+    "AEGIS_GATEWAY_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:gateway",
+    "AEGIS_OBSERVER_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/observer.private",
+    "AEGIS_OBSERVER_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/observer.public",
+    "AEGIS_OT_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/ot.private",
+    "AEGIS_OT_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/ot.public",
+    "AEGIS_OT_WORKLOAD_KEY_ID": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+    "AEGIS_OT_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:ot-adapter",
+    "AEGIS_PERMIT_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/permit.private",
+    "AEGIS_PERMIT_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/permit.public",
+    "AEGIS_PLANT_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/plant.private",
+    "AEGIS_PLANT_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/plant.public",
+    "AEGIS_SOURCE_REVISION": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+    "AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE": "<ephemeral-key-dir>/workload_authority.private",
+    "AEGIS_WORKLOAD_AUTHORITY_PUBLIC_KEY_FILE": "<ephemeral-key-dir>/workload_authority.public",
+    "AEGIS_WORKLOAD_TRUST_DOMAIN": "aegis-ot.m4g.local",
+    "AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283"
+  },
+  "clean_checkout_end": true,
+  "clean_checkout_start": true,
+  "cleanup": {
+    "compose_project_removed": true,
+    "private_key_directory_removed": true,
+    "transport_probe_volume_removed": true,
+    "transport_replay_volume_removed": true,
+    "workload_identity_volume_removed": true,
+    "workload_replay_volume_removed": true
+  },
+  "compose_files": [
+    "docker-compose.yml",
+    "docker-compose.auth.yml",
+    "docker-compose.replay.yml",
+    "docker-compose.capability.yml",
+    "docker-compose.identity.yml"
+  ],
+  "containers_after_rotation": {
+    "candidate": {
+      "configured_image": "aegis-ot-m4g-a800a5c-candidate",
+      "container_id": "11a7b185eba39d70c4509ead0ae0a3159aff200fce42a076dbec53d49f8034ee",
+      "created": "2026-08-25T19:47:33.770230345Z",
+      "exit_code": 0,
+      "image_id": "sha256:cd6f4215cd591311923c65635753171c7cc5e7fd84d73c9ad688a19f85e186e4",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "candidate",
+      "started_at": "2026-08-25T19:47:35.710825763Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "identity-init": {
+      "configured_image": "aegis-ot-m4g-a800a5c-identity-init",
+      "container_id": "ca57b0eec47cb5a35f3b116972f8faea55ed8203ac154f9a09bbea5bddba14fe",
+      "created": "2026-08-25T19:47:32.802439511Z",
+      "exit_code": 0,
+      "image_id": "sha256:04c1692b76d982767b0686f19f78176f74adc3e82eee18e66e6991bad6c88c7c",
+      "networks": [
+        "none"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": false,
+      "service": "identity-init",
+      "started_at": "2026-08-25T19:47:34.523079929Z",
+      "status": "exited",
+      "volume_mounts": [
+        {
+          "destination": "/var/lib/aegis-ot/identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": true
+        }
+      ]
+    },
+    "observer": {
+      "configured_image": "aegis-ot-m4g-a800a5c-observer",
+      "container_id": "b83dcad1002570968e20ba738215a93611550ef67fcd7a26b25db111b3f3816e",
+      "created": "2026-08-25T19:47:33.768973887Z",
+      "exit_code": 0,
+      "image_id": "sha256:6f268576d7d0f372eb225c7efbd079aac5a432d7af97984ceea8b20848474f91",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "observer",
+      "started_at": "2026-08-25T19:47:35.697251721Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "opa": {
+      "configured_image": "openpolicyagent/opa:1.19.1-static@sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "container_id": "efac06277542043c4d675c3e9fbf40b05e929f8bc047cd062934647fded7b732",
+      "created": "2026-08-25T19:47:32.857630886Z",
+      "exit_code": 0,
+      "image_id": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_trust"
+      ],
+      "oci_revision": null,
+      "running": true,
+      "service": "opa",
+      "started_at": "2026-08-25T19:47:34.509188095Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "ot-adapter": {
+      "configured_image": "aegis-ot-m4g-a800a5c-ot-adapter",
+      "container_id": "b745099d75f4e531029c978efd52dae0cc7cc1733a226cb5279e453bc9cd6247",
+      "created": "2026-08-25T19:47:34.163762095Z",
+      "exit_code": 0,
+      "image_id": "sha256:73fdd03bf9ffc84689f4fd846c9d17ba8208a4abd4add06f4e8080cf603e71df",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "ot-adapter",
+      "started_at": "2026-08-25T19:47:38.422526708Z",
+      "status": "running",
+      "volume_mounts": [
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        },
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4g-a800a5c_workload_replay",
+          "rw": true
+        }
+      ]
+    },
+    "replay-init": {
+      "configured_image": "aegis-ot-m4g-a800a5c-replay-init",
+      "container_id": "403f5c72dca113da126864ff5366fb3caa8fbaf74e8d410ff05de47a00c1ca14",
+      "created": "2026-08-25T19:47:33.770612637Z",
+      "exit_code": 0,
+      "image_id": "sha256:06a8b507d569a821f114dc141658bcb7c021dd6cb6ddb559bf5bda0639f6d662",
+      "networks": [
+        "none"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": false,
+      "service": "replay-init",
+      "started_at": "2026-08-25T19:47:36.879761888Z",
+      "status": "exited",
+      "volume_mounts": [
+        {
+          "destination": "/probe",
+          "name": "aegis-ot-m4g-a800a5c_transport_probe",
+          "rw": true
+        },
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        },
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4g-a800a5c_workload_replay",
+          "rw": true
+        }
+      ]
+    },
+    "segmented-gateway": {
+      "configured_image": "aegis-ot-m4g-a800a5c-segmented-gateway",
+      "container_id": "73e882b660edc3bafe208353866725355b076b262bbda354bb4c763abb0bd4e1",
+      "created": "2026-08-25T19:47:49.264762421Z",
+      "exit_code": 0,
+      "image_id": "sha256:50c4700726de69461aa7d89112cb7d91d174beddc773f71ae30731f591b90563",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_agent",
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_trust"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "segmented-gateway",
+      "started_at": "2026-08-25T19:47:50.125868838Z",
+      "status": "running",
+      "volume_mounts": [
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        }
+      ]
+    },
+    "simulation": {
+      "configured_image": "aegis-ot-m4g-a800a5c-simulation",
+      "container_id": "8c7fc6626778337fed359aab3034abbaee8b0640dde6731ec2403776464a6d52",
+      "created": "2026-08-25T19:47:32.923982886Z",
+      "exit_code": 0,
+      "image_id": "sha256:aab2c5c27b516cfc0884f6d243c5f07cd3ff2f9ddbd05a53070f2fe7c713d2a1",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "simulation",
+      "started_at": "2026-08-25T19:47:34.515284137Z",
+      "status": "running",
+      "volume_mounts": []
+    }
+  },
+  "containers_before_rotation": {
+    "candidate": {
+      "configured_image": "aegis-ot-m4g-a800a5c-candidate",
+      "container_id": "11a7b185eba39d70c4509ead0ae0a3159aff200fce42a076dbec53d49f8034ee",
+      "created": "2026-08-25T19:47:33.770230345Z",
+      "exit_code": 0,
+      "image_id": "sha256:cd6f4215cd591311923c65635753171c7cc5e7fd84d73c9ad688a19f85e186e4",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "candidate",
+      "started_at": "2026-08-25T19:47:35.710825763Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "identity-init": {
+      "configured_image": "aegis-ot-m4g-a800a5c-identity-init",
+      "container_id": "ca57b0eec47cb5a35f3b116972f8faea55ed8203ac154f9a09bbea5bddba14fe",
+      "created": "2026-08-25T19:47:32.802439511Z",
+      "exit_code": 0,
+      "image_id": "sha256:04c1692b76d982767b0686f19f78176f74adc3e82eee18e66e6991bad6c88c7c",
+      "networks": [
+        "none"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": false,
+      "service": "identity-init",
+      "started_at": "2026-08-25T19:47:34.523079929Z",
+      "status": "exited",
+      "volume_mounts": [
+        {
+          "destination": "/var/lib/aegis-ot/identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": true
+        }
+      ]
+    },
+    "observer": {
+      "configured_image": "aegis-ot-m4g-a800a5c-observer",
+      "container_id": "b83dcad1002570968e20ba738215a93611550ef67fcd7a26b25db111b3f3816e",
+      "created": "2026-08-25T19:47:33.768973887Z",
+      "exit_code": 0,
+      "image_id": "sha256:6f268576d7d0f372eb225c7efbd079aac5a432d7af97984ceea8b20848474f91",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "observer",
+      "started_at": "2026-08-25T19:47:35.697251721Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "opa": {
+      "configured_image": "openpolicyagent/opa:1.19.1-static@sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "container_id": "efac06277542043c4d675c3e9fbf40b05e929f8bc047cd062934647fded7b732",
+      "created": "2026-08-25T19:47:32.857630886Z",
+      "exit_code": 0,
+      "image_id": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_trust"
+      ],
+      "oci_revision": null,
+      "running": true,
+      "service": "opa",
+      "started_at": "2026-08-25T19:47:34.509188095Z",
+      "status": "running",
+      "volume_mounts": []
+    },
+    "ot-adapter": {
+      "configured_image": "aegis-ot-m4g-a800a5c-ot-adapter",
+      "container_id": "b745099d75f4e531029c978efd52dae0cc7cc1733a226cb5279e453bc9cd6247",
+      "created": "2026-08-25T19:47:34.163762095Z",
+      "exit_code": 0,
+      "image_id": "sha256:73fdd03bf9ffc84689f4fd846c9d17ba8208a4abd4add06f4e8080cf603e71df",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "ot-adapter",
+      "started_at": "2026-08-25T19:47:38.422526708Z",
+      "status": "running",
+      "volume_mounts": [
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        },
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4g-a800a5c_workload_replay",
+          "rw": true
+        }
+      ]
+    },
+    "replay-init": {
+      "configured_image": "aegis-ot-m4g-a800a5c-replay-init",
+      "container_id": "403f5c72dca113da126864ff5366fb3caa8fbaf74e8d410ff05de47a00c1ca14",
+      "created": "2026-08-25T19:47:33.770612637Z",
+      "exit_code": 0,
+      "image_id": "sha256:06a8b507d569a821f114dc141658bcb7c021dd6cb6ddb559bf5bda0639f6d662",
+      "networks": [
+        "none"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": false,
+      "service": "replay-init",
+      "started_at": "2026-08-25T19:47:36.879761888Z",
+      "status": "exited",
+      "volume_mounts": [
+        {
+          "destination": "/probe",
+          "name": "aegis-ot-m4g-a800a5c_transport_probe",
+          "rw": true
+        },
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        },
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4g-a800a5c_workload_replay",
+          "rw": true
+        }
+      ]
+    },
+    "segmented-gateway": {
+      "configured_image": "aegis-ot-m4g-a800a5c-segmented-gateway",
+      "container_id": "a940f80bc22b5e0c3a1f77f1aca7b510a5b8c1cdb43cb398967c24cddc11d729",
+      "created": "2026-08-25T19:47:34.302443095Z",
+      "exit_code": 0,
+      "image_id": "sha256:50c4700726de69461aa7d89112cb7d91d174beddc773f71ae30731f591b90563",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_agent",
+        "aegis-ot-m4g-a800a5c_control_dmz",
+        "aegis-ot-m4g-a800a5c_trust"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "segmented-gateway",
+      "started_at": "2026-08-25T19:47:39.276958667Z",
+      "status": "running",
+      "volume_mounts": [
+        {
+          "destination": "/run/aegis-identity",
+          "name": "aegis-ot-m4g-a800a5c_workload_identity",
+          "rw": false
+        }
+      ]
+    },
+    "simulation": {
+      "configured_image": "aegis-ot-m4g-a800a5c-simulation",
+      "container_id": "8c7fc6626778337fed359aab3034abbaee8b0640dde6731ec2403776464a6d52",
+      "created": "2026-08-25T19:47:32.923982886Z",
+      "exit_code": 0,
+      "image_id": "sha256:aab2c5c27b516cfc0884f6d243c5f07cd3ff2f9ddbd05a53070f2fe7c713d2a1",
+      "networks": [
+        "aegis-ot-m4g-a800a5c_simulation"
+      ],
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "running": true,
+      "service": "simulation",
+      "started_at": "2026-08-25T19:47:34.515284137Z",
+      "status": "running",
+      "volume_mounts": []
+    }
+  },
+  "direct_dispatch_after_rotation": {
+    "ack_dispatch_phase": null,
+    "ack_reason": null,
+    "ack_status": null,
+    "direct_dispatch_attempted": true,
+    "fresh_transaction_dispatch_digest": "b43393f92a5992e87c65aaf40adb48a28bee1128085cbe671e6fa77aeb09c77b",
+    "fresh_transaction_permit_id": "2cbeb673-4e45-413d-8a20-3c247cef38cf",
+    "fresh_transaction_prepared": true,
+    "fresh_transaction_request_digest": "e37b851078a40c25dea1b355b5bac97cc243da7ba0b96519b0102c2f665de233",
+    "gateway_credential_id": "credential-e15cd61cd4c446f69121d1f8b19ed057",
+    "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+    "http_status": 409,
+    "permit_remaining_ms_at_post": 1996,
+    "post_observation_digest": null,
+    "post_observation_verified": false,
+    "response": {
+      "reason": "transport_request_replayed",
+      "schema_version": "m4g-transport-failure-v1",
+      "status": "rejected"
+    },
+    "response_verified": false,
+    "signed_request_sha256": "0781b2c7ee52bfd42aa62989d3ef601a8a43fcfb73d1c2b8aad492c386326e5c",
+    "transport_nonce": "m4g-cross-leaf-transport-nonce-0001"
+  },
+  "direct_dispatch_before_rotation": {
+    "ack_dispatch_phase": "committed",
+    "ack_reason": "command_applied_and_plc_read_back",
+    "ack_status": "applied",
+    "direct_dispatch_attempted": true,
+    "fresh_transaction_dispatch_digest": "86150ee95fa06cf5a8a95f1bb6db2d0365f73efacfd1b9dd81d4c97664a61589",
+    "fresh_transaction_permit_id": "b0bdc1fa-c77f-4eed-ad38-075ec8cf23f6",
+    "fresh_transaction_prepared": true,
+    "fresh_transaction_request_digest": "76771029cc9843992775de73cdb405b9a70d8d194a8af8768acffb670edda630",
+    "gateway_credential_id": "credential-e5ba9b875aa74f66a088388d61c02fb1",
+    "gateway_key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+    "http_status": 200,
+    "permit_remaining_ms_at_post": 1997,
+    "post_observation_digest": "045c1519cd034a8caf51213c83f40d4aa30e9853971814b09f38ac097366b3e3",
+    "post_observation_verified": true,
+    "response": {
+      "audience": "aegis-ot:m4g:gateway",
+      "request_sha256": "94f74648dda8188b45f685aa66158e4b96b1a24f4af59b82854f3d5bc1127673",
+      "response": {
+        "acknowledgment": {
+          "acknowledged_at": "2026-08-25T19:47:47.731039Z",
+          "acknowledgment_id": "6dca759f-51c3-4abf-bb95-d02c3e20e56f",
+          "assessment_digest": "dd8bb383d1d92832f17d805342d0deb4dda5306e110e7abf1db9fc4eff6c6c27",
+          "command_digest": "134aacb38035dd5bfe720cc29e48103d7a5e3462ab792153a1b6b8123f75cf5d",
+          "command_id": "d087cd77-466b-43a9-b7a0-74a096bb057f",
+          "decision_id": "59571e51-c3c0-4db7-b9c6-677cdeebbeef",
+          "dispatch_attempt": 1,
+          "dispatch_phase": "committed",
+          "observation_envelope_digest": "133219518308faffd70cddd06bc1fa84f8512551ea7d005d124e4d39797d2970",
+          "permit_digest": "cddc348918f54de569b05e553bb235051be759c75bbbbc18a339d63f814af2c2",
+          "permit_id": "b0bdc1fa-c77f-4eed-ad38-075ec8cf23f6",
+          "permit_nonce": "0fa71630-b3ee-43be-a517-3d910f0b9c15",
+          "plc_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+          "plc_id": "virtual-control-device:m4g-segmented",
+          "plc_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+          "plc_scan": 2,
+          "post_actuator_setpoint": 0.0,
+          "post_state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "post_state_version": 2,
+          "post_topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "pre_actuator_setpoint": 0.0,
+          "pre_state": {
+            "battery_injection_mw": {
+              "battery-1": -0.6
+            },
+            "bus_voltage_pu": [
+              1.03,
+              0.9949984609296982,
+              0.9804483372248348,
+              0.957238729801661,
+              0.9555792032074706,
+              0.9544628208972457,
+              null,
+              0.958163798236279,
+              0.9551694308344867,
+              0.9543932702162847,
+              0.9530484838176296,
+              0.952865513177412,
+              1.0001462529762852,
+              0.9953255860732707,
+              0.9925528877507264
+            ],
+            "converged": true,
+            "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+            "isolated_resources": [
+              "feeder-1"
+            ],
+            "line_loading_pct": [
+              53.87472597426189,
+              54.60778755491812,
+              35.43972544523311,
+              26.648304218001982,
+              null,
+              29.59373817765251,
+              24.631291485706903,
+              21.620398478601256,
+              6.859229772736998,
+              15.851368691259896,
+              9.476242316809149,
+              8.908939098002548,
+              null,
+              0.17658731540238126,
+              0.037286542180545536
+            ],
+            "maximum_line_loading_pct": 54.60778755491812,
+            "maximum_voltage_pu": 1.03,
+            "minimum_voltage_pu": 0.952865513177412,
+            "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+            "model_id": "pandapower-cigre-mv-all",
+            "observation_clock_domain": "UTC",
+            "observation_digest": "1c0411c52611d2b5599b49d87e1b77953c35f530887ac5a64a89acf6b430f86e",
+            "observation_sequence": 5,
+            "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+            "observed_at": "2026-08-25T19:47:47.523997Z",
+            "priority_load_demand_mw": 1.0157500000000002,
+            "priority_load_served_mw": 1.0157500000000002,
+            "priority_load_served_pct": 100.0,
+            "schema_version": "physical-state-v1",
+            "served_load_mw": 44.1941,
+            "simulation_time_s": 1.0,
+            "simulator_version": "pandapower-3.5.4",
+            "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+            "state_version": 1,
+            "thermal_violation_count": 0,
+            "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+            "total_load_demand_mw": 44.742149999999995,
+            "total_load_served_pct": 98.77509239050873,
+            "unsafe_state": false,
+            "unserved_load_mw": 0.5480499999999964,
+            "voltage_violation_count": 0
+          },
+          "pre_state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "pre_state_version": 1,
+          "proposal_id": "m4g-rotation-fixture-3e34db6f-fb17-42c4-9fdf-ae3ce25859b4",
+          "reason": "command_applied_and_plc_read_back",
+          "request_digest": "76771029cc9843992775de73cdb405b9a70d8d194a8af8768acffb670edda630",
+          "schema_version": "plc-command-ack-v1",
+          "signature": "6y8MrGAaSjBDEuRPVNNC-jZDEVzfB01fY3n7lH68vvpeVNdxpdzMGiLuoLglw9KH2aJ1Tt0gyCwiRhO8u-ufAg==",
+          "simulation_time_s": 2.0,
+          "status": "applied"
+        },
+        "ot_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+        "request_sha256": "615e17c5c70b5e4bce6e2de97ae213350a22cda5166ab5d5e334ecd7a2de583b",
+        "schema_version": "m4g-signed-capability-response-v1",
+        "signature": "ZP8Ji0srOy8Qu3U7KAOgOYkHaZuvcYTZaHFWDFmArQMRJfg2yMZINRxfOKXzVWGNBBUUsEtIuTP89gtIW4JTBA==",
+        "signed_at": "2026-08-25T19:47:47.731449Z"
+      },
+      "schema_version": "m4g-workload-capability-response-v1",
+      "sender_credential": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:gateway"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-d359fab96440462181c95bca896a489e",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+          "role": "ot-adapter",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:ot-adapter",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "4AjLuHJCvfv__ppOEpJmSvPOLbN1X9r2_KIQ-osvE6DmxYVBylBq7VAfRhPca8xos1aSGdP-PE_gpkZyij77Aw=="
+      },
+      "signature": "MJZ8UwLAk3SWHocxci2kumIA1b6hDlnbm_ygyEnMHPyLOlwOvlm9yl8zVFItUoppYcTbJaBZD4yS7P69LsL4DA=="
+    },
+    "response_verified": true,
+    "signed_request_sha256": "94f74648dda8188b45f685aa66158e4b96b1a24f4af59b82854f3d5bc1127673",
+    "transport_nonce": "m4g-cross-leaf-transport-nonce-0001"
+  },
+  "evidence_boundary": [
+    "Application-layer authority-signed workload credentials, not mTLS or SPIFFE runtime attestation",
+    "One single-host Docker Compose campaign, not multi-host or multi-replica validation",
+    "Same-process signed-bundle rollback rejection, not hostile restart rollback resistance",
+    "Durable stable-subject replay admission, not exactly-once physical effects",
+    "Synthetic plant and local campaign evidence, not production OT deployment or independent validation",
+    "Ephemeral experiment keys were removed and no runtime received the authority private key",
+    "The fixed-nonce rotation fixture runs inside the gateway workload; it does not represent a second agent-ingress test"
+  ],
+  "fresh_probe_after_rotation": {
+    "agent_direct_reachability": {
+      "candidate": false,
+      "observer": false,
+      "ot-adapter": false,
+      "simulation": false
+    },
+    "exact_gateway_request_replay": {
+      "acknowledgment": null,
+      "assessment": null,
+      "automatic_retry_count": 0,
+      "candidate_exchange": null,
+      "command": null,
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": null,
+      "dispatch_attempts": 0,
+      "execution_evidence_hash": "30ba162b654479277986a9f625fdbd59b6521efaa588fc0651b9845a56e9bbf6",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:53.846750Z",
+        "challenge_nonce": "_DVOAsx2Qgy4a4e9eugntxFTO4DDFq5d",
+        "command_digest": null,
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "logical_time_s": 2.0,
+        "observation_id": "13d49625-2907-4bde-8c5b-2acfbad1028d",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 6,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "045c1519cd034a8caf51213c83f40d4aa30e9853971814b09f38ac097366b3e3",
+        "schema_version": "signed-observation-v1",
+        "signature": "eiSsrRo6EC0ij9SNK53-F5QfODIly6Jwh9S2W9QAlnqf8cwwY2cW8MZ2H4uPK9p7QBpJhWwpkIFFHfyMeOTqAQ==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+          "observation_sequence": 8,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 2.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "state_version": 2,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": null,
+      "post_observation": null,
+      "pre_observation": null,
+      "reasons": [
+        "observation_sequence_regressed",
+        "observation_challenge_replayed"
+      ],
+      "request": {
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "observation_challenge_nonce": "_DVOAsx2Qgy4a4e9eugntxFTO4DDFq5d",
+        "observation_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "observation_id": "13d49625-2907-4bde-8c5b-2acfbad1028d",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "mktma2FGiuHBF3shaAvbWCpVlUdle9QU",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "observed_state_version": 2,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 5.0
+          },
+          "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:53.862407Z"
+        },
+        "request_id": "6b9123df-130e-4a7b-ba7a-cb78a90fa0bb",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "not_dispatched"
+    },
+    "gateway_health": {
+      "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "coordination_backend": "segmented-compose-http-v1",
+      "evidence_records": 0,
+      "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "role": "segmented-gateway",
+      "schema_version": "m4g-gateway-health-v1",
+      "status": "ready"
+    },
+    "nominal": {
+      "acknowledgment": {
+        "acknowledged_at": "2026-08-25T19:47:54.052957Z",
+        "acknowledgment_id": "75e03797-f881-4168-9c4c-5a06c43e0844",
+        "assessment_digest": "2efe58e7acd749f3f5e39ebf0ad6288622fa40dac43da95b6344cb0044e3598a",
+        "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+        "command_id": "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+        "decision_id": "0ef57053-f9c4-48e0-8f39-a46557d36c71",
+        "dispatch_attempt": 1,
+        "dispatch_phase": "committed",
+        "observation_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "permit_digest": "a10ea1f7e9eb403bc39b88563c7847fa021155f310155ddb7b9675a4e123cd4c",
+        "permit_id": "07485f72-c726-4599-9a0f-7aa049306fd9",
+        "permit_nonce": "8bb97a54-20af-48b2-a1e5-dadef7fcbb72",
+        "plc_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+        "plc_id": "virtual-control-device:m4g-segmented",
+        "plc_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+        "plc_scan": 3,
+        "post_actuator_setpoint": 0.0,
+        "post_state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+        "post_state_version": 3,
+        "post_topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+        "pre_actuator_setpoint": 0.0,
+        "pre_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+          "observation_sequence": 8,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 2.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "state_version": 2,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        },
+        "pre_state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+        "pre_state_version": 2,
+        "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+        "reason": "command_applied_and_plc_read_back",
+        "request_digest": "f95aad3729f8cc2d996c3714b000fc7976e0d42702a6711d3e7644a711860351",
+        "schema_version": "plc-command-ack-v1",
+        "signature": "tekPOLGjnulJtjPrdSVj4ajU9dEigZmO5h8jJyGs5Km44CPJdqxHgF2mZDJvsZP62Yd6oKpOFKSaCT6i8JygCQ==",
+        "simulation_time_s": 3.0,
+        "status": "applied"
+      },
+      "assessment": {
+        "assessment_id": "ce938f77-8a0f-4cb7-9648-4c4542470538",
+        "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+        "post_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a2a92e3eff620e863e60bdf90f1221c50a5a38dcb4d767fbe9c7977e45217b9f",
+          "observation_sequence": 9,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:54.846750Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 3.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "state_version": 3,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        },
+        "pre_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+          "observation_sequence": 8,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 2.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "state_version": 2,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        },
+        "reasons": [],
+        "safe": true,
+        "schema_version": "candidate-assessment-v1"
+      },
+      "automatic_retry_count": 0,
+      "candidate_exchange": {
+        "call": {
+          "audience": "aegis-ot:m4g:physical-plant",
+          "call_nonce": "GF_gRMBzHfO37t6eXogojcRdE02rCQ-x",
+          "caller_key_id": "m4g-candidate-key-v1",
+          "expires_at": "2026-08-25T19:48:08.876613Z",
+          "issued_at": "2026-08-25T19:47:53.876613Z",
+          "operation": "simulate",
+          "payload": {
+            "command": {
+              "command_id": "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+              "command_type": "set_line_service",
+              "operation": "isolate_asset",
+              "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+              "resource": "feeder-1",
+              "schema_version": "physical-command-v1",
+              "setpoint": 0.0,
+              "target": "Line 5-6",
+              "target_index": 4,
+              "unit": "boolean"
+            },
+            "schema_version": "m4g-plant-simulate-v1"
+          },
+          "payload_sha256": "82cfa5b815fb328cd2d5dd2ca0da43ca04f712ee3a0a3fb2986cacf90656a900",
+          "role": "candidate",
+          "schema_version": "m4g-signed-plant-call-v1",
+          "signature": "g8V3TtFf-O5fjVSetB2CeHdngZZRb4_neMicv6Ysz6B4C6ZrsjqeYuaXIXsJ7AfiUxMZ-KH-8UiGx_rVVsZtDA==",
+          "target_plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+          "target_plant_key_id": "m4g-plant-key-v1"
+        },
+        "response": {
+          "call_sha256": "f0aec0468fb2532138fda283ec639ae7f2c14af36c62f88645bd87f3dc81e155",
+          "operation": "simulate",
+          "payload": {
+            "assessment": {
+              "assessment_id": "ce938f77-8a0f-4cb7-9648-4c4542470538",
+              "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+              "post_state": {
+                "battery_injection_mw": {
+                  "battery-1": -0.6
+                },
+                "bus_voltage_pu": [
+                  1.03,
+                  0.9949984609296982,
+                  0.9804483372248348,
+                  0.957238729801661,
+                  0.9555792032074706,
+                  0.9544628208972457,
+                  null,
+                  0.958163798236279,
+                  0.9551694308344867,
+                  0.9543932702162847,
+                  0.9530484838176296,
+                  0.952865513177412,
+                  1.0001462529762852,
+                  0.9953255860732707,
+                  0.9925528877507264
+                ],
+                "converged": true,
+                "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+                "isolated_resources": [
+                  "feeder-1"
+                ],
+                "line_loading_pct": [
+                  53.87472597426189,
+                  54.60778755491812,
+                  35.43972544523311,
+                  26.648304218001982,
+                  null,
+                  29.59373817765251,
+                  24.631291485706903,
+                  21.620398478601256,
+                  6.859229772736998,
+                  15.851368691259896,
+                  9.476242316809149,
+                  8.908939098002548,
+                  null,
+                  0.17658731540238126,
+                  0.037286542180545536
+                ],
+                "maximum_line_loading_pct": 54.60778755491812,
+                "maximum_voltage_pu": 1.03,
+                "minimum_voltage_pu": 0.952865513177412,
+                "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+                "model_id": "pandapower-cigre-mv-all",
+                "observation_clock_domain": "UTC",
+                "observation_digest": "a2a92e3eff620e863e60bdf90f1221c50a5a38dcb4d767fbe9c7977e45217b9f",
+                "observation_sequence": 9,
+                "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+                "observed_at": "2026-08-25T19:47:54.846750Z",
+                "priority_load_demand_mw": 1.0157500000000002,
+                "priority_load_served_mw": 1.0157500000000002,
+                "priority_load_served_pct": 100.0,
+                "schema_version": "physical-state-v1",
+                "served_load_mw": 44.1941,
+                "simulation_time_s": 3.0,
+                "simulator_version": "pandapower-3.5.4",
+                "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+                "state_version": 3,
+                "thermal_violation_count": 0,
+                "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+                "total_load_demand_mw": 44.742149999999995,
+                "total_load_served_pct": 98.77509239050873,
+                "unsafe_state": false,
+                "unserved_load_mw": 0.5480499999999964,
+                "voltage_violation_count": 0
+              },
+              "pre_state": {
+                "battery_injection_mw": {
+                  "battery-1": -0.6
+                },
+                "bus_voltage_pu": [
+                  1.03,
+                  0.9949984609296982,
+                  0.9804483372248348,
+                  0.957238729801661,
+                  0.9555792032074706,
+                  0.9544628208972457,
+                  null,
+                  0.958163798236279,
+                  0.9551694308344867,
+                  0.9543932702162847,
+                  0.9530484838176296,
+                  0.952865513177412,
+                  1.0001462529762852,
+                  0.9953255860732707,
+                  0.9925528877507264
+                ],
+                "converged": true,
+                "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+                "isolated_resources": [
+                  "feeder-1"
+                ],
+                "line_loading_pct": [
+                  53.87472597426189,
+                  54.60778755491812,
+                  35.43972544523311,
+                  26.648304218001982,
+                  null,
+                  29.59373817765251,
+                  24.631291485706903,
+                  21.620398478601256,
+                  6.859229772736998,
+                  15.851368691259896,
+                  9.476242316809149,
+                  8.908939098002548,
+                  null,
+                  0.17658731540238126,
+                  0.037286542180545536
+                ],
+                "maximum_line_loading_pct": 54.60778755491812,
+                "maximum_voltage_pu": 1.03,
+                "minimum_voltage_pu": 0.952865513177412,
+                "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+                "model_id": "pandapower-cigre-mv-all",
+                "observation_clock_domain": "UTC",
+                "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+                "observation_sequence": 8,
+                "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+                "observed_at": "2026-08-25T19:47:53.846750Z",
+                "priority_load_demand_mw": 1.0157500000000002,
+                "priority_load_served_mw": 1.0157500000000002,
+                "priority_load_served_pct": 100.0,
+                "schema_version": "physical-state-v1",
+                "served_load_mw": 44.1941,
+                "simulation_time_s": 2.0,
+                "simulator_version": "pandapower-3.5.4",
+                "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+                "state_version": 2,
+                "thermal_violation_count": 0,
+                "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+                "total_load_demand_mw": 44.742149999999995,
+                "total_load_served_pct": 98.77509239050873,
+                "unsafe_state": false,
+                "unserved_load_mw": 0.5480499999999964,
+                "voltage_violation_count": 0
+              },
+              "reasons": [],
+              "safe": true,
+              "schema_version": "candidate-assessment-v1"
+            },
+            "schema_version": "m4g-plant-simulation-response-v1"
+          },
+          "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+          "plant_key_id": "m4g-plant-key-v1",
+          "schema_version": "m4g-signed-plant-response-v1",
+          "signature": "kiROR-IeRktFz118FKWqg21efQec1nzlQk6JX58io2xwTPBIc7gFz9DsMd6NNruCfDeqKWpciH3mWHLmKMQ7DA==",
+          "signed_at": "2026-08-25T19:47:53.924440Z",
+          "status": "ok"
+        },
+        "schema_version": "m4g-plant-exchange-v1"
+      },
+      "command": {
+        "command_id": "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+        "command_type": "set_line_service",
+        "operation": "isolate_asset",
+        "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+        "resource": "feeder-1",
+        "schema_version": "physical-command-v1",
+        "setpoint": 0.0,
+        "target": "Line 5-6",
+        "target_index": 4,
+        "unit": "boolean"
+      },
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": {
+        "decided_at": "2026-08-25T19:47:53.874966Z",
+        "decision_id": "0ef57053-f9c4-48e0-8f39-a46557d36c71",
+        "evidence_record_hash": "1f97b84c46f3551de0c87d185f820b4e74f54e596c6987ec5eae559917f3a86d",
+        "outcome": "permit",
+        "policy_version": "contextual-v1+opa-aegis-v1",
+        "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+        "reasons": [
+          "all_checks_passed"
+        ],
+        "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+        "state_version": 2
+      },
+      "dispatch_attempts": 1,
+      "execution_evidence_hash": "b14bba93525dd5ddcedad3a356e42280cbbb9dc5acb139f6a0f1253a08b241eb",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:54.060589Z",
+        "challenge_nonce": "aJzByJJ30FyY9JUEJtPKuaRbQyOvmwP5",
+        "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "envelope_digest": "d4b7d8db32052b3dd0e4d21e8e580f07ccc6feb5a40148053bfb516dbfff302b",
+        "logical_time_s": 3.0,
+        "observation_id": "66bb7063-04bd-4c06-bb60-52b284309816",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 7,
+        "permit_id": "07485f72-c726-4599-9a0f-7aa049306fd9",
+        "phase": "post_dispatch",
+        "plc_acknowledgment_digest": "7ba96f9189e1cc66614706de8992e71acee34a8db4cd88ec9230b4d15a66e247",
+        "previous_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "schema_version": "signed-observation-v1",
+        "signature": "Bez1dNcsqIQdmUJxEePrwESJICGBxV1Xcr5QWWqx_wqWQhCwGENb-wHeLcC5FRMHfaLoGezGDgNmOIjiyDrTCg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "ddc94e0e9f923089dd94f053def881b81a6b2c3663448734fef5012e18f23d06",
+          "observation_sequence": 10,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:54.060589Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 3.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "state_version": 3,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": {
+        "base_permit": {
+          "assessment_digest": "2efe58e7acd749f3f5e39ebf0ad6288622fa40dac43da95b6344cb0044e3598a",
+          "audience": "virtual-control-device:m4g-segmented",
+          "command": {
+            "command_id": "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+            "command_type": "set_line_service",
+            "operation": "isolate_asset",
+            "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+            "resource": "feeder-1",
+            "schema_version": "physical-command-v1",
+            "setpoint": 0.0,
+            "target": "Line 5-6",
+            "target_index": 4,
+            "unit": "boolean"
+          },
+          "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+          "decision_id": "0ef57053-f9c4-48e0-8f39-a46557d36c71",
+          "decision_outcome": "permit",
+          "evidence_record_hash": "1f97b84c46f3551de0c87d185f820b4e74f54e596c6987ec5eae559917f3a86d",
+          "expected_post_state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "expected_post_state_version": 3,
+          "expected_post_topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "expires_at": "2026-08-25T19:47:55.928690Z",
+          "issued_at": "2026-08-25T19:47:53.928690Z",
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+          "permit_id": "07485f72-c726-4599-9a0f-7aa049306fd9",
+          "permit_nonce": "8bb97a54-20af-48b2-a1e5-dadef7fcbb72",
+          "policy_version": "contextual-v1+opa-aegis-v1",
+          "proposal_digest": "8bc54785712d5eaae1ef878266fe19cd3b4113b30bb0fd683fed2a6cd303612d",
+          "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+          "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+          "schema_version": "execution-permit-v1",
+          "signature": "9NtzMs19acY2XyRI7bo7fUCq6pO9PUiZZKuzGwP0_wELSho826wS6gS9f9AdTsWYhdbOGcvyPf-rBO9WDP8HBQ==",
+          "signing_key_id": "m4g-permit-key-v1",
+          "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "state_version": 2,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d"
+        },
+        "observation_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "observation_id": "13d49625-2907-4bde-8c5b-2acfbad1028d",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "request_digest": "f95aad3729f8cc2d996c3714b000fc7976e0d42702a6711d3e7644a711860351",
+        "schema_version": "capability-execution-permit-v1",
+        "signature": "UVtkDYseYivMwNNznAAh3fgFp5TT3iEokA31Ode7FG0reb-WHGget-mzaBAUkdYYyObDUZwYv7zilh1C_tRdBQ==",
+        "signing_key_id": "m4g-permit-key-v1",
+        "target_plc_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+        "target_plc_id": "virtual-control-device:m4g-segmented",
+        "target_plc_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4"
+      },
+      "post_observation": {
+        "captured_at": "2026-08-25T19:47:54.060589Z",
+        "challenge_nonce": "aJzByJJ30FyY9JUEJtPKuaRbQyOvmwP5",
+        "command_digest": "ddd7ddb8569ecb96ed1e057dd661a0d503a976bf902b5e1b6ce27f77e754ac93",
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "envelope_digest": "d4b7d8db32052b3dd0e4d21e8e580f07ccc6feb5a40148053bfb516dbfff302b",
+        "logical_time_s": 3.0,
+        "observation_id": "66bb7063-04bd-4c06-bb60-52b284309816",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 7,
+        "permit_id": "07485f72-c726-4599-9a0f-7aa049306fd9",
+        "phase": "post_dispatch",
+        "plc_acknowledgment_digest": "7ba96f9189e1cc66614706de8992e71acee34a8db4cd88ec9230b4d15a66e247",
+        "previous_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "schema_version": "signed-observation-v1",
+        "signature": "Bez1dNcsqIQdmUJxEePrwESJICGBxV1Xcr5QWWqx_wqWQhCwGENb-wHeLcC5FRMHfaLoGezGDgNmOIjiyDrTCg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "ddc94e0e9f923089dd94f053def881b81a6b2c3663448734fef5012e18f23d06",
+          "observation_sequence": 10,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:54.060589Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 3.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "state_version": 3,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "pre_observation": {
+        "captured_at": "2026-08-25T19:47:53.846750Z",
+        "challenge_nonce": "_DVOAsx2Qgy4a4e9eugntxFTO4DDFq5d",
+        "command_digest": null,
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "logical_time_s": 2.0,
+        "observation_id": "13d49625-2907-4bde-8c5b-2acfbad1028d",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 6,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "045c1519cd034a8caf51213c83f40d4aa30e9853971814b09f38ac097366b3e3",
+        "schema_version": "signed-observation-v1",
+        "signature": "eiSsrRo6EC0ij9SNK53-F5QfODIly6Jwh9S2W9QAlnqf8cwwY2cW8MZ2H4uPK9p7QBpJhWwpkIFFHfyMeOTqAQ==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a3d48c011ba13b8f8526505bc3c33b4c6046e064d038f89ecdd1450d1baf9fd8",
+          "observation_sequence": 8,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 2.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "79465a3b09887a9c3d781df417994346a19f5bce3f01683d5445d488481d81e8",
+          "state_version": 2,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "reasons": [
+        "plc_acknowledgment_and_signed_post_observation_match"
+      ],
+      "request": {
+        "correlation_id": "143660df-6c04-4ca8-b7cf-dec41cfd4076",
+        "observation_challenge_nonce": "_DVOAsx2Qgy4a4e9eugntxFTO4DDFq5d",
+        "observation_envelope_digest": "0bb8d24f6316ac7047248e15008b78a924dd4ff278987d63834292c590af39ab",
+        "observation_id": "13d49625-2907-4bde-8c5b-2acfbad1028d",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "mktma2FGiuHBF3shaAvbWCpVlUdle9QU",
+          "observed_at": "2026-08-25T19:47:53.846750Z",
+          "observed_state_version": 2,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 5.0
+          },
+          "proposal_id": "m4g-nominal-f88a677c-a9b7-4d4f-978f-720bd445c6ca",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:53.862407Z"
+        },
+        "request_id": "6b9123df-130e-4a7b-ba7a-cb78a90fa0bb",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "completed"
+    },
+    "schema_version": "m4g-capability-probe-v1",
+    "unsafe": {
+      "acknowledgment": null,
+      "assessment": null,
+      "automatic_retry_count": 0,
+      "candidate_exchange": null,
+      "command": null,
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": {
+        "decided_at": "2026-08-25T19:47:54.108740Z",
+        "decision_id": "6658e94c-3566-48cd-8a1d-5ee2b631582a",
+        "evidence_record_hash": "9be674f0d8313dea66769d6c488dc4a0800899f642918ae87e198c1d0c7fe369",
+        "outcome": "deny",
+        "policy_version": "contextual-v1+opa-aegis-v1",
+        "proposal_id": "m4g-unsafe-7c23d2cf-4fb3-45e1-aa83-b1261468e686",
+        "reasons": [
+          "critical_load_below_limit"
+        ],
+        "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+        "state_version": 3
+      },
+      "dispatch_attempts": 0,
+      "execution_evidence_hash": "372672c593a0905d819be7da6fba7018459b8a017e382ef97cab7c0bb0b02a87",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:54.086244Z",
+        "challenge_nonce": "ZApvTs4tmUj_t3dPlGrlCZLhvMvCxnic",
+        "command_digest": null,
+        "correlation_id": "f99e67fb-c3ca-4d9c-b6fb-f3db8d75a03d",
+        "envelope_digest": "a13e7877d811595745368909fc5a23ef6b33e2008bfd6c90e96ef0824fe2eb8b",
+        "logical_time_s": 3.0,
+        "observation_id": "e2f7d839-fe59-4d57-ad28-7617d03b8e4b",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 8,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "d4b7d8db32052b3dd0e4d21e8e580f07ccc6feb5a40148053bfb516dbfff302b",
+        "schema_version": "signed-observation-v1",
+        "signature": "iaDEiJYowGTIj8wcd7KwiikfiyLlZZpfuAGoEP2mfOpAYjDKXo3aHZrFBFOKD14E32vIxodgX5LAR4QUV8qZCA==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "b1823a5804076c797d5366dfe6e871293fdc7b90c63aa56133114a589421ce15",
+          "observation_sequence": 11,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:54.086244Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 3.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "state_version": 3,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": null,
+      "post_observation": null,
+      "pre_observation": {
+        "captured_at": "2026-08-25T19:47:54.086244Z",
+        "challenge_nonce": "ZApvTs4tmUj_t3dPlGrlCZLhvMvCxnic",
+        "command_digest": null,
+        "correlation_id": "f99e67fb-c3ca-4d9c-b6fb-f3db8d75a03d",
+        "envelope_digest": "a13e7877d811595745368909fc5a23ef6b33e2008bfd6c90e96ef0824fe2eb8b",
+        "logical_time_s": 3.0,
+        "observation_id": "e2f7d839-fe59-4d57-ad28-7617d03b8e4b",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 8,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "d4b7d8db32052b3dd0e4d21e8e580f07ccc6feb5a40148053bfb516dbfff302b",
+        "schema_version": "signed-observation-v1",
+        "signature": "iaDEiJYowGTIj8wcd7KwiikfiyLlZZpfuAGoEP2mfOpAYjDKXo3aHZrFBFOKD14E32vIxodgX5LAR4QUV8qZCA==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "b1823a5804076c797d5366dfe6e871293fdc7b90c63aa56133114a589421ce15",
+          "observation_sequence": 11,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:54.086244Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 3.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+          "state_version": 3,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "reasons": [
+        "critical_load_below_limit"
+      ],
+      "request": {
+        "correlation_id": "f99e67fb-c3ca-4d9c-b6fb-f3db8d75a03d",
+        "observation_challenge_nonce": "ZApvTs4tmUj_t3dPlGrlCZLhvMvCxnic",
+        "observation_envelope_digest": "a13e7877d811595745368909fc5a23ef6b33e2008bfd6c90e96ef0824fe2eb8b",
+        "observation_id": "e2f7d839-fe59-4d57-ad28-7617d03b8e4b",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "2A1vbLqTaOqQS_TZJIlVI8w7Q1BodTRH",
+          "observed_at": "2026-08-25T19:47:54.086244Z",
+          "observed_state_version": 3,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 30.0
+          },
+          "proposal_id": "m4g-unsafe-7c23d2cf-4fb3-45e1-aa83-b1261468e686",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:54.099490Z"
+        },
+        "request_id": "1380a98a-c61c-453e-83f9-ad3e31e4d61e",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "not_dispatched"
+    }
+  },
+  "gateway_health_after_rotation": {
+    "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+    "coordination_backend": "segmented-compose-http-v1",
+    "evidence_records": 0,
+    "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+    "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+    "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+    "pid": 1,
+    "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+    "role": "segmented-gateway",
+    "schema_version": "m4g-gateway-health-v1",
+    "status": "ready"
+  },
+  "generated_at": "2026-08-25T19:49:08.695980+00:00",
+  "git_commit": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+  "health_after_rotation": {
+    "candidate": {
+      "boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "key_id": "m4g-candidate-key-v1",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "6QEs3GVDMdmzeBw3B-eexVzVPQAzi42xexaaBG-0EPM=",
+      "role": "candidate",
+      "schema_version": "m4g-candidate-health-v1",
+      "simulation_count": 4,
+      "status": "ready"
+    },
+    "observer": {
+      "boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "cached_observations": 9,
+      "capture_count": 9,
+      "key_id": "m4g-observer-key-v1",
+      "observer_id": "signed-observer:m4g-segmented",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "Ay0KYIBFuo3br9aeehDjFWUtWD9wXOTe41EImySUsAY=",
+      "resolve_count": 8,
+      "role": "observer",
+      "schema_version": "m4g-observer-health-v1",
+      "status": "ready"
+    },
+    "ot-adapter": {
+      "boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "execute_requests": 3,
+      "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "gateway_public_key_b64": "SpwNiH5r7xcYFd2ZoLn5VWNWz9Oa4GPzWPBRZRqO8dg=",
+      "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "permit_key_id": "m4g-permit-key-v1",
+      "permit_public_key_b64": "fLUxKTdirFZXNxUwsWyNZqStizmp1nXNGOOZDYfrKew=",
+      "pid": 1,
+      "plant": {
+        "apply_requests": 0,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 0,
+        "commit_count": 0,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+        "state_version": 0,
+        "status": "ready"
+      },
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "plc_id": "virtual-control-device:m4g-segmented",
+      "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+      "role": "ot-adapter",
+      "scan_counter": 3,
+      "schema_version": "m4g-ot-health-v1",
+      "semantic_replay_reservations": 3,
+      "status": "ready",
+      "transport_replay_reservations": 3
+    },
+    "segmented-gateway": {
+      "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "coordination_backend": "segmented-compose-http-v1",
+      "evidence_records": 8,
+      "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "role": "segmented-gateway",
+      "schema_version": "m4g-gateway-health-v1",
+      "status": "ready"
+    },
+    "simulation": {
+      "apply_requests": 3,
+      "backend": "pandapower-cigre-mv-segmented-http-v1",
+      "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "call_reservations": 22,
+      "commit_count": 3,
+      "key_id": "m4g-plant-key-v1",
+      "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+      "pid": 1,
+      "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+      "role": "plant",
+      "schema_version": "m4g-plant-health-v1",
+      "simulator_version": "pandapower-3.5.4",
+      "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+      "state_version": 3,
+      "status": "ready"
+    }
+  },
+  "health_before": {
+    "candidate": {
+      "boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "key_id": "m4g-candidate-key-v1",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "6QEs3GVDMdmzeBw3B-eexVzVPQAzi42xexaaBG-0EPM=",
+      "role": "candidate",
+      "schema_version": "m4g-candidate-health-v1",
+      "simulation_count": 0,
+      "status": "ready"
+    },
+    "observer": {
+      "boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "cached_observations": 0,
+      "capture_count": 0,
+      "key_id": "m4g-observer-key-v1",
+      "observer_id": "signed-observer:m4g-segmented",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "Ay0KYIBFuo3br9aeehDjFWUtWD9wXOTe41EImySUsAY=",
+      "resolve_count": 0,
+      "role": "observer",
+      "schema_version": "m4g-observer-health-v1",
+      "status": "ready"
+    },
+    "ot-adapter": {
+      "boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "execute_requests": 0,
+      "gateway_key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+      "gateway_public_key_b64": "yl4VLuDGhRaAFqSZDkChEeLRFcnuXlf0Zd5Ubl0GUBg=",
+      "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "permit_key_id": "m4g-permit-key-v1",
+      "permit_public_key_b64": "fLUxKTdirFZXNxUwsWyNZqStizmp1nXNGOOZDYfrKew=",
+      "pid": 1,
+      "plant": {
+        "apply_requests": 0,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 0,
+        "commit_count": 0,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+        "state_version": 0,
+        "status": "ready"
+      },
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "plc_id": "virtual-control-device:m4g-segmented",
+      "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+      "role": "ot-adapter",
+      "scan_counter": 0,
+      "schema_version": "m4g-ot-health-v1",
+      "semantic_replay_reservations": 0,
+      "status": "ready",
+      "transport_replay_reservations": 0
+    },
+    "segmented-gateway": {
+      "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "coordination_backend": "segmented-compose-http-v1",
+      "evidence_records": 0,
+      "gateway_key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "role": "segmented-gateway",
+      "schema_version": "m4g-gateway-health-v1",
+      "status": "ready"
+    },
+    "simulation": {
+      "apply_requests": 0,
+      "backend": "pandapower-cigre-mv-segmented-http-v1",
+      "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "call_reservations": 0,
+      "commit_count": 0,
+      "key_id": "m4g-plant-key-v1",
+      "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+      "pid": 1,
+      "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+      "role": "plant",
+      "schema_version": "m4g-plant-health-v1",
+      "simulator_version": "pandapower-3.5.4",
+      "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+      "state_version": 0,
+      "status": "ready"
+    }
+  },
+  "health_final": {
+    "candidate": {
+      "boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "key_id": "m4g-candidate-key-v1",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "6QEs3GVDMdmzeBw3B-eexVzVPQAzi42xexaaBG-0EPM=",
+      "role": "candidate",
+      "schema_version": "m4g-candidate-health-v1",
+      "simulation_count": 4,
+      "status": "ready"
+    },
+    "observer": {
+      "boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "cached_observations": 9,
+      "capture_count": 9,
+      "key_id": "m4g-observer-key-v1",
+      "observer_id": "signed-observer:m4g-segmented",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "public_key_b64": "Ay0KYIBFuo3br9aeehDjFWUtWD9wXOTe41EImySUsAY=",
+      "resolve_count": 8,
+      "role": "observer",
+      "schema_version": "m4g-observer-health-v1",
+      "status": "ready"
+    },
+    "ot-adapter": {
+      "boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "execute_requests": 3,
+      "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "gateway_public_key_b64": "SpwNiH5r7xcYFd2ZoLn5VWNWz9Oa4GPzWPBRZRqO8dg=",
+      "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "permit_key_id": "m4g-permit-key-v1",
+      "permit_public_key_b64": "fLUxKTdirFZXNxUwsWyNZqStizmp1nXNGOOZDYfrKew=",
+      "pid": 1,
+      "plant": {
+        "apply_requests": 0,
+        "backend": "pandapower-cigre-mv-segmented-http-v1",
+        "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+        "call_reservations": 0,
+        "commit_count": 0,
+        "key_id": "m4g-plant-key-v1",
+        "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+        "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+        "pid": 1,
+        "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+        "role": "plant",
+        "schema_version": "m4g-plant-health-v1",
+        "simulator_version": "pandapower-3.5.4",
+        "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+        "state_version": 0,
+        "status": "ready"
+      },
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "plant_model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "plc_id": "virtual-control-device:m4g-segmented",
+      "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+      "role": "ot-adapter",
+      "scan_counter": 3,
+      "schema_version": "m4g-ot-health-v1",
+      "semantic_replay_reservations": 3,
+      "status": "ready",
+      "transport_replay_reservations": 3
+    },
+    "segmented-gateway": {
+      "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "coordination_backend": "segmented-compose-http-v1",
+      "evidence_records": 8,
+      "gateway_key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "role": "segmented-gateway",
+      "schema_version": "m4g-gateway-health-v1",
+      "status": "ready"
+    },
+    "simulation": {
+      "apply_requests": 3,
+      "backend": "pandapower-cigre-mv-segmented-http-v1",
+      "boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "call_reservations": 22,
+      "commit_count": 3,
+      "key_id": "m4g-plant-key-v1",
+      "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+      "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+      "pid": 1,
+      "public_key_b64": "ns3dmj0Tuxe0QuCqeML-VuP5sBQHmp1jIdOKgVX6n9o=",
+      "role": "plant",
+      "schema_version": "m4g-plant-health-v1",
+      "simulator_version": "pandapower-3.5.4",
+      "state_digest": "d2fb5328e341c710d90f777f316c10475fba76b65c8ae7502821b06e168deb3d",
+      "state_version": 3,
+      "status": "ready"
+    }
+  },
+  "identity_initial": {
+    "agent.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6Z2F0ZXdheSJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtMTBkZmE5N2RlOWEyNGM4MzlkMmFiNWUwNzhlNGI5ZmQiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwia2V5X2lkIjoiZWQyNTUxOTpmYjJiNmUxZWYzN2IyODZiYzUwNWYxZjYwNjBkOWY5Yzk0YTcxYjNhNjcxYWJiY2FiZmM2NWY5MmIzNDQ4MjdjIiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6MzYuMDEzODEwWiIsInB1YmxpY19rZXlfYjY0Ijoic2JTb1ktS3k1S0V3bXRvZ0NORGtwZXRCYV9VZXlDMk8wZUo5NUZkc0I5WT0iLCJyb2xlIjoiYWdlbnQiLCJzY2hlbWFfdmVyc2lvbiI6Im00Zy13b3JrbG9hZC1jcmVkZW50aWFsLXYxIiwic3ViamVjdCI6InVybjphZWdpcy1vdDptNGc6d29ya2xvYWQ6YWdlbnQtcHJvYmUiLCJ0cnVzdF9kb21haW4iOiJhZWdpcy1vdC5tNGcubG9jYWwifSwic2lnbmF0dXJlIjoiZG1ObkJmM0ZkTlZlZ0N4R21Jalk4dEdYYzQ1UWY4SjJTajhGM2lyTmdDNEZXbWVPMzR0cjhYU2pTSjFfbDVZVFZJdDNyMWtGVEtVeGJkQ3A5V2FRQmc9PSJ9Cg==",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:gateway"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-10dfa97de9a24c839d2ab5e078e4b9fd",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:fb2b6e1ef37b286bc505f1f6060d9f9c94a71b3a671abbcabfc65f92b344827c",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "sbSoY-Ky5KEwmtogCNDkpetBa_UeyC2O0eJ95FdsB9Y=",
+          "role": "agent",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:agent-probe",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "dmNnBf3FdNVegCxGmIjY8tGXc45Qf8J2Sj8F3irNgC4FWmeO34tr8XSjSJ1_l5YTVIt3r1kFTKUxbdCp9WaQBg=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "b3b8f6f4335fc9671a51d6acbac3165e28ec33db61899ccf891f9cf95a0dd151",
+      "uid": 65532
+    },
+    "authority.public": {
+      "bytes_base64": "Gh7613CJ1Xk4VTgH2wQ8YQiZnVqMO3wO0Y0mRDqA3fc=",
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+      "uid": 65532
+    },
+    "gateway.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6b3QtYWRhcHRlciJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtZTViYTliODc1YWE3NGY2NmEwODgzODhkNjFjMDJmYjEiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwia2V5X2lkIjoiZWQyNTUxOToxMGIwZjEwZjMwOWZiOTEyODE1OTZiZDc3OTc2ZDY4NDM2YThlN2RiOGNhYjNjZjgxY2JlOTU3YTljNTNlMjJhIiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6MzYuMDEzODEwWiIsInB1YmxpY19rZXlfYjY0IjoieWw0Vkx1REdoUmFBRnFTWkRrQ2hFZUxSRmNudVhsZjBaZDVVYmwwR1VCZz0iLCJyb2xlIjoiZ2F0ZXdheSIsInNjaGVtYV92ZXJzaW9uIjoibTRnLXdvcmtsb2FkLWNyZWRlbnRpYWwtdjEiLCJzdWJqZWN0IjoidXJuOmFlZ2lzLW90Om00Zzp3b3JrbG9hZDpnYXRld2F5IiwidHJ1c3RfZG9tYWluIjoiYWVnaXMtb3QubTRnLmxvY2FsIn0sInNpZ25hdHVyZSI6IjkwWll3NHlucm51UXpXZVVESUl3RGVLTUl1Zk83akYwYTA2NE15SnB4UHFTeUNmcGhlc2Y3UHdETXh2OVF0ZHBrRzFFVFM2blpaMzVKTFlFX3lBYkF3PT0ifQo=",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:ot-adapter"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-e5ba9b875aa74f66a088388d61c02fb1",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "yl4VLuDGhRaAFqSZDkChEeLRFcnuXlf0Zd5Ubl0GUBg=",
+          "role": "gateway",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:gateway",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "90ZYw4ynrnuQzWeUDIIwDeKMIufO7jF0a064MyJpxPqSyCfphesf7PwDMxv9QtdpkG1ETS6nZZ35JLYE_yAbAw=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "a75a2f6e4d1dbbb51091d33d45ce5f4e39733b067c23dd727165a9ad0149765b",
+      "uid": 65532
+    },
+    "ot.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6Z2F0ZXdheSJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtZDM1OWZhYjk2NDQwNDYyMTgxYzk1YmNhODk2YTQ4OWUiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwia2V5X2lkIjoiZWQyNTUxOTozNjA4ZDUwZjBmNmYxYjk2NjRmZDc0MmZlMzg2ZjcyMzc1N2U2YjZjYmEzZjM1ZWIwM2UxODI4MzQxNTI2YWY0Iiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6MzYuMDEzODEwWiIsInB1YmxpY19rZXlfYjY0IjoiUXRCd2Nodi1LZkpLaXhQOGVXakhodTFfVnZKeWY5bDR0dmYxWV9pUzhNRT0iLCJyb2xlIjoib3QtYWRhcHRlciIsInNjaGVtYV92ZXJzaW9uIjoibTRnLXdvcmtsb2FkLWNyZWRlbnRpYWwtdjEiLCJzdWJqZWN0IjoidXJuOmFlZ2lzLW90Om00Zzp3b3JrbG9hZDpvdC1hZGFwdGVyIiwidHJ1c3RfZG9tYWluIjoiYWVnaXMtb3QubTRnLmxvY2FsIn0sInNpZ25hdHVyZSI6IjRBakx1SEpDdmZ2X19wcE9FcEptU3ZQT0xiTjFYOXIyX0tJUS1vc3ZFNkRteFlWQnlsQnE3VkFmUmhQY2E4eG9zMWFTR2RQLVBFX2dwa1p5aWo3N0F3PT0ifQo=",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:gateway"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-d359fab96440462181c95bca896a489e",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+          "role": "ot-adapter",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:ot-adapter",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "4AjLuHJCvfv__ppOEpJmSvPOLbN1X9r2_KIQ-osvE6DmxYVBylBq7VAfRhPca8xos1aSGdP-PE_gpkZyij77Aw=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "d321b8073a45c67a506a1bb81440660a54ba627aa1650ba505770a619185deb5",
+      "uid": 65532
+    },
+    "trust-bundle.json": {
+      "bytes_base64": "eyJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiYXV0aG9yaXR5X3B1YmxpY19rZXlfYjY0IjoiR2g3NjEzQ0oxWGs0VlRnSDJ3UThZUWlablZxTU8zd08wWTBtUkRxQTNmYz0iLCJidW5kbGVfaWQiOiJidW5kbGUtNTY1NWMxMjRiMTRmNDAwNTg0MzNjZTZhMTRjMTBjM2QiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwicmV2b2NhdGlvbnMiOltdLCJzY2hlbWFfdmVyc2lvbiI6Im00Zy13b3JrbG9hZC10cnVzdC1idW5kbGUtdjEiLCJzZXF1ZW5jZSI6MSwic2lnbmF0dXJlIjoiSEh6Q1pDR1Nnejl4YW00anNQNjZRcm9ub09PelE0THhXQmE5T0s4MUM0VW5hV1NKeFFhZkxkSkhYWFlxMW1jaERIY2owNU8wMXpNMnJiT3RSTktXQXc9PSIsInRydXN0X2RvbWFpbiI6ImFlZ2lzLW90Lm00Zy5sb2NhbCJ9Cg==",
+      "document": {
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "authority_public_key_b64": "Gh7613CJ1Xk4VTgH2wQ8YQiZnVqMO3wO0Y0mRDqA3fc=",
+        "bundle_id": "bundle-5655c124b14f40058433ce6a14c10c3d",
+        "expires_at": "2026-08-25T20:47:36.013810Z",
+        "issued_at": "2026-08-25T19:47:36.013810Z",
+        "revocations": [],
+        "schema_version": "m4g-workload-trust-bundle-v1",
+        "sequence": 1,
+        "signature": "HHzCZCGSgz9xam4jsP66QronoOOzQ4LxWBa9OK81C4UnaWSJxQafLdJHXXYq1mchDHcj05O01zM2rbOtRNKWAw==",
+        "trust_domain": "aegis-ot.m4g.local"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "93f0c9220ca5ff8abddf727ca87093e476938ecc66c96fe0a836afdef6a21b1b",
+      "uid": 65532
+    }
+  },
+  "identity_initialization": {
+    "artifact_mode": "0600",
+    "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+    "authority_private_key_retained": false,
+    "authority_public_key_file": "/var/lib/aegis-ot/identity/authority.public",
+    "credentials": {
+      "agent": {
+        "audiences": [
+          "aegis-ot:m4g:gateway"
+        ],
+        "credential_id": "credential-10dfa97de9a24c839d2ab5e078e4b9fd",
+        "expires_at": "2026-08-25T20:47:36.013810+00:00",
+        "key_id": "ed25519:fb2b6e1ef37b286bc505f1f6060d9f9c94a71b3a671abbcabfc65f92b344827c",
+        "path": "/var/lib/aegis-ot/identity/agent.credential.json",
+        "role": "agent",
+        "subject": "urn:aegis-ot:m4g:workload:agent-probe"
+      },
+      "gateway": {
+        "audiences": [
+          "aegis-ot:m4g:ot-adapter"
+        ],
+        "credential_id": "credential-e5ba9b875aa74f66a088388d61c02fb1",
+        "expires_at": "2026-08-25T20:47:36.013810+00:00",
+        "key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+        "path": "/var/lib/aegis-ot/identity/gateway.credential.json",
+        "role": "gateway",
+        "subject": "urn:aegis-ot:m4g:workload:gateway"
+      },
+      "ot-adapter": {
+        "audiences": [
+          "aegis-ot:m4g:gateway"
+        ],
+        "credential_id": "credential-d359fab96440462181c95bca896a489e",
+        "expires_at": "2026-08-25T20:47:36.013810+00:00",
+        "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+        "path": "/var/lib/aegis-ot/identity/ot.credential.json",
+        "role": "ot-adapter",
+        "subject": "urn:aegis-ot:m4g:workload:ot-adapter"
+      }
+    },
+    "directory_mode": "0700",
+    "identity_directory": "/var/lib/aegis-ot/identity",
+    "runtime_gid": 65532,
+    "runtime_uid": 65532,
+    "schema_version": "m4g-workload-identity-initialization-v1",
+    "trust_bundle": {
+      "bundle_id": "bundle-5655c124b14f40058433ce6a14c10c3d",
+      "expires_at": "2026-08-25T20:47:36.013810+00:00",
+      "path": "/var/lib/aegis-ot/identity/trust-bundle.json",
+      "sequence": 1
+    },
+    "trust_domain": "aegis-ot.m4g.local"
+  },
+  "identity_rotated": {
+    "agent.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6Z2F0ZXdheSJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtMTBkZmE5N2RlOWEyNGM4MzlkMmFiNWUwNzhlNGI5ZmQiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwia2V5X2lkIjoiZWQyNTUxOTpmYjJiNmUxZWYzN2IyODZiYzUwNWYxZjYwNjBkOWY5Yzk0YTcxYjNhNjcxYWJiY2FiZmM2NWY5MmIzNDQ4MjdjIiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6MzYuMDEzODEwWiIsInB1YmxpY19rZXlfYjY0Ijoic2JTb1ktS3k1S0V3bXRvZ0NORGtwZXRCYV9VZXlDMk8wZUo5NUZkc0I5WT0iLCJyb2xlIjoiYWdlbnQiLCJzY2hlbWFfdmVyc2lvbiI6Im00Zy13b3JrbG9hZC1jcmVkZW50aWFsLXYxIiwic3ViamVjdCI6InVybjphZWdpcy1vdDptNGc6d29ya2xvYWQ6YWdlbnQtcHJvYmUiLCJ0cnVzdF9kb21haW4iOiJhZWdpcy1vdC5tNGcubG9jYWwifSwic2lnbmF0dXJlIjoiZG1ObkJmM0ZkTlZlZ0N4R21Jalk4dEdYYzQ1UWY4SjJTajhGM2lyTmdDNEZXbWVPMzR0cjhYU2pTSjFfbDVZVFZJdDNyMWtGVEtVeGJkQ3A5V2FRQmc9PSJ9Cg==",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:gateway"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-10dfa97de9a24c839d2ab5e078e4b9fd",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:fb2b6e1ef37b286bc505f1f6060d9f9c94a71b3a671abbcabfc65f92b344827c",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "sbSoY-Ky5KEwmtogCNDkpetBa_UeyC2O0eJ95FdsB9Y=",
+          "role": "agent",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:agent-probe",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "dmNnBf3FdNVegCxGmIjY8tGXc45Qf8J2Sj8F3irNgC4FWmeO34tr8XSjSJ1_l5YTVIt3r1kFTKUxbdCp9WaQBg=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "b3b8f6f4335fc9671a51d6acbac3165e28ec33db61899ccf891f9cf95a0dd151",
+      "uid": 65532
+    },
+    "authority.public": {
+      "bytes_base64": "Gh7613CJ1Xk4VTgH2wQ8YQiZnVqMO3wO0Y0mRDqA3fc=",
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+      "uid": 65532
+    },
+    "gateway.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6b3QtYWRhcHRlciJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtZTE1Y2Q2MWNkNGM0NDZmNjkxMjFkMWY4YjE5ZWQwNTciLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0Nzo0OC43Nzc1OTdaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0Nzo0OC43Nzc1OTdaIiwia2V5X2lkIjoiZWQyNTUxOTpiZWZlNGI1NjhhYjgwNzJkNDMzOWNiZTVhMDM4OGYxOWQxNTYyMmVlMWU5Y2UzYWI4ZDZjMWM0ZmI0OGU4NmZmIiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6NDguNzc3NTk3WiIsInB1YmxpY19rZXlfYjY0IjoiU3B3TmlINXI3eGNZRmQyWm9MbjVWV05XejlPYTRHUHpXUEJSWlJxTzhkZz0iLCJyb2xlIjoiZ2F0ZXdheSIsInNjaGVtYV92ZXJzaW9uIjoibTRnLXdvcmtsb2FkLWNyZWRlbnRpYWwtdjEiLCJzdWJqZWN0IjoidXJuOmFlZ2lzLW90Om00Zzp3b3JrbG9hZDpnYXRld2F5IiwidHJ1c3RfZG9tYWluIjoiYWVnaXMtb3QubTRnLmxvY2FsIn0sInNpZ25hdHVyZSI6ImlJN0ZCSFAxZzBEc213Y1pqcnk5WXRWdTdmUEZ0ajY3dlVOQnBCRmxFWlhSTEJYV3p4bTdLVVgyVUVRdE5WRnIxNExqT1c5d0hhR0RQSHRsV3plLUNRPT0ifQo=",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:ot-adapter"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-e15cd61cd4c446f69121d1f8b19ed057",
+          "expires_at": "2026-08-25T20:47:48.777597Z",
+          "issued_at": "2026-08-25T19:47:48.777597Z",
+          "key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+          "not_before": "2026-08-25T19:47:48.777597Z",
+          "public_key_b64": "SpwNiH5r7xcYFd2ZoLn5VWNWz9Oa4GPzWPBRZRqO8dg=",
+          "role": "gateway",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:gateway",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "iI7FBHP1g0DsmwcZjry9YtVu7fPFtj67vUNBpBFlEZXRLBXWzxm7KUX2UEQtNVFr14LjOW9wHaGDPHtlWze-CQ=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "a4d301d0cce09c96e44873d4929c6600aa848cd66676a312923f874d0936c9eb",
+      "uid": 65532
+    },
+    "ot.credential.json": {
+      "bytes_base64": "eyJjcmVkZW50aWFsIjp7ImF1ZGllbmNlcyI6WyJhZWdpcy1vdDptNGc6Z2F0ZXdheSJdLCJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiY3JlZGVudGlhbF9pZCI6ImNyZWRlbnRpYWwtZDM1OWZhYjk2NDQwNDYyMTgxYzk1YmNhODk2YTQ4OWUiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0NzozNi4wMTM4MTBaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0NzozNi4wMTM4MTBaIiwia2V5X2lkIjoiZWQyNTUxOTozNjA4ZDUwZjBmNmYxYjk2NjRmZDc0MmZlMzg2ZjcyMzc1N2U2YjZjYmEzZjM1ZWIwM2UxODI4MzQxNTI2YWY0Iiwibm90X2JlZm9yZSI6IjIwMjYtMDgtMjVUMTk6NDc6MzYuMDEzODEwWiIsInB1YmxpY19rZXlfYjY0IjoiUXRCd2Nodi1LZkpLaXhQOGVXakhodTFfVnZKeWY5bDR0dmYxWV9pUzhNRT0iLCJyb2xlIjoib3QtYWRhcHRlciIsInNjaGVtYV92ZXJzaW9uIjoibTRnLXdvcmtsb2FkLWNyZWRlbnRpYWwtdjEiLCJzdWJqZWN0IjoidXJuOmFlZ2lzLW90Om00Zzp3b3JrbG9hZDpvdC1hZGFwdGVyIiwidHJ1c3RfZG9tYWluIjoiYWVnaXMtb3QubTRnLmxvY2FsIn0sInNpZ25hdHVyZSI6IjRBakx1SEpDdmZ2X19wcE9FcEptU3ZQT0xiTjFYOXIyX0tJUS1vc3ZFNkRteFlWQnlsQnE3VkFmUmhQY2E4eG9zMWFTR2RQLVBFX2dwa1p5aWo3N0F3PT0ifQo=",
+      "document": {
+        "credential": {
+          "audiences": [
+            "aegis-ot:m4g:gateway"
+          ],
+          "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+          "credential_id": "credential-d359fab96440462181c95bca896a489e",
+          "expires_at": "2026-08-25T20:47:36.013810Z",
+          "issued_at": "2026-08-25T19:47:36.013810Z",
+          "key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+          "not_before": "2026-08-25T19:47:36.013810Z",
+          "public_key_b64": "QtBwchv-KfJKixP8eWjHhu1_VvJyf9l4tvf1Y_iS8ME=",
+          "role": "ot-adapter",
+          "schema_version": "m4g-workload-credential-v1",
+          "subject": "urn:aegis-ot:m4g:workload:ot-adapter",
+          "trust_domain": "aegis-ot.m4g.local"
+        },
+        "signature": "4AjLuHJCvfv__ppOEpJmSvPOLbN1X9r2_KIQ-osvE6DmxYVBylBq7VAfRhPca8xos1aSGdP-PE_gpkZyij77Aw=="
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "d321b8073a45c67a506a1bb81440660a54ba627aa1650ba505770a619185deb5",
+      "uid": 65532
+    },
+    "trust-bundle.json": {
+      "bytes_base64": "eyJhdXRob3JpdHlfa2V5X2lkIjoiZWQyNTUxOTpiZjUyZTFmZjVhNGI2NGI5NGZhNjNjYTI3NDgyMjQzMmFlYzA3YjE0ZTEyMjYwYzY1OTI0MWUwNjYzYjUzMjgzIiwiYXV0aG9yaXR5X3B1YmxpY19rZXlfYjY0IjoiR2g3NjEzQ0oxWGs0VlRnSDJ3UThZUWlablZxTU8zd08wWTBtUkRxQTNmYz0iLCJidW5kbGVfaWQiOiJidW5kbGUtN2RmMmY3ZjM3YjJjNDRlNTk1OGI3M2MyNzU1MzhhZTEiLCJleHBpcmVzX2F0IjoiMjAyNi0wOC0yNVQyMDo0Nzo0OC43Nzc1OTdaIiwiaXNzdWVkX2F0IjoiMjAyNi0wOC0yNVQxOTo0Nzo0OC43Nzc1OTdaIiwicmV2b2NhdGlvbnMiOlt7ImNyZWRlbnRpYWxfaWQiOiJjcmVkZW50aWFsLWU1YmE5Yjg3NWFhNzRmNjZhMDg4Mzg4ZDYxYzAyZmIxIiwicmVhc29uIjoiYm91bmRlZCBNNGcgZ2F0ZXdheSBsZWFmIHJvdGF0aW9uIiwicmV2b2tlZF9hdCI6IjIwMjYtMDgtMjVUMTk6NDc6NDguNzc3NTk3WiJ9XSwic2NoZW1hX3ZlcnNpb24iOiJtNGctd29ya2xvYWQtdHJ1c3QtYnVuZGxlLXYxIiwic2VxdWVuY2UiOjIsInNpZ25hdHVyZSI6IlpxX0xGVXVPNnd5QTVLMk50cC1fcmhUZlUwTzE5Vl9uUjhUdDV3V1JwR1NYanhGQXhzekczazdlXzVkM002V0V4NXJ5d2NQNTJOMFJCWTl2dllCQUFnPT0iLCJ0cnVzdF9kb21haW4iOiJhZWdpcy1vdC5tNGcubG9jYWwifQo=",
+      "document": {
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "authority_public_key_b64": "Gh7613CJ1Xk4VTgH2wQ8YQiZnVqMO3wO0Y0mRDqA3fc=",
+        "bundle_id": "bundle-7df2f7f37b2c44e5958b73c275538ae1",
+        "expires_at": "2026-08-25T20:47:48.777597Z",
+        "issued_at": "2026-08-25T19:47:48.777597Z",
+        "revocations": [
+          {
+            "credential_id": "credential-e5ba9b875aa74f66a088388d61c02fb1",
+            "reason": "bounded M4g gateway leaf rotation",
+            "revoked_at": "2026-08-25T19:47:48.777597Z"
+          }
+        ],
+        "schema_version": "m4g-workload-trust-bundle-v1",
+        "sequence": 2,
+        "signature": "Zq_LFUuO6wyA5K2Ntp-_rhTfU0O19V_nR8Tt5wWRpGSXjxFAxszG3k7e_5d3M6WEx5rywcP52N0RBY9vvYBAAg==",
+        "trust_domain": "aegis-ot.m4g.local"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "136bb8cab6b5baf3195fef5d8ab9512478978d436bb1de1763ebb5b9f672509b",
+      "uid": 65532
+    }
+  },
+  "image_provenance": {
+    "agent-probe": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-agent-probe",
+      "image_id": "sha256:ef2e8fa24917289c3843d200deb6d101cdb20573d5a9c6c041bb5c6cd9beff83",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-agent-probe@sha256:ef2e8fa24917289c3843d200deb6d101cdb20573d5a9c6c041bb5c6cd9beff83"
+      ]
+    },
+    "candidate": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-candidate",
+      "image_id": "sha256:cd6f4215cd591311923c65635753171c7cc5e7fd84d73c9ad688a19f85e186e4",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-candidate@sha256:cd6f4215cd591311923c65635753171c7cc5e7fd84d73c9ad688a19f85e186e4"
+      ]
+    },
+    "identity-admin": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-identity-admin",
+      "image_id": "sha256:82cc9c0f945cdd0565a314d0ad8e675cde2677c1c2eacf2df0fa5cb583fe897f",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-identity-admin@sha256:82cc9c0f945cdd0565a314d0ad8e675cde2677c1c2eacf2df0fa5cb583fe897f"
+      ]
+    },
+    "identity-init": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-identity-init",
+      "image_id": "sha256:04c1692b76d982767b0686f19f78176f74adc3e82eee18e66e6991bad6c88c7c",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-identity-init@sha256:04c1692b76d982767b0686f19f78176f74adc3e82eee18e66e6991bad6c88c7c"
+      ]
+    },
+    "observer": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-observer",
+      "image_id": "sha256:6f268576d7d0f372eb225c7efbd079aac5a432d7af97984ceea8b20848474f91",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-observer@sha256:6f268576d7d0f372eb225c7efbd079aac5a432d7af97984ceea8b20848474f91"
+      ]
+    },
+    "ot-adapter": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-ot-adapter",
+      "image_id": "sha256:73fdd03bf9ffc84689f4fd846c9d17ba8208a4abd4add06f4e8080cf603e71df",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-ot-adapter@sha256:73fdd03bf9ffc84689f4fd846c9d17ba8208a4abd4add06f4e8080cf603e71df"
+      ]
+    },
+    "replay-init": {
+      "created": "2026-08-25T19:46:51.202857714Z",
+      "image": "aegis-ot-m4g-a800a5c-replay-init",
+      "image_id": "sha256:06a8b507d569a821f114dc141658bcb7c021dd6cb6ddb559bf5bda0639f6d662",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-replay-init@sha256:06a8b507d569a821f114dc141658bcb7c021dd6cb6ddb559bf5bda0639f6d662"
+      ]
+    },
+    "segmented-gateway": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-segmented-gateway",
+      "image_id": "sha256:50c4700726de69461aa7d89112cb7d91d174beddc773f71ae30731f591b90563",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-segmented-gateway@sha256:50c4700726de69461aa7d89112cb7d91d174beddc773f71ae30731f591b90563"
+      ]
+    },
+    "simulation": {
+      "created": "2026-08-25T19:47:11.225659334Z",
+      "image": "aegis-ot-m4g-a800a5c-simulation",
+      "image_id": "sha256:aab2c5c27b516cfc0884f6d243c5f07cd3ff2f9ddbd05a53070f2fe7c713d2a1",
+      "oci_revision": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+      "repo_digests": [
+        "aegis-ot-m4g-a800a5c-simulation@sha256:aab2c5c27b516cfc0884f6d243c5f07cd3ff2f9ddbd05a53070f2fe7c713d2a1"
+      ]
+    }
+  },
+  "normalized_compose_sha256": "fc8d493ef2e7acba7a692920517dfe6875702aafc34f630091ac83ea7e8cd5a7",
+  "primary_probe": {
+    "agent_direct_reachability": {
+      "candidate": false,
+      "observer": false,
+      "ot-adapter": false,
+      "simulation": false
+    },
+    "exact_gateway_request_replay": {
+      "acknowledgment": null,
+      "assessment": null,
+      "automatic_retry_count": 0,
+      "candidate_exchange": null,
+      "command": null,
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": null,
+      "dispatch_attempts": 0,
+      "execution_evidence_hash": "c6f065cdcc0eece566d90e34387a7e11eda5ccac18d0b7d317ea4184f985315a",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:45.186595Z",
+        "challenge_nonce": "JyMO6dVst5sLt6CDll2ysv7-MWjbWBZI",
+        "command_digest": null,
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "logical_time_s": 0.0,
+        "observation_id": "8216e8bf-7000-4e13-96d5-503f903fb377",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 1,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": null,
+        "schema_version": "signed-observation-v1",
+        "signature": "p8nn9eCliCSvqrEdKcdI3tfPZJ8CysmT38Im2kRLTQE2nrAA5TEGfXdJ8hcHhbJxyW-YfTAtwFKZWB-XsP3zDg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9938603000580032,
+            0.976534547544543,
+            0.9490646016784645,
+            0.9468420074238046,
+            0.9452143887291542,
+            0.9438035446949382,
+            0.9499928777832463,
+            0.9469737229182031,
+            0.9461904916716105,
+            0.944833475923079,
+            0.9446487922144212,
+            1.0001462529762855,
+            0.9953255860732702,
+            0.992552887750726
+          ],
+          "converged": true,
+          "input_digest": "6d3b376ddec05e0f05e9180790df697473c587f759664e0eed48e2ebe41939ff",
+          "isolated_resources": [],
+          "line_loading_pct": [
+            65.30118286851932,
+            65.97225929299988,
+            46.93481417317517,
+            38.05275309753639,
+            11.283691399628944,
+            29.848274907569177,
+            24.850331084037034,
+            21.809541215590095,
+            6.919584550692405,
+            16.014075645766457,
+            9.476242316810058,
+            8.908939098002547,
+            0.08566905715503977,
+            0.17506457302390332,
+            0.03728654218152448
+          ],
+          "maximum_line_loading_pct": 65.97225929299988,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.9438035446949382,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+          "observation_sequence": 1,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.742149999999995,
+          "simulation_time_s": 0.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+          "state_version": 0,
+          "thermal_violation_count": 0,
+          "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 100.0,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.0,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": null,
+      "post_observation": null,
+      "pre_observation": null,
+      "reasons": [
+        "observation_sequence_regressed",
+        "observation_challenge_replayed"
+      ],
+      "request": {
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "observation_challenge_nonce": "JyMO6dVst5sLt6CDll2ysv7-MWjbWBZI",
+        "observation_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "observation_id": "8216e8bf-7000-4e13-96d5-503f903fb377",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "v01SebyryjpHwVtyoZbyAXvu8fjckCZ9",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "observed_state_version": 0,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 5.0
+          },
+          "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:45.208710Z"
+        },
+        "request_id": "4e177150-4254-4b6c-993c-bc768c46e53f",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "not_dispatched"
+    },
+    "gateway_health": {
+      "candidate_boot_epoch": "58b18792-76b7-4b75-ba82-766c6bb2d0c3",
+      "coordination_backend": "segmented-compose-http-v1",
+      "evidence_records": 0,
+      "gateway_key_id": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+      "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+      "ot_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+      "pid": 1,
+      "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+      "role": "segmented-gateway",
+      "schema_version": "m4g-gateway-health-v1",
+      "status": "ready"
+    },
+    "nominal": {
+      "acknowledgment": {
+        "acknowledged_at": "2026-08-25T19:47:45.442884Z",
+        "acknowledgment_id": "da1cfd8b-f117-40ad-936f-0c37fc251c2f",
+        "assessment_digest": "ee2d171e40ff731266245389300823f66def253d31cb2aab04440c1ead406173",
+        "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+        "command_id": "d84a489a-953f-4be9-9b30-bbaee3ce4ee8",
+        "decision_id": "93df709b-1679-4145-804a-32f2862f82b6",
+        "dispatch_attempt": 1,
+        "dispatch_phase": "committed",
+        "observation_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "permit_digest": "bb7c460cf7b71b826d1e7dd3f9ff34f448a368717815ad385424b21bcb774cc8",
+        "permit_id": "34391abe-80ea-4457-82db-90f573b35260",
+        "permit_nonce": "313c8b49-c67f-4e52-a30e-d290ca83da7f",
+        "plc_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+        "plc_id": "virtual-control-device:m4g-segmented",
+        "plc_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+        "plc_scan": 1,
+        "post_actuator_setpoint": 0.0,
+        "post_state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+        "post_state_version": 1,
+        "post_topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+        "pre_actuator_setpoint": 1.0,
+        "pre_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9938603000580032,
+            0.976534547544543,
+            0.9490646016784645,
+            0.9468420074238046,
+            0.9452143887291542,
+            0.9438035446949382,
+            0.9499928777832463,
+            0.9469737229182031,
+            0.9461904916716105,
+            0.944833475923079,
+            0.9446487922144212,
+            1.0001462529762855,
+            0.9953255860732702,
+            0.992552887750726
+          ],
+          "converged": true,
+          "input_digest": "6d3b376ddec05e0f05e9180790df697473c587f759664e0eed48e2ebe41939ff",
+          "isolated_resources": [],
+          "line_loading_pct": [
+            65.30118286851932,
+            65.97225929299988,
+            46.93481417317517,
+            38.05275309753639,
+            11.283691399628944,
+            29.848274907569177,
+            24.850331084037034,
+            21.809541215590095,
+            6.919584550692405,
+            16.014075645766457,
+            9.476242316810058,
+            8.908939098002547,
+            0.08566905715503977,
+            0.17506457302390332,
+            0.03728654218152448
+          ],
+          "maximum_line_loading_pct": 65.97225929299988,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.9438035446949382,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+          "observation_sequence": 1,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.742149999999995,
+          "simulation_time_s": 0.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+          "state_version": 0,
+          "thermal_violation_count": 0,
+          "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 100.0,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.0,
+          "voltage_violation_count": 0
+        },
+        "pre_state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+        "pre_state_version": 0,
+        "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+        "reason": "command_applied_and_plc_read_back",
+        "request_digest": "16bb338ef7f25a05f6c2ff759f6a00fc6e64af2d3441047749eaae5b068da027",
+        "schema_version": "plc-command-ack-v1",
+        "signature": "0gsiTo69dILUHNOa5iVEOztZfDG8U-8oXsdNaQM230t_BGDy44FuCIilDYsGd7m5Drwc-N1xKUSI4m2gDt9FDQ==",
+        "simulation_time_s": 1.0,
+        "status": "applied"
+      },
+      "assessment": {
+        "assessment_id": "f89cfb84-c7f1-4e4e-8dd1-6d3e5c51c122",
+        "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+        "post_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "c9933c1552ed46a479f0e05567b2a0e18af623075ee7e8edce55c865f885face",
+          "observation_sequence": 2,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:46.186595Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 1.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "state_version": 1,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        },
+        "pre_state": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9938603000580032,
+            0.976534547544543,
+            0.9490646016784645,
+            0.9468420074238046,
+            0.9452143887291542,
+            0.9438035446949382,
+            0.9499928777832463,
+            0.9469737229182031,
+            0.9461904916716105,
+            0.944833475923079,
+            0.9446487922144212,
+            1.0001462529762855,
+            0.9953255860732702,
+            0.992552887750726
+          ],
+          "converged": true,
+          "input_digest": "6d3b376ddec05e0f05e9180790df697473c587f759664e0eed48e2ebe41939ff",
+          "isolated_resources": [],
+          "line_loading_pct": [
+            65.30118286851932,
+            65.97225929299988,
+            46.93481417317517,
+            38.05275309753639,
+            11.283691399628944,
+            29.848274907569177,
+            24.850331084037034,
+            21.809541215590095,
+            6.919584550692405,
+            16.014075645766457,
+            9.476242316810058,
+            8.908939098002547,
+            0.08566905715503977,
+            0.17506457302390332,
+            0.03728654218152448
+          ],
+          "maximum_line_loading_pct": 65.97225929299988,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.9438035446949382,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+          "observation_sequence": 1,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.742149999999995,
+          "simulation_time_s": 0.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+          "state_version": 0,
+          "thermal_violation_count": 0,
+          "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 100.0,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.0,
+          "voltage_violation_count": 0
+        },
+        "reasons": [],
+        "safe": true,
+        "schema_version": "candidate-assessment-v1"
+      },
+      "automatic_retry_count": 0,
+      "candidate_exchange": {
+        "call": {
+          "audience": "aegis-ot:m4g:physical-plant",
+          "call_nonce": "-oEL2-q-LF4KAkpTqPuYDgkdmhT45VcB",
+          "caller_key_id": "m4g-candidate-key-v1",
+          "expires_at": "2026-08-25T19:48:00.230001Z",
+          "issued_at": "2026-08-25T19:47:45.230001Z",
+          "operation": "simulate",
+          "payload": {
+            "command": {
+              "command_id": "d84a489a-953f-4be9-9b30-bbaee3ce4ee8",
+              "command_type": "set_line_service",
+              "operation": "isolate_asset",
+              "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+              "resource": "feeder-1",
+              "schema_version": "physical-command-v1",
+              "setpoint": 0.0,
+              "target": "Line 5-6",
+              "target_index": 4,
+              "unit": "boolean"
+            },
+            "schema_version": "m4g-plant-simulate-v1"
+          },
+          "payload_sha256": "f839421878a250ec12ce3b5b3a66f99cd1aeb90fce8e2beec6621fde56cfc5ca",
+          "role": "candidate",
+          "schema_version": "m4g-signed-plant-call-v1",
+          "signature": "UGFJD_fDUwmUnq9lDy67DaI4vqZzcI2PMzQOQOLtvIpVdNCJGm_jmL9NZn8mqCsmGHv8Sm31FBnzephD6ZDBCw==",
+          "target_plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+          "target_plant_key_id": "m4g-plant-key-v1"
+        },
+        "response": {
+          "call_sha256": "b96dad5797248124d90d65221092bec44e3135d630a04b3b38220c8d86f5fb94",
+          "operation": "simulate",
+          "payload": {
+            "assessment": {
+              "assessment_id": "f89cfb84-c7f1-4e4e-8dd1-6d3e5c51c122",
+              "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+              "post_state": {
+                "battery_injection_mw": {
+                  "battery-1": -0.6
+                },
+                "bus_voltage_pu": [
+                  1.03,
+                  0.9949984609296982,
+                  0.9804483372248348,
+                  0.957238729801661,
+                  0.9555792032074706,
+                  0.9544628208972457,
+                  null,
+                  0.958163798236279,
+                  0.9551694308344867,
+                  0.9543932702162847,
+                  0.9530484838176296,
+                  0.952865513177412,
+                  1.0001462529762852,
+                  0.9953255860732707,
+                  0.9925528877507264
+                ],
+                "converged": true,
+                "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+                "isolated_resources": [
+                  "feeder-1"
+                ],
+                "line_loading_pct": [
+                  53.87472597426189,
+                  54.60778755491812,
+                  35.43972544523311,
+                  26.648304218001982,
+                  null,
+                  29.59373817765251,
+                  24.631291485706903,
+                  21.620398478601256,
+                  6.859229772736998,
+                  15.851368691259896,
+                  9.476242316809149,
+                  8.908939098002548,
+                  null,
+                  0.17658731540238126,
+                  0.037286542180545536
+                ],
+                "maximum_line_loading_pct": 54.60778755491812,
+                "maximum_voltage_pu": 1.03,
+                "minimum_voltage_pu": 0.952865513177412,
+                "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+                "model_id": "pandapower-cigre-mv-all",
+                "observation_clock_domain": "UTC",
+                "observation_digest": "c9933c1552ed46a479f0e05567b2a0e18af623075ee7e8edce55c865f885face",
+                "observation_sequence": 2,
+                "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+                "observed_at": "2026-08-25T19:47:46.186595Z",
+                "priority_load_demand_mw": 1.0157500000000002,
+                "priority_load_served_mw": 1.0157500000000002,
+                "priority_load_served_pct": 100.0,
+                "schema_version": "physical-state-v1",
+                "served_load_mw": 44.1941,
+                "simulation_time_s": 1.0,
+                "simulator_version": "pandapower-3.5.4",
+                "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+                "state_version": 1,
+                "thermal_violation_count": 0,
+                "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+                "total_load_demand_mw": 44.742149999999995,
+                "total_load_served_pct": 98.77509239050873,
+                "unsafe_state": false,
+                "unserved_load_mw": 0.5480499999999964,
+                "voltage_violation_count": 0
+              },
+              "pre_state": {
+                "battery_injection_mw": {
+                  "battery-1": -0.6
+                },
+                "bus_voltage_pu": [
+                  1.03,
+                  0.9938603000580032,
+                  0.976534547544543,
+                  0.9490646016784645,
+                  0.9468420074238046,
+                  0.9452143887291542,
+                  0.9438035446949382,
+                  0.9499928777832463,
+                  0.9469737229182031,
+                  0.9461904916716105,
+                  0.944833475923079,
+                  0.9446487922144212,
+                  1.0001462529762855,
+                  0.9953255860732702,
+                  0.992552887750726
+                ],
+                "converged": true,
+                "input_digest": "6d3b376ddec05e0f05e9180790df697473c587f759664e0eed48e2ebe41939ff",
+                "isolated_resources": [],
+                "line_loading_pct": [
+                  65.30118286851932,
+                  65.97225929299988,
+                  46.93481417317517,
+                  38.05275309753639,
+                  11.283691399628944,
+                  29.848274907569177,
+                  24.850331084037034,
+                  21.809541215590095,
+                  6.919584550692405,
+                  16.014075645766457,
+                  9.476242316810058,
+                  8.908939098002547,
+                  0.08566905715503977,
+                  0.17506457302390332,
+                  0.03728654218152448
+                ],
+                "maximum_line_loading_pct": 65.97225929299988,
+                "maximum_voltage_pu": 1.03,
+                "minimum_voltage_pu": 0.9438035446949382,
+                "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+                "model_id": "pandapower-cigre-mv-all",
+                "observation_clock_domain": "UTC",
+                "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+                "observation_sequence": 1,
+                "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+                "observed_at": "2026-08-25T19:47:45.186595Z",
+                "priority_load_demand_mw": 1.0157500000000002,
+                "priority_load_served_mw": 1.0157500000000002,
+                "priority_load_served_pct": 100.0,
+                "schema_version": "physical-state-v1",
+                "served_load_mw": 44.742149999999995,
+                "simulation_time_s": 0.0,
+                "simulator_version": "pandapower-3.5.4",
+                "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+                "state_version": 0,
+                "thermal_violation_count": 0,
+                "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938",
+                "total_load_demand_mw": 44.742149999999995,
+                "total_load_served_pct": 100.0,
+                "unsafe_state": false,
+                "unserved_load_mw": 0.0,
+                "voltage_violation_count": 0
+              },
+              "reasons": [],
+              "safe": true,
+              "schema_version": "candidate-assessment-v1"
+            },
+            "schema_version": "m4g-plant-simulation-response-v1"
+          },
+          "plant_boot_epoch": "18445e18-0202-4849-aed7-2156652f7049",
+          "plant_key_id": "m4g-plant-key-v1",
+          "schema_version": "m4g-signed-plant-response-v1",
+          "signature": "fqGmpcxsnV98VIDw8xvcvI9gagb3N5U6019y2kB3WNR_otKcp2i3PsZSv3trnh5j7gmaIyqOFQ0zxaNAvsFoBw==",
+          "signed_at": "2026-08-25T19:47:45.295173Z",
+          "status": "ok"
+        },
+        "schema_version": "m4g-plant-exchange-v1"
+      },
+      "command": {
+        "command_id": "d84a489a-953f-4be9-9b30-bbaee3ce4ee8",
+        "command_type": "set_line_service",
+        "operation": "isolate_asset",
+        "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+        "resource": "feeder-1",
+        "schema_version": "physical-command-v1",
+        "setpoint": 0.0,
+        "target": "Line 5-6",
+        "target_index": 4,
+        "unit": "boolean"
+      },
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": {
+        "decided_at": "2026-08-25T19:47:45.227729Z",
+        "decision_id": "93df709b-1679-4145-804a-32f2862f82b6",
+        "evidence_record_hash": "fd187c4441f5dc97f01ce1ab65f39759701682f71c9849170666f1350eb87f84",
+        "outcome": "permit",
+        "policy_version": "contextual-v1+opa-aegis-v1",
+        "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+        "reasons": [
+          "all_checks_passed"
+        ],
+        "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+        "state_version": 0
+      },
+      "dispatch_attempts": 1,
+      "execution_evidence_hash": "c63082edb42f110e04904b53e25101cff9ce760fbbb9f4f3075d82264b9e27b4",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:45.451070Z",
+        "challenge_nonce": "oHSIPtdWI-bDzttnXQpstpgVhSZdk_en",
+        "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "envelope_digest": "df720a7d01087a481a5c516744f96b116c0335449c2560b85d385dea600dcc6f",
+        "logical_time_s": 1.0,
+        "observation_id": "4cd0e7bf-97b5-4247-8760-c44a64adac28",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 2,
+        "permit_id": "34391abe-80ea-4457-82db-90f573b35260",
+        "phase": "post_dispatch",
+        "plc_acknowledgment_digest": "38e5d196b09515e8650d542c6852ea9450aa9051f869ba0769fbb26d0a27fa3e",
+        "previous_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "schema_version": "signed-observation-v1",
+        "signature": "32OW5qmKCedAeJNtIn07z-MnEPs6j0l4hvXSfii3F9Xk91r-35GOEVuvaTbGa0cZPW7zo75OPZKq99z5b8ZdDg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a8cd7a4ce37adcbd99134d76c8234cd104012b8432280bcca14eaf14b8d8beaf",
+          "observation_sequence": 3,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.451070Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 1.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "state_version": 1,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": {
+        "base_permit": {
+          "assessment_digest": "ee2d171e40ff731266245389300823f66def253d31cb2aab04440c1ead406173",
+          "audience": "virtual-control-device:m4g-segmented",
+          "command": {
+            "command_id": "d84a489a-953f-4be9-9b30-bbaee3ce4ee8",
+            "command_type": "set_line_service",
+            "operation": "isolate_asset",
+            "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+            "resource": "feeder-1",
+            "schema_version": "physical-command-v1",
+            "setpoint": 0.0,
+            "target": "Line 5-6",
+            "target_index": 4,
+            "unit": "boolean"
+          },
+          "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+          "decision_id": "93df709b-1679-4145-804a-32f2862f82b6",
+          "decision_outcome": "permit",
+          "evidence_record_hash": "fd187c4441f5dc97f01ce1ab65f39759701682f71c9849170666f1350eb87f84",
+          "expected_post_state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "expected_post_state_version": 1,
+          "expected_post_topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "expires_at": "2026-08-25T19:47:47.299363Z",
+          "issued_at": "2026-08-25T19:47:45.299363Z",
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+          "permit_id": "34391abe-80ea-4457-82db-90f573b35260",
+          "permit_nonce": "313c8b49-c67f-4e52-a30e-d290ca83da7f",
+          "policy_version": "contextual-v1+opa-aegis-v1",
+          "proposal_digest": "19a05e2be6695041367cb3c8779337ed67a2289aa28252300b21e983a819359a",
+          "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+          "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+          "schema_version": "execution-permit-v1",
+          "signature": "uO2LkVyG4ipjIuexIm2ZOF-5tiPloiZnITz3yudiPiT29LhnyW_gPQonea6XCZFxfNwr84DEnTi_lTpA2S0eDw==",
+          "signing_key_id": "m4g-permit-key-v1",
+          "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+          "state_version": 0,
+          "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938"
+        },
+        "observation_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "observation_id": "8216e8bf-7000-4e13-96d5-503f903fb377",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "request_digest": "16bb338ef7f25a05f6c2ff759f6a00fc6e64af2d3441047749eaae5b068da027",
+        "schema_version": "capability-execution-permit-v1",
+        "signature": "LBf657kCa8i6FWersSKbym8-lRDzwFSpeH4Uqsd7D_JTRTaxr3TbmW3PjBUiRJzeBinZh_DaURHdlqJhFwAmCQ==",
+        "signing_key_id": "m4g-permit-key-v1",
+        "target_plc_boot_epoch": "df387888-fdf3-4610-bbab-bafba6f506b4",
+        "target_plc_id": "virtual-control-device:m4g-segmented",
+        "target_plc_key_id": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4"
+      },
+      "post_observation": {
+        "captured_at": "2026-08-25T19:47:45.451070Z",
+        "challenge_nonce": "oHSIPtdWI-bDzttnXQpstpgVhSZdk_en",
+        "command_digest": "663eb2ee5dcc36e54abb91e1bbf9e9167d71dc9c0d5feb47e2086ac7db3eb80f",
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "envelope_digest": "df720a7d01087a481a5c516744f96b116c0335449c2560b85d385dea600dcc6f",
+        "logical_time_s": 1.0,
+        "observation_id": "4cd0e7bf-97b5-4247-8760-c44a64adac28",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 2,
+        "permit_id": "34391abe-80ea-4457-82db-90f573b35260",
+        "phase": "post_dispatch",
+        "plc_acknowledgment_digest": "38e5d196b09515e8650d542c6852ea9450aa9051f869ba0769fbb26d0a27fa3e",
+        "previous_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "schema_version": "signed-observation-v1",
+        "signature": "32OW5qmKCedAeJNtIn07z-MnEPs6j0l4hvXSfii3F9Xk91r-35GOEVuvaTbGa0cZPW7zo75OPZKq99z5b8ZdDg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "a8cd7a4ce37adcbd99134d76c8234cd104012b8432280bcca14eaf14b8d8beaf",
+          "observation_sequence": 3,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.451070Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 1.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "state_version": 1,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "pre_observation": {
+        "captured_at": "2026-08-25T19:47:45.186595Z",
+        "challenge_nonce": "JyMO6dVst5sLt6CDll2ysv7-MWjbWBZI",
+        "command_digest": null,
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "logical_time_s": 0.0,
+        "observation_id": "8216e8bf-7000-4e13-96d5-503f903fb377",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 1,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": null,
+        "schema_version": "signed-observation-v1",
+        "signature": "p8nn9eCliCSvqrEdKcdI3tfPZJ8CysmT38Im2kRLTQE2nrAA5TEGfXdJ8hcHhbJxyW-YfTAtwFKZWB-XsP3zDg==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9938603000580032,
+            0.976534547544543,
+            0.9490646016784645,
+            0.9468420074238046,
+            0.9452143887291542,
+            0.9438035446949382,
+            0.9499928777832463,
+            0.9469737229182031,
+            0.9461904916716105,
+            0.944833475923079,
+            0.9446487922144212,
+            1.0001462529762855,
+            0.9953255860732702,
+            0.992552887750726
+          ],
+          "converged": true,
+          "input_digest": "6d3b376ddec05e0f05e9180790df697473c587f759664e0eed48e2ebe41939ff",
+          "isolated_resources": [],
+          "line_loading_pct": [
+            65.30118286851932,
+            65.97225929299988,
+            46.93481417317517,
+            38.05275309753639,
+            11.283691399628944,
+            29.848274907569177,
+            24.850331084037034,
+            21.809541215590095,
+            6.919584550692405,
+            16.014075645766457,
+            9.476242316810058,
+            8.908939098002547,
+            0.08566905715503977,
+            0.17506457302390332,
+            0.03728654218152448
+          ],
+          "maximum_line_loading_pct": 65.97225929299988,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.9438035446949382,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "8a9db81a432de5f20d010c9b705d0ae99d440fba6bdd9cab544577071fd8dec1",
+          "observation_sequence": 1,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.742149999999995,
+          "simulation_time_s": 0.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "aa76ea231b54931f017bcb96c31e7187a2c4f861986a3510a9e2b8ca65d2e81a",
+          "state_version": 0,
+          "thermal_violation_count": 0,
+          "topology_digest": "1060269da3c26194a337732c3ee75ddc1c0c23b00cd1b3040dc279f2f3208938",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 100.0,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.0,
+          "voltage_violation_count": 0
+        }
+      },
+      "reasons": [
+        "plc_acknowledgment_and_signed_post_observation_match"
+      ],
+      "request": {
+        "correlation_id": "322108d5-f790-4774-b725-e05da7008c47",
+        "observation_challenge_nonce": "JyMO6dVst5sLt6CDll2ysv7-MWjbWBZI",
+        "observation_envelope_digest": "6b2e285354fdeab51bcce172e3d8054b83e6e1e1ffda64534c29a727ba83ea1e",
+        "observation_id": "8216e8bf-7000-4e13-96d5-503f903fb377",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "v01SebyryjpHwVtyoZbyAXvu8fjckCZ9",
+          "observed_at": "2026-08-25T19:47:45.186595Z",
+          "observed_state_version": 0,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 5.0
+          },
+          "proposal_id": "m4g-nominal-b9e8bf31-76e8-4462-bd64-039cb966b9bf",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:45.208710Z"
+        },
+        "request_id": "4e177150-4254-4b6c-993c-bc768c46e53f",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "completed"
+    },
+    "schema_version": "m4g-capability-probe-v1",
+    "unsafe": {
+      "acknowledgment": null,
+      "assessment": null,
+      "automatic_retry_count": 0,
+      "candidate_exchange": null,
+      "command": null,
+      "coordination_backend": "segmented-compose-http-v1",
+      "decision": {
+        "decided_at": "2026-08-25T19:47:45.498816Z",
+        "decision_id": "dfab16fe-1c04-4c52-9966-1bbb176fdaec",
+        "evidence_record_hash": "4052245d8b73662b98f24efbec376f2926e55dad20708fdea1b95faf1ad86b71",
+        "outcome": "deny",
+        "policy_version": "contextual-v1+opa-aegis-v1",
+        "proposal_id": "m4g-unsafe-22248013-4319-4acc-8ebe-0fa179c07511",
+        "reasons": [
+          "critical_load_below_limit"
+        ],
+        "safety_version": "surrogate-safety-v1-m4g-supervisory-limits",
+        "state_version": 1
+      },
+      "dispatch_attempts": 0,
+      "execution_evidence_hash": "0e47c0754b1c5b4b32ee91a24d45c84481d5d09e7e6c7cea600b9c76eabfb390",
+      "last_observation": {
+        "captured_at": "2026-08-25T19:47:45.477656Z",
+        "challenge_nonce": "xyIPivnSn4qZm4ivNZvgfHgNvZ5vjqUH",
+        "command_digest": null,
+        "correlation_id": "4176f038-0825-4943-b2fe-403f752ba1d4",
+        "envelope_digest": "b4d1b7cf6c248779e2bc60f7be189ba542aa46282ccb478aa31fb16343579612",
+        "logical_time_s": 1.0,
+        "observation_id": "779de2f9-673b-474e-a2cb-7205bfc093bb",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 3,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "df720a7d01087a481a5c516744f96b116c0335449c2560b85d385dea600dcc6f",
+        "schema_version": "signed-observation-v1",
+        "signature": "qiO7HXqhQCvrCAtub7knhQ5-_qmRH3aLSEF5Dq2zwf12udeE08iTFnu5IDL8K_LbuEGMHJdZzZvIJGrZoAt0CQ==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "b6384efcb51137fcaad52f03c4d44655d6062f364a0efa8f948bc5cda1ae0982",
+          "observation_sequence": 4,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.477656Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 1.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "state_version": 1,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "permit": null,
+      "post_observation": null,
+      "pre_observation": {
+        "captured_at": "2026-08-25T19:47:45.477656Z",
+        "challenge_nonce": "xyIPivnSn4qZm4ivNZvgfHgNvZ5vjqUH",
+        "command_digest": null,
+        "correlation_id": "4176f038-0825-4943-b2fe-403f752ba1d4",
+        "envelope_digest": "b4d1b7cf6c248779e2bc60f7be189ba542aa46282ccb478aa31fb16343579612",
+        "logical_time_s": 1.0,
+        "observation_id": "779de2f9-673b-474e-a2cb-7205bfc093bb",
+        "observer_boot_epoch": "1e9f2d0d-b136-44f6-9458-8ccd5e9b9646",
+        "observer_id": "signed-observer:m4g-segmented",
+        "observer_key_id": "m4g-observer-key-v1",
+        "observer_sequence": 3,
+        "permit_id": null,
+        "phase": "pre_authorization",
+        "plc_acknowledgment_digest": null,
+        "previous_envelope_digest": "df720a7d01087a481a5c516744f96b116c0335449c2560b85d385dea600dcc6f",
+        "schema_version": "signed-observation-v1",
+        "signature": "qiO7HXqhQCvrCAtub7knhQ5-_qmRH3aLSEF5Dq2zwf12udeE08iTFnu5IDL8K_LbuEGMHJdZzZvIJGrZoAt0CQ==",
+        "snapshot": {
+          "battery_injection_mw": {
+            "battery-1": -0.6
+          },
+          "bus_voltage_pu": [
+            1.03,
+            0.9949984609296982,
+            0.9804483372248348,
+            0.957238729801661,
+            0.9555792032074706,
+            0.9544628208972457,
+            null,
+            0.958163798236279,
+            0.9551694308344867,
+            0.9543932702162847,
+            0.9530484838176296,
+            0.952865513177412,
+            1.0001462529762852,
+            0.9953255860732707,
+            0.9925528877507264
+          ],
+          "converged": true,
+          "input_digest": "359c5a11f975d4528382f293cb0f7124bf443cca47abcfab0d2d3424e212932b",
+          "isolated_resources": [
+            "feeder-1"
+          ],
+          "line_loading_pct": [
+            53.87472597426189,
+            54.60778755491812,
+            35.43972544523311,
+            26.648304218001982,
+            null,
+            29.59373817765251,
+            24.631291485706903,
+            21.620398478601256,
+            6.859229772736998,
+            15.851368691259896,
+            9.476242316809149,
+            8.908939098002548,
+            null,
+            0.17658731540238126,
+            0.037286542180545536
+          ],
+          "maximum_line_loading_pct": 54.60778755491812,
+          "maximum_voltage_pu": 1.03,
+          "minimum_voltage_pu": 0.952865513177412,
+          "model_digest": "49b0559c9a7158f9ec6c5ae84c27306dd28119ac0516f465e0b19f22a26f6035",
+          "model_id": "pandapower-cigre-mv-all",
+          "observation_clock_domain": "UTC",
+          "observation_digest": "b6384efcb51137fcaad52f03c4d44655d6062f364a0efa8f948bc5cda1ae0982",
+          "observation_sequence": 4,
+          "observation_source_id": "segmented-capability-plant:18445e18-0202-4849-aed7-2156652f7049",
+          "observed_at": "2026-08-25T19:47:45.477656Z",
+          "priority_load_demand_mw": 1.0157500000000002,
+          "priority_load_served_mw": 1.0157500000000002,
+          "priority_load_served_pct": 100.0,
+          "schema_version": "physical-state-v1",
+          "served_load_mw": 44.1941,
+          "simulation_time_s": 1.0,
+          "simulator_version": "pandapower-3.5.4",
+          "state_digest": "537125cb0e14448eb977802ff8537bd0d30839676e164dff7a6ad8e818c6e1af",
+          "state_version": 1,
+          "thermal_violation_count": 0,
+          "topology_digest": "8d6187fd577d241a8dd5219de759230e3ddd05d314079b76e773923a9e2ce65d",
+          "total_load_demand_mw": 44.742149999999995,
+          "total_load_served_pct": 98.77509239050873,
+          "unsafe_state": false,
+          "unserved_load_mw": 0.5480499999999964,
+          "voltage_violation_count": 0
+        }
+      },
+      "reasons": [
+        "critical_load_below_limit"
+      ],
+      "request": {
+        "correlation_id": "4176f038-0825-4943-b2fe-403f752ba1d4",
+        "observation_challenge_nonce": "xyIPivnSn4qZm4ivNZvgfHgNvZ5vjqUH",
+        "observation_envelope_digest": "b4d1b7cf6c248779e2bc60f7be189ba542aa46282ccb478aa31fb16343579612",
+        "observation_id": "779de2f9-673b-474e-a2cb-7205bfc093bb",
+        "proposal": {
+          "actor_id": "agent:operator-1",
+          "confidence": 0.95,
+          "delegation_chain": [
+            "grant-root",
+            "grant-leaf"
+          ],
+          "human_approval_id": null,
+          "mission_id": "microgrid-containment",
+          "nonce": "iPxQklLittGZ9wds_Vhjv4tGxYDJ79kW",
+          "observed_at": "2026-08-25T19:47:45.477656Z",
+          "observed_state_version": 1,
+          "operation": "isolate_asset",
+          "parameters": {
+            "critical_load_impact_pct": 30.0
+          },
+          "proposal_id": "m4g-unsafe-22248013-4319-4acc-8ebe-0fa179c07511",
+          "resource": "feeder-1",
+          "risk_score": 40.0,
+          "submitted_at": "2026-08-25T19:47:45.489572Z"
+        },
+        "request_id": "8941e274-5715-495a-bd44-087da3dc83df",
+        "schema_version": "capability-action-request-v1"
+      },
+      "schema_version": "segmented-capability-closed-loop-result-v1",
+      "status": "not_dispatched"
+    }
+  },
+  "private_key_material_retained": false,
+  "project_name": "aegis-ot-m4g-a800a5c",
+  "replay_after_fixed_nonce": {
+    "semantic-replay.json": {
+      "bytes_base64": "eyJjb21tYW5kX2lkcyI6WyJkMDg3Y2Q3Ny00NjZiLTQzYTktYjdhMC03NGEwOTZiYjA1N2YiLCJkODRhNDg5YS05NTNmLTRiZTktOWIzMC1iYmFlZTNjZTRlZTgiXSwicGVybWl0X2lkcyI6WyIzNDM5MWFiZS04MGVhLTQ0NTctODJkYi05MGY1NzNiMzUyNjAiLCJiMGJkYzFmYS1jNzdmLTRlZWQtYWQzOC0wNzVlYzhjZjIzZjYiXSwicGVybWl0X25vbmNlcyI6WyIwZmE3MTYzMC1iM2VlLTQzYmUtYTUxNy0zZDkxMGYwYjljMTUiLCIzMTNjOGI0OS1jNjdmLTRlNTItYTMwZS1kMjkwY2E4M2RhN2YiXSwicmVxdWVzdF9kaWdlc3RzIjpbIjE2YmIzMzhlZjdmMjVhMDVmNmMyZmY3NTlmNmEwMGZjNmU2NGFmMmQzNDQxMDQ3NzQ5ZWFhZTViMDY4ZGEwMjciLCI3Njc3MTAyOWNjOTg0Mzk5Mjc3NWRlNzNjZGI0MDViOWE3MGQ4ZDE5NGE4YWY4NzY4YWNmZmI2NzBlZGRhNjMwIl19",
+      "document": {
+        "command_ids": [
+          "d087cd77-466b-43a9-b7a0-74a096bb057f",
+          "d84a489a-953f-4be9-9b30-bbaee3ce4ee8"
+        ],
+        "permit_ids": [
+          "34391abe-80ea-4457-82db-90f573b35260",
+          "b0bdc1fa-c77f-4eed-ad38-075ec8cf23f6"
+        ],
+        "permit_nonces": [
+          "0fa71630-b3ee-43be-a517-3d910f0b9c15",
+          "313c8b49-c67f-4e52-a30e-d290ca83da7f"
+        ],
+        "request_digests": [
+          "16bb338ef7f25a05f6c2ff759f6a00fc6e64af2d3441047749eaae5b068da027",
+          "76771029cc9843992775de73cdb405b9a70d8d194a8af8768acffb670edda630"
+        ]
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "c36968253f24b3dd5e83491b256b27631420d455f58fc50949fa871c2d08f578",
+      "uid": 65532
+    },
+    "workload-replay.json": {
+      "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om00ZzpvdC1hZGFwdGVyIiwiYXV0aG9yaXR5X2tleV9pZCI6ImVkMjU1MTk6YmY1MmUxZmY1YTRiNjRiOTRmYTYzY2EyNzQ4MjI0MzJhZWMwN2IxNGUxMjI2MGM2NTkyNDFlMDY2M2I1MzI4MyIsInJlc2VydmF0aW9ucyI6W3sibm9uY2UiOiJmTHVCSmQtVGhDSHh6ZDRkbzB0Mk1XQ3g0RG9NdVBrZiIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6IjU1YWU3NDY1NmVjYWM5NWQ0ZDllNzkwMmI3YWE1ZWI2OWUyNjEwNTEwZjhlMWEzODYwOWVjYmQ2MDIyZWM3NGUifSx7Im5vbmNlIjoibTRnLWNyb3NzLWxlYWYtdHJhbnNwb3J0LW5vbmNlLTAwMDEiLCJzaWduZWRfcmVxdWVzdF9zaGEyNTYiOiI5NGY3NDY0OGRkYTgxODhiNDVmNjg1YWE2NjE1OGU0Yjk2YjFhMjRmNGFmNTliODI4NTRmM2Q1YmMxMTI3NjczIn1dLCJzY2hlbWFfdmVyc2lvbiI6Im00Zy13b3JrbG9hZC1yZXBsYXktbGVkZ2VyLXYxIiwidHJ1c3RfZG9tYWluIjoiYWVnaXMtb3QubTRnLmxvY2FsIiwid29ya2xvYWRfc3ViamVjdCI6InVybjphZWdpcy1vdDptNGc6d29ya2xvYWQ6Z2F0ZXdheSJ9",
+      "document": {
+        "audience": "aegis-ot:m4g:ot-adapter",
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "reservations": [
+          {
+            "nonce": "fLuBJd-ThCHxzd4do0t2MWCx4DoMuPkf",
+            "signed_request_sha256": "55ae74656ecac95d4d9e7902b7aa5eb69e2610510f8e1a38609ecbd6022ec74e"
+          },
+          {
+            "nonce": "m4g-cross-leaf-transport-nonce-0001",
+            "signed_request_sha256": "94f74648dda8188b45f685aa66158e4b96b1a24f4af59b82854f3d5bc1127673"
+          }
+        ],
+        "schema_version": "m4g-workload-replay-ledger-v1",
+        "trust_domain": "aegis-ot.m4g.local",
+        "workload_subject": "urn:aegis-ot:m4g:workload:gateway"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "2be2c54903fe290092aa2f389b4323acd616061c96dfafa451ac269c09c7bb79",
+      "uid": 65532
+    }
+  },
+  "replay_after_rotation": {
+    "semantic-replay.json": {
+      "bytes_base64": "eyJjb21tYW5kX2lkcyI6WyJjNzA4Y2ExYy0xZTczLTQ4NGQtOWVlNy0xOTA1ZTUxZGRlNDUiLCJkMDg3Y2Q3Ny00NjZiLTQzYTktYjdhMC03NGEwOTZiYjA1N2YiLCJkODRhNDg5YS05NTNmLTRiZTktOWIzMC1iYmFlZTNjZTRlZTgiXSwicGVybWl0X2lkcyI6WyIwNzQ4NWY3Mi1jNzI2LTQ1OTktOWEwZi03YWEwNDkzMDZmZDkiLCIzNDM5MWFiZS04MGVhLTQ0NTctODJkYi05MGY1NzNiMzUyNjAiLCJiMGJkYzFmYS1jNzdmLTRlZWQtYWQzOC0wNzVlYzhjZjIzZjYiXSwicGVybWl0X25vbmNlcyI6WyIwZmE3MTYzMC1iM2VlLTQzYmUtYTUxNy0zZDkxMGYwYjljMTUiLCIzMTNjOGI0OS1jNjdmLTRlNTItYTMwZS1kMjkwY2E4M2RhN2YiLCI4YmI5N2E1NC0yMGFmLTQ4YjItYTFlNS1kYWRlZjdmY2JiNzIiXSwicmVxdWVzdF9kaWdlc3RzIjpbIjE2YmIzMzhlZjdmMjVhMDVmNmMyZmY3NTlmNmEwMGZjNmU2NGFmMmQzNDQxMDQ3NzQ5ZWFhZTViMDY4ZGEwMjciLCI3Njc3MTAyOWNjOTg0Mzk5Mjc3NWRlNzNjZGI0MDViOWE3MGQ4ZDE5NGE4YWY4NzY4YWNmZmI2NzBlZGRhNjMwIiwiZjk1YWFkMzcyOWY4Y2MyZDk5NmMzNzE0YjAwMGZjNzk3NmUwZDQyNzAyYTY3MTFkM2U3NjQ0YTcxMTg2MDM1MSJdfQ==",
+      "document": {
+        "command_ids": [
+          "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+          "d087cd77-466b-43a9-b7a0-74a096bb057f",
+          "d84a489a-953f-4be9-9b30-bbaee3ce4ee8"
+        ],
+        "permit_ids": [
+          "07485f72-c726-4599-9a0f-7aa049306fd9",
+          "34391abe-80ea-4457-82db-90f573b35260",
+          "b0bdc1fa-c77f-4eed-ad38-075ec8cf23f6"
+        ],
+        "permit_nonces": [
+          "0fa71630-b3ee-43be-a517-3d910f0b9c15",
+          "313c8b49-c67f-4e52-a30e-d290ca83da7f",
+          "8bb97a54-20af-48b2-a1e5-dadef7fcbb72"
+        ],
+        "request_digests": [
+          "16bb338ef7f25a05f6c2ff759f6a00fc6e64af2d3441047749eaae5b068da027",
+          "76771029cc9843992775de73cdb405b9a70d8d194a8af8768acffb670edda630",
+          "f95aad3729f8cc2d996c3714b000fc7976e0d42702a6711d3e7644a711860351"
+        ]
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "860e0e314704403b7f97c3f5956460372d7638fa0839c4aa326fa8fe5ac3eff4",
+      "uid": 65532
+    },
+    "workload-replay.json": {
+      "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om00ZzpvdC1hZGFwdGVyIiwiYXV0aG9yaXR5X2tleV9pZCI6ImVkMjU1MTk6YmY1MmUxZmY1YTRiNjRiOTRmYTYzY2EyNzQ4MjI0MzJhZWMwN2IxNGUxMjI2MGM2NTkyNDFlMDY2M2I1MzI4MyIsInJlc2VydmF0aW9ucyI6W3sibm9uY2UiOiIxYTJRV2dQVE1ZQk5OTVdaQk9tRExWcFpZS2syUmpxaiIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6Ijg1ODFhYmQ5ZWY0MzQ0ODI0YTEzNDhjZWY4YjFlN2VlMTE5ZGI2NGMyMTI2YjdhNzZmYmYxODRiNzI2YzdiNDgifSx7Im5vbmNlIjoiZkx1QkpkLVRoQ0h4emQ0ZG8wdDJNV0N4NERvTXVQa2YiLCJzaWduZWRfcmVxdWVzdF9zaGEyNTYiOiI1NWFlNzQ2NTZlY2FjOTVkNGQ5ZTc5MDJiN2FhNWViNjllMjYxMDUxMGY4ZTFhMzg2MDllY2JkNjAyMmVjNzRlIn0seyJub25jZSI6Im00Zy1jcm9zcy1sZWFmLXRyYW5zcG9ydC1ub25jZS0wMDAxIiwic2lnbmVkX3JlcXVlc3Rfc2hhMjU2IjoiOTRmNzQ2NDhkZGE4MTg4YjQ1ZjY4NWFhNjYxNThlNGI5NmIxYTI0ZjRhZjU5YjgyODU0ZjNkNWJjMTEyNzY3MyJ9XSwic2NoZW1hX3ZlcnNpb24iOiJtNGctd29ya2xvYWQtcmVwbGF5LWxlZGdlci12MSIsInRydXN0X2RvbWFpbiI6ImFlZ2lzLW90Lm00Zy5sb2NhbCIsIndvcmtsb2FkX3N1YmplY3QiOiJ1cm46YWVnaXMtb3Q6bTRnOndvcmtsb2FkOmdhdGV3YXkifQ==",
+      "document": {
+        "audience": "aegis-ot:m4g:ot-adapter",
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "reservations": [
+          {
+            "nonce": "1a2QWgPTMYBNNMWZBOmDLVpZYKk2Rjqj",
+            "signed_request_sha256": "8581abd9ef4344824a1348cef8b1e7ee119db64c2126b7a76fbf184b726c7b48"
+          },
+          {
+            "nonce": "fLuBJd-ThCHxzd4do0t2MWCx4DoMuPkf",
+            "signed_request_sha256": "55ae74656ecac95d4d9e7902b7aa5eb69e2610510f8e1a38609ecbd6022ec74e"
+          },
+          {
+            "nonce": "m4g-cross-leaf-transport-nonce-0001",
+            "signed_request_sha256": "94f74648dda8188b45f685aa66158e4b96b1a24f4af59b82854f3d5bc1127673"
+          }
+        ],
+        "schema_version": "m4g-workload-replay-ledger-v1",
+        "trust_domain": "aegis-ot.m4g.local",
+        "workload_subject": "urn:aegis-ot:m4g:workload:gateway"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "5723cdc1bc0d935a8b9dc145a2db14ee34a0dfe51331a6f722371fa9b8151918",
+      "uid": 65532
+    }
+  },
+  "replay_final": {
+    "semantic-replay.json": {
+      "bytes_base64": "eyJjb21tYW5kX2lkcyI6WyJjNzA4Y2ExYy0xZTczLTQ4NGQtOWVlNy0xOTA1ZTUxZGRlNDUiLCJkMDg3Y2Q3Ny00NjZiLTQzYTktYjdhMC03NGEwOTZiYjA1N2YiLCJkODRhNDg5YS05NTNmLTRiZTktOWIzMC1iYmFlZTNjZTRlZTgiXSwicGVybWl0X2lkcyI6WyIwNzQ4NWY3Mi1jNzI2LTQ1OTktOWEwZi03YWEwNDkzMDZmZDkiLCIzNDM5MWFiZS04MGVhLTQ0NTctODJkYi05MGY1NzNiMzUyNjAiLCJiMGJkYzFmYS1jNzdmLTRlZWQtYWQzOC0wNzVlYzhjZjIzZjYiXSwicGVybWl0X25vbmNlcyI6WyIwZmE3MTYzMC1iM2VlLTQzYmUtYTUxNy0zZDkxMGYwYjljMTUiLCIzMTNjOGI0OS1jNjdmLTRlNTItYTMwZS1kMjkwY2E4M2RhN2YiLCI4YmI5N2E1NC0yMGFmLTQ4YjItYTFlNS1kYWRlZjdmY2JiNzIiXSwicmVxdWVzdF9kaWdlc3RzIjpbIjE2YmIzMzhlZjdmMjVhMDVmNmMyZmY3NTlmNmEwMGZjNmU2NGFmMmQzNDQxMDQ3NzQ5ZWFhZTViMDY4ZGEwMjciLCI3Njc3MTAyOWNjOTg0Mzk5Mjc3NWRlNzNjZGI0MDViOWE3MGQ4ZDE5NGE4YWY4NzY4YWNmZmI2NzBlZGRhNjMwIiwiZjk1YWFkMzcyOWY4Y2MyZDk5NmMzNzE0YjAwMGZjNzk3NmUwZDQyNzAyYTY3MTFkM2U3NjQ0YTcxMTg2MDM1MSJdfQ==",
+      "document": {
+        "command_ids": [
+          "c708ca1c-1e73-484d-9ee7-1905e51dde45",
+          "d087cd77-466b-43a9-b7a0-74a096bb057f",
+          "d84a489a-953f-4be9-9b30-bbaee3ce4ee8"
+        ],
+        "permit_ids": [
+          "07485f72-c726-4599-9a0f-7aa049306fd9",
+          "34391abe-80ea-4457-82db-90f573b35260",
+          "b0bdc1fa-c77f-4eed-ad38-075ec8cf23f6"
+        ],
+        "permit_nonces": [
+          "0fa71630-b3ee-43be-a517-3d910f0b9c15",
+          "313c8b49-c67f-4e52-a30e-d290ca83da7f",
+          "8bb97a54-20af-48b2-a1e5-dadef7fcbb72"
+        ],
+        "request_digests": [
+          "16bb338ef7f25a05f6c2ff759f6a00fc6e64af2d3441047749eaae5b068da027",
+          "76771029cc9843992775de73cdb405b9a70d8d194a8af8768acffb670edda630",
+          "f95aad3729f8cc2d996c3714b000fc7976e0d42702a6711d3e7644a711860351"
+        ]
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "860e0e314704403b7f97c3f5956460372d7638fa0839c4aa326fa8fe5ac3eff4",
+      "uid": 65532
+    },
+    "workload-replay.json": {
+      "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om00ZzpvdC1hZGFwdGVyIiwiYXV0aG9yaXR5X2tleV9pZCI6ImVkMjU1MTk6YmY1MmUxZmY1YTRiNjRiOTRmYTYzY2EyNzQ4MjI0MzJhZWMwN2IxNGUxMjI2MGM2NTkyNDFlMDY2M2I1MzI4MyIsInJlc2VydmF0aW9ucyI6W3sibm9uY2UiOiIxYTJRV2dQVE1ZQk5OTVdaQk9tRExWcFpZS2syUmpxaiIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6Ijg1ODFhYmQ5ZWY0MzQ0ODI0YTEzNDhjZWY4YjFlN2VlMTE5ZGI2NGMyMTI2YjdhNzZmYmYxODRiNzI2YzdiNDgifSx7Im5vbmNlIjoiZkx1QkpkLVRoQ0h4emQ0ZG8wdDJNV0N4NERvTXVQa2YiLCJzaWduZWRfcmVxdWVzdF9zaGEyNTYiOiI1NWFlNzQ2NTZlY2FjOTVkNGQ5ZTc5MDJiN2FhNWViNjllMjYxMDUxMGY4ZTFhMzg2MDllY2JkNjAyMmVjNzRlIn0seyJub25jZSI6Im00Zy1jcm9zcy1sZWFmLXRyYW5zcG9ydC1ub25jZS0wMDAxIiwic2lnbmVkX3JlcXVlc3Rfc2hhMjU2IjoiOTRmNzQ2NDhkZGE4MTg4YjQ1ZjY4NWFhNjYxNThlNGI5NmIxYTI0ZjRhZjU5YjgyODU0ZjNkNWJjMTEyNzY3MyJ9XSwic2NoZW1hX3ZlcnNpb24iOiJtNGctd29ya2xvYWQtcmVwbGF5LWxlZGdlci12MSIsInRydXN0X2RvbWFpbiI6ImFlZ2lzLW90Lm00Zy5sb2NhbCIsIndvcmtsb2FkX3N1YmplY3QiOiJ1cm46YWVnaXMtb3Q6bTRnOndvcmtsb2FkOmdhdGV3YXkifQ==",
+      "document": {
+        "audience": "aegis-ot:m4g:ot-adapter",
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "reservations": [
+          {
+            "nonce": "1a2QWgPTMYBNNMWZBOmDLVpZYKk2Rjqj",
+            "signed_request_sha256": "8581abd9ef4344824a1348cef8b1e7ee119db64c2126b7a76fbf184b726c7b48"
+          },
+          {
+            "nonce": "fLuBJd-ThCHxzd4do0t2MWCx4DoMuPkf",
+            "signed_request_sha256": "55ae74656ecac95d4d9e7902b7aa5eb69e2610510f8e1a38609ecbd6022ec74e"
+          },
+          {
+            "nonce": "m4g-cross-leaf-transport-nonce-0001",
+            "signed_request_sha256": "94f74648dda8188b45f685aa66158e4b96b1a24f4af59b82854f3d5bc1127673"
+          }
+        ],
+        "schema_version": "m4g-workload-replay-ledger-v1",
+        "trust_domain": "aegis-ot.m4g.local",
+        "workload_subject": "urn:aegis-ot:m4g:workload:gateway"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "5723cdc1bc0d935a8b9dc145a2db14ee34a0dfe51331a6f722371fa9b8151918",
+      "uid": 65532
+    }
+  },
+  "replay_initial": {
+    "semantic-replay.json": {
+      "bytes_base64": "eyJjb21tYW5kX2lkcyI6W10sInBlcm1pdF9pZHMiOltdLCJwZXJtaXRfbm9uY2VzIjpbXSwicmVxdWVzdF9kaWdlc3RzIjpbXX0=",
+      "document": {
+        "command_ids": [],
+        "permit_ids": [],
+        "permit_nonces": [],
+        "request_digests": []
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "fe11d2bfde2cfc81e505439be07b1a426191fc9e6de09936d5a6b52103390536",
+      "uid": 65532
+    },
+    "workload-replay.json": {
+      "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om00ZzpvdC1hZGFwdGVyIiwiYXV0aG9yaXR5X2tleV9pZCI6ImVkMjU1MTk6YmY1MmUxZmY1YTRiNjRiOTRmYTYzY2EyNzQ4MjI0MzJhZWMwN2IxNGUxMjI2MGM2NTkyNDFlMDY2M2I1MzI4MyIsInJlc2VydmF0aW9ucyI6W10sInNjaGVtYV92ZXJzaW9uIjoibTRnLXdvcmtsb2FkLXJlcGxheS1sZWRnZXItdjEiLCJ0cnVzdF9kb21haW4iOiJhZWdpcy1vdC5tNGcubG9jYWwiLCJ3b3JrbG9hZF9zdWJqZWN0IjoidXJuOmFlZ2lzLW90Om00Zzp3b3JrbG9hZDpnYXRld2F5In0=",
+      "document": {
+        "audience": "aegis-ot:m4g:ot-adapter",
+        "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+        "reservations": [],
+        "schema_version": "m4g-workload-replay-ledger-v1",
+        "trust_domain": "aegis-ot.m4g.local",
+        "workload_subject": "urn:aegis-ot:m4g:workload:gateway"
+      },
+      "gid": 65532,
+      "mode": "0600",
+      "sha256": "1fa5241aaa22e0780def222a245709ae993e0d9507b4a894995416a41f2dcbb7",
+      "uid": 65532
+    }
+  },
+  "replay_initialization": {
+    "authority_key_id": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+    "authority_public_key_sha256": "bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+    "directory_mode": "0700",
+    "gateway_workload_subject": "urn:aegis-ot:m4g:workload:gateway",
+    "runtime_gid": 65532,
+    "runtime_uid": 65532,
+    "schema_version": "m4g-replay-volume-initialization-v1",
+    "semantic_ledger_mode": "0600",
+    "semantic_replay_reservations": 0,
+    "workload_ledger_mode": "0600",
+    "workload_replay_audience": "aegis-ot:m4g:ot-adapter",
+    "workload_replay_reservations": 0,
+    "workload_trust_domain": "aegis-ot.m4g.local"
+  },
+  "rotation": {
+    "bundle_expires_at": "2026-08-25T20:47:48.777597+00:00",
+    "bundle_id": "bundle-7df2f7f37b2c44e5958b73c275538ae1",
+    "credential": {
+      "audiences": [
+        "aegis-ot:m4g:ot-adapter"
+      ],
+      "credential_id": "credential-e15cd61cd4c446f69121d1f8b19ed057",
+      "expires_at": "2026-08-25T20:47:48.777597+00:00",
+      "key_id": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "path": "/var/lib/aegis-ot/identity/gateway.credential.json",
+      "role": "gateway",
+      "subject": "urn:aegis-ot:m4g:workload:gateway"
+    },
+    "operation": "rotate",
+    "prior_sequence": 1,
+    "published_sequence": 2,
+    "revoked_credential_id": "credential-e5ba9b875aa74f66a088388d61c02fb1",
+    "runtime_private_key_written": false,
+    "schema_version": "m4g-workload-identity-administration-v1",
+    "trust_domain": "aegis-ot.m4g.local"
+  },
+  "rotation_fixture_classification": "Gateway-internal fresh full-authorization and OT-transport fixture; agent ingress is exercised separately by agent-probe",
+  "schema_version": "m4g-workload-identity-experiment-v1",
+  "semantic_outcome_sha256": "39eea09765b5da627b41c8cb1834a179282530de32039fb562d971a8f720f011",
+  "semantic_projection": {
+    "acceptance": {
+      "bundle_faults_failed_closed_without_effect": true,
+      "clean_source_bound_to_images_and_containers": true,
+      "cross_leaf_reused_transport_nonce_rejected": true,
+      "fresh_request_after_rotation_accepted": true,
+      "gateway_leaf_rotated_same_subject_and_old_leaf_revoked": true,
+      "identity_and_replay_initialized_private": true,
+      "only_gateway_recreated_for_leaf_rotation": true,
+      "primary_agent_campaign_accepted": true,
+      "stable_replay_subject_survived_leaf_rotation": true
+    },
+    "bundle_faults": {
+      "corrupt": {
+        "effect_absent": true,
+        "probe_exit_code": 1
+      },
+      "missing": {
+        "effect_absent": true,
+        "probe_exit_code": 1
+      },
+      "rollback": {
+        "effect_absent": true,
+        "probe_exit_code": 1
+      }
+    },
+    "cross_leaf_replay": {
+      "initial_status": 200,
+      "request_digests_differ": true,
+      "rotated_status": 409,
+      "same_nonce": true
+    },
+    "git_commit": "a800a5c9b58b165fe214214b12a091cc58224bf9",
+    "normalized_compose_sha256": "fc8d493ef2e7acba7a692920517dfe6875702aafc34f630091ac83ea7e8cd5a7",
+    "primary_probe": {
+      "direct_reachability": {
+        "candidate": false,
+        "observer": false,
+        "ot-adapter": false,
+        "simulation": false
+      },
+      "nominal_status": "completed",
+      "replay_status": "not_dispatched",
+      "unsafe_status": "not_dispatched"
+    },
+    "rotation": {
+      "old_credential_revoked": true,
+      "only_gateway_recreated": true,
+      "prior_sequence": 1,
+      "published_sequence": 2,
+      "same_subject": true
+    },
+    "workload_key_ids": {
+      "agent": "ed25519:fb2b6e1ef37b286bc505f1f6060d9f9c94a71b3a671abbcabfc65f92b344827c",
+      "authority": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283",
+      "gateway_initial": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+      "gateway_rotated": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+      "ot": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4"
+    }
+  },
+  "source_checkout_binding": {
+    "checkout_root": "/private/tmp/aegis-ot-m4g-clean-5f2d1ed",
+    "package_directory": "src/aegis_ot"
+  },
+  "workload_public_key_ids": {
+    "agent": "ed25519:fb2b6e1ef37b286bc505f1f6060d9f9c94a71b3a671abbcabfc65f92b344827c",
+    "gateway": "ed25519:10b0f10f309fb91281596bd77976d68436a8e7db8cab3cf81cbe957a9c53e22a",
+    "gateway_rotated": "ed25519:befe4b568ab8072d4339cbe5a0388f19d15622ee1e9ce3ab8d6c1c4fb48e86ff",
+    "ot": "ed25519:3608d50f0f6f1b9664fd742fe386f723757e6b6cba3f35eb03e1828341526af4",
+    "workload_authority": "ed25519:bf52e1ff5a4b64b94fa63ca274822432aec07b14e12260c659241e0663b53283"
+  }
+}
