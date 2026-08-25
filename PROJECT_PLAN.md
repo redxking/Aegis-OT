@@ -214,16 +214,16 @@ Evidence boundary and next hypothesis-critical gate:
 - M4b is not external custody, independent replication, segmented or multi-host
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
-- The next shortest claim-critical increment after M4c is durable replay across
-  crash/full-stack restart plus missing-post handling at the independent-
-  evaluator boundary. After that, identity/policy/control separation must move
-  across an actual segmented deployment before the central system claim can be
-  tested beyond a single-host process-capability boundary.
+- The next shortest claim-critical increment after M4c is abrupt process-crash
+  consistency for the replay ledger plus missing-post handling at the
+  independent-evaluator boundary. After that, identity/policy/control separation
+  must move across an actual segmented deployment before the central system
+  claim can be tested beyond a single-host process-capability boundary.
 
 ## Active M4c fault and adversarial increment
 
-Implemented and locally reproduced in its stronger five-condition form from
-clean detached checkout `9268b4aba00636fd352c3d4cdc17f1f998301fb6`:
+Implemented and locally reproduced in its stronger v3 form from clean detached
+checkout `1a282b0467506368bd37246a33da0418c018ecfb`:
 
 - A five-condition live-process campaign, with a fresh capability-separated
   plant, observer, virtual PLC, and controller stack for every condition.
@@ -251,11 +251,17 @@ clean detached checkout `9268b4aba00636fd352c3d4cdc17f1f998301fb6`:
 - A separate evaluator process received strict-JSON duplicate-key input,
   returned exit code 2 with a self-verifying signed `input_rejected` report, and
   rejected a post-signature alteration of that report.
-- The initial four-condition v1 reports remain retained. Two separately retained
-  read-only v2 reports both met the five-condition criteria and reproduced
+- A sixth lifecycle condition closed the complete plant/observer/PLC/controller
+  stack, retained an externally owned replay ledger, started a fresh stack with
+  new process identities and observer/PLC boot epochs, and submitted the exact
+  prior request, permit, observation, decision, and assessment. The new PLC
+  returned a validly signed `transaction_replayed` rejection before dispatch;
+  the fresh plant state and ledger contents were unchanged.
+- The v1 and v2 reports remain retained as historical increments. Two separately
+  retained read-only v3 reports both met all six criteria and reproduced
   deterministic projection hash
-  `43798d11cd1425bc7e9a4b649afa6775c71af8b895b880dbf99dfb9f2907d5b8`.
-- The clean checkout passed 519 tests; ruff, strict mypy across 44 source files,
+  `52f2cd25760589041ad4d8391a1ca9ba0669b06c128d6ea8a7fa2a841a0179de`.
+- The clean checkout passed 520 tests; ruff, strict mypy across 44 source files,
   schema drift, and topology-fixture drift checks were clean.
 
 Evidence boundary and remaining critical tests:
@@ -271,10 +277,14 @@ Evidence boundary and remaining critical tests:
   its registered profile. Five deterministic cases do not estimate failure
   rates, recovery times, or
   behavior under arbitrary faults.
+- The replay result establishes persistence across an orderly full-stack
+  shutdown and restart when the ledger directory remains available. It does not
+  establish atomic durability under process kill during write, OS crash, power
+  loss, filesystem corruption, rollback, deletion, or hostile-host tampering.
 - Missing independent post-observation, concurrent state transition, process
-  crash during dispatch, durable replay across full-stack restart, hostile
-  coordinator/host, segmentation, HELICS/OpenPLC, and hardware conditions remain
-  untested or lack retained experimental evidence.
+  crash during dispatch or ledger persistence, hostile coordinator/host,
+  segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
+  retained experimental evidence.
 
 ## Read-only public demonstration increment
 

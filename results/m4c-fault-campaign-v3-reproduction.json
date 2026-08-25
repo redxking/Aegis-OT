@@ -1,0 +1,170 @@
+{
+  "claim_boundary": "same-host injected-port fault evidence over the deterministic local process lab; not fault-rate estimation, hostile-host isolation, segmented deployment, hardware, field evidence, or independent validation",
+  "completed_at_utc": "2026-08-25T13:13:24.454654+00:00",
+  "controller_cases": [
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "completed",
+      "automatic_retry_count": 0,
+      "condition": "nominal_control",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "completed",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "independent_contradiction_evaluation": null,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": true,
+      "reasons": [
+        "plc_acknowledgment_and_signed_post_observation_match"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": false,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "plc_response_lost_after_commit",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": true,
+      "independent_contradiction_evaluation": null,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "plc_dispatch_outcome_unavailable",
+        "IpcOutcomeUnknownError"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "post_observation_unavailable_after_commit",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "independent_contradiction_evaluation": null,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "post_observation_unavailable",
+        "ObserverServiceError"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "post_observation_tampered_after_signing",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "independent_contradiction_evaluation": null,
+      "original_pre_tamper_observation_valid": true,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "post_observation_invalid",
+        "observation_signature_invalid",
+        "post_observation_challenge_mismatch"
+      ],
+      "tampered_observation_rejected": true
+    },
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "observation_diverged",
+      "automatic_retry_count": 0,
+      "condition": "signed_post_observation_contradiction",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "observation_diverged",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "independent_contradiction_evaluation": {
+        "evaluator_process_separate": true,
+        "metric_mismatches": [
+          "served_load_mw",
+          "total_load_served_pct",
+          "isolated_resources"
+        ],
+        "report_valid": true,
+        "status": "contradict"
+      },
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": true,
+      "reasons": [
+        "signed_post_observation_contradiction"
+      ],
+      "tampered_observation_rejected": false
+    }
+  ],
+  "deterministic_projection_sha256": "52f2cd25760589041ad4d8391a1ca9ba0669b06c128d6ea8a7fa2a841a0179de",
+  "evaluator_adversarial_checks": {
+    "evaluator_exit_code": 2,
+    "evaluator_process_separate": true,
+    "malformed_request_sha256": "b450f9e75ccb81da64a2b8a6a30600d6a4aa282a545a8d93741402d755465998",
+    "signed_report_status": "input_rejected",
+    "signed_report_valid": true,
+    "tampered_report_valid": false
+  },
+  "experiment_criteria_met": true,
+  "full_stack_restart_replay": {
+    "condition": "full_stack_restart_replay",
+    "criteria_met": true,
+    "first_stack_closed": true,
+    "fresh_stack_isolated_resources": [],
+    "fresh_stack_state_unchanged": true,
+    "ledger_retained_across_restart": true,
+    "ledger_unchanged_by_replay": true,
+    "observer_boot_epoch_changed": true,
+    "observer_process_restarted": true,
+    "plant_process_restarted": true,
+    "plc_boot_epoch_changed": true,
+    "plc_process_restarted": true,
+    "replay_acknowledgment_valid": true,
+    "replay_phase": "pre_dispatch",
+    "replay_reason": "transaction_replayed",
+    "replay_status": "rejected"
+  },
+  "git": {
+    "branch": "DETACHED",
+    "commit": "1a282b0467506368bd37246a33da0418c018ecfb",
+    "working_tree_dirty_at_end": false,
+    "working_tree_dirty_at_start": false
+  },
+  "schema_version": "m4c-fault-campaign-v3",
+  "started_at_utc": "2026-08-25T13:12:51.717576+00:00"
+}
