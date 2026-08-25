@@ -214,25 +214,32 @@ Evidence boundary and next hypothesis-critical gate:
 - M4b is not external custody, independent replication, segmented or multi-host
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
-- The next shortest claim-critical increment after M4c is a validly signed live
-  contradiction plus durable replay across crash/full-stack restart. After that,
-  identity/policy/control separation must move across an actual segmented
-  deployment before the central system claim can be tested beyond a single-host
-  process-capability boundary.
+- The next shortest claim-critical increment after M4c is durable replay across
+  crash/full-stack restart plus missing-post handling at the independent-
+  evaluator boundary. After that, identity/policy/control separation must move
+  across an actual segmented deployment before the central system claim can be
+  tested beyond a single-host process-capability boundary.
 
 ## Active M4c fault and adversarial increment
 
-Implemented and locally reproduced from clean detached checkout
-`f6f030d59b58bf63407f744d2aa47ad66ef8e1da`:
+Implemented and locally reproduced in its stronger five-condition form from
+clean detached checkout `9268b4aba00636fd352c3d4cdc17f1f998301fb6`:
 
-- A four-condition live-process campaign, with a fresh capability-separated
+- A five-condition live-process campaign, with a fresh capability-separated
   plant, observer, virtual PLC, and controller stack for every condition.
 - One nominal control completed with a valid acknowledgment and signed post-
   observation. Three after-dispatch faults—PLC response loss after an actual
   commit, post-observation unavailability after an acknowledged commit, and a
   post-observation altered after signing—each terminated as `unknown_effect`
   with exactly one dispatch and zero automatic retry.
-- In all four conditions, a separate follow-up signed capture observed the
+- A fifth condition started the observer in a fixed experiment profile that
+  signed the transaction predecessor as the post-state. The envelope was
+  structurally valid, correctly signed, and transaction-bound, but contradicted
+  the PLC acknowledgment, permit expectation, and actual plant state. The
+  controller returned `observation_diverged`; the separate evaluator returned a
+  valid signed `contradict` report with served-load, total-load-served, and
+  isolated-resource mismatches.
+- In all five conditions, a separate follow-up signed capture observed the
   modeled feeder isolation at state version 1. This matters because the three
   fault cases did not mean “no effect”; they meant the controller lacked enough
   trustworthy completion evidence to claim a known outcome.
@@ -244,9 +251,10 @@ Implemented and locally reproduced from clean detached checkout
 - A separate evaluator process received strict-JSON duplicate-key input,
   returned exit code 2 with a self-verifying signed `input_rejected` report, and
   rejected a post-signature alteration of that report.
-- Two separately retained read-only campaign reports both met their registered
-  criteria and reproduced deterministic projection hash
-  `f6066a725e1b5f88c65cce4a7c9c013ddb94354389621aff7d545f6867e81b15`.
+- The initial four-condition v1 reports remain retained. Two separately retained
+  read-only v2 reports both met the five-condition criteria and reproduced
+  deterministic projection hash
+  `43798d11cd1425bc7e9a4b649afa6775c71af8b895b880dbf99dfb9f2907d5b8`.
 - The clean checkout passed 519 tests; ruff, strict mypy across 44 source files,
   schema drift, and topology-fixture drift checks were clean.
 
@@ -259,13 +267,14 @@ Evidence boundary and remaining critical tests:
   commit; it is not external custody or independent validation.
 - The observed `unknown_effect` transitions support fail-closed outcome
   classification and no-retry behavior under the three registered injections.
-  Four deterministic cases do not estimate failure rates, recovery times, or
+  The signed contradiction supports explicit divergence classification under
+  its registered profile. Five deterministic cases do not estimate failure
+  rates, recovery times, or
   behavior under arbitrary faults.
-- A validly signed contradictory post-observation, missing independent post-
-  observation, concurrent state transition, process crash during dispatch,
-  durable replay across full-stack restart, hostile coordinator/host,
-  segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
-  retained experimental evidence.
+- Missing independent post-observation, concurrent state transition, process
+  crash during dispatch, durable replay across full-stack restart, hostile
+  coordinator/host, segmentation, HELICS/OpenPLC, and hardware conditions remain
+  untested or lack retained experimental evidence.
 
 ## Read-only public demonstration increment
 
