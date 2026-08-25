@@ -232,6 +232,14 @@ def test_cross_leaf_acceptance_requires_same_nonce_new_proof_and_replay_reason(
     assert not runner._cross_leaf_accepted(before, after)
 
 
+def test_failed_acceptance_names_are_stable_and_only_include_false_values(
+    runner: Any,
+) -> None:
+    assert runner._failed_acceptance_names(
+        {"zeta": False, "accepted": True, "alpha": False}
+    ) == ("alpha", "zeta")
+
+
 def test_only_gateway_recreated_rejects_any_dependency_replacement(runner: Any) -> None:
     before = {
         service: {"container_id": f"{service}-old", "started_at": f"{service}-time"}

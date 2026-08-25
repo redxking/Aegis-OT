@@ -1051,6 +1051,12 @@ def _cross_leaf_accepted(
     )
 
 
+def _failed_acceptance_names(acceptance: dict[str, bool]) -> tuple[str, ...]:
+    return tuple(
+        name for name, accepted in sorted(acceptance.items()) if accepted is not True
+    )
+
+
 def _redacted_environment(
     environment: dict[str, str],
     key_directory: Path,
@@ -1414,8 +1420,10 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             }
             _assert_checkout(commit)
             if evidence["accepted"] is not True:
+                failed = _failed_acceptance_names(acceptance)
                 raise m4d.ExperimentError(
-                    "M4g workload-identity acceptance criteria were not all satisfied"
+                    "M4g workload-identity acceptance criteria failed: "
+                    + ", ".join(failed)
                 )
     finally:
         if project_created:
