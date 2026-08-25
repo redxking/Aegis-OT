@@ -31,6 +31,10 @@ def initialize() -> dict[str, str | int]:
     probe_directory = Path(os.getenv("AEGIS_TRANSPORT_PROBE_DIRECTORY", "/probe"))
     public_key_path = Path(os.environ["AEGIS_GATEWAY_PUBLIC_KEY_FILE"])
     gateway_key_id = os.environ["AEGIS_GATEWAY_KEY_ID"]
+    transport_audience = os.getenv(
+        "AEGIS_TRANSPORT_AUDIENCE",
+        "aegis-ot:ot-adapter",
+    )
     target_uid = int(os.getenv("AEGIS_RUNTIME_UID", "65532"))
     target_gid = int(os.getenv("AEGIS_RUNTIME_GID", "65532"))
 
@@ -42,7 +46,7 @@ def initialize() -> dict[str, str | int]:
     public_key_sha256 = hashlib.sha256(public_key).hexdigest()
     ledger = DurableTransportReplayLedger(
         ledger_path,
-        audience="aegis-ot:ot-adapter",
+        audience=transport_audience,
         gateway_key_id=gateway_key_id,
         gateway_public_key_sha256=public_key_sha256,
         initialize=True,
