@@ -48,6 +48,20 @@ def test_live_fault_campaign_fails_closed_without_retry() -> None:
     assert evaluator["signed_report_valid"] is True
     assert evaluator["tampered_report_valid"] is False
     assert evaluator["evaluator_process_separate"] is True
+    replay = report["full_stack_restart_replay"]
+    assert replay["criteria_met"] is True
+    assert replay["first_stack_closed"] is True
+    assert replay["plant_process_restarted"] is True
+    assert replay["observer_process_restarted"] is True
+    assert replay["plc_process_restarted"] is True
+    assert replay["ledger_retained_across_restart"] is True
+    assert replay["ledger_unchanged_by_replay"] is True
+    assert replay["replay_status"] == "rejected"
+    assert replay["replay_phase"] == "pre_dispatch"
+    assert replay["replay_reason"] == "transaction_replayed"
+    assert replay["replay_acknowledgment_valid"] is True
+    assert replay["fresh_stack_state_unchanged"] is True
+    assert replay["fresh_stack_isolated_resources"] == []
 
 
 def test_fault_campaign_writer_is_exclusive(
@@ -55,7 +69,7 @@ def test_fault_campaign_writer_is_exclusive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
-        "schema_version": "m4c-fault-campaign-v2",
+        "schema_version": "m4c-fault-campaign-v3",
         "experiment_criteria_met": True,
     }
     monkeypatch.setattr(

@@ -648,6 +648,17 @@ def test_process_stack_cleanup_is_best_effort_and_reports_aggregated_failure(
     assert events == before
 
 
+def test_process_stack_preserves_externally_owned_replay_directory(tmp_path: Path) -> None:
+    events: list[str] = []
+    stack = _stack_for_cleanup(tmp_path, events)
+    stack.owns_replay_directory = False
+
+    with pytest.raises(RuntimeError, match="cleanup had 1 failure"):
+        stack.close()
+
+    assert stack.replay_directory.is_dir()
+
+
 def test_process_stack_restart_guards_closed_consumed_and_stuck_plc() -> None:
     closed = object.__new__(CapabilityProcessStack)
     closed.closed = True

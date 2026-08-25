@@ -166,6 +166,7 @@ class CapabilityProcessStack:
     replacement_plc_admin_connection: Any | None
     replacement_plc_gateway_connection: Any | None
     replay_directory: Path
+    owns_replay_directory: bool
     closed: bool = False
 
     def restart_plc(self, timeout_seconds: float = 20.0) -> PlcProcessInfo:
@@ -229,7 +230,8 @@ class CapabilityProcessStack:
         attempt(self.plant_admin.shutdown)
         attempt(self.plant_admin.close)
         attempt(lambda: _stop_process(self.plant_process))
-        shutil.rmtree(self.replay_directory, ignore_errors=True)
+        if getattr(self, "owns_replay_directory", True):
+            shutil.rmtree(self.replay_directory, ignore_errors=True)
         if failures:
             raise RuntimeError(
                 f"capability process stack cleanup had {len(failures)} failure(s)"
@@ -241,6 +243,7 @@ def start_capability_process_stack(
     fixed_now: datetime | None = None,
     readiness_timeout_seconds: float = 20.0,
     observer_post_snapshot_source: Literal["plant", "predecessor"] = "plant",
+    replay_directory: Path | None = None,
 ) -> tuple[CapabilityProcessStack, Ed25519PrivateKey, Ed25519PublicKey]:
     """Start plant, observer, and virtual-PLC children with dedicated pipe capabilities."""
 
@@ -251,8 +254,18 @@ def start_capability_process_stack(
         format=serialization.PublicFormat.Raw,
     )
     permit_key_id = "capability-permit-key-v1"
-    replay_directory = Path(tempfile.mkdtemp(prefix="aegis-ot-capability-replay-"))
-    replay_path = replay_directory / "plc-replay-ledger.json"
+    owns_replay_directory = replay_directory is None
+    if replay_directory is None:
+        selected_replay_directory = Path(
+            tempfile.mkdtemp(prefix="aegis-ot-capability-replay-")
+        )
+    else:
+        selected_replay_directory = replay_directory.resolve(strict=True)
+        if replay_directory.is_symlink() or not selected_replay_directory.is_dir():
+            raise ValueError("external replay directory must be a regular directory")
+    replay_path = selected_replay_directory / "plc-replay-ledger.json"
+    if replay_path.is_symlink():
+        raise ValueError("PLC replay ledger must not be a symlink")
     fixed_now_iso = fixed_now.isoformat() if fixed_now is not None else None
 
     plant_admin_parent, plant_admin_child = context.Pipe(duplex=True)
@@ -305,7 +318,8 @@ def start_capability_process_stack(
         replacement_plc_gateway_parent.close()
         plant_process.terminate()
         _stop_process(plant_process)
-        shutil.rmtree(replay_directory, ignore_errors=True)
+        if owns_replay_directory:
+            shutil.rmtree(selected_replay_directory, ignore_errors=True)
         raise
     finally:
         plant_ready_parent.close()
@@ -355,7 +369,8 @@ def start_capability_process_stack(
         plant_admin.shutdown()
         plant_admin.close()
         _stop_process(plant_process)
-        shutil.rmtree(replay_directory, ignore_errors=True)
+        if owns_replay_directory:
+            shutil.rmtree(selected_replay_directory, ignore_errors=True)
         raise
     finally:
         observer_ready_parent.close()
@@ -386,7 +401,8 @@ def start_capability_process_stack(
         plant_admin.shutdown()
         plant_admin.close()
         _stop_process(plant_process)
-        shutil.rmtree(replay_directory, ignore_errors=True)
+        if owns_replay_directory:
+            shutil.rmtree(selected_replay_directory, ignore_errors=True)
         raise
     stack = CapabilityProcessStack(
         context=context,
@@ -409,7 +425,8 @@ def start_capability_process_stack(
         fixed_now_iso=fixed_now_iso,
         replacement_plc_admin_connection=replacement_plc_admin_parent,
         replacement_plc_gateway_connection=replacement_plc_gateway_parent,
-        replay_directory=replay_directory,
+        replay_directory=selected_replay_directory,
+        owns_replay_directory=owns_replay_directory,
     )
     return stack, permit_private, permit_public
 
@@ -478,12 +495,14 @@ def start_capability_separated_lab(
     now: datetime | None = None,
     *,
     observer_post_snapshot_source: Literal["plant", "predecessor"] = "plant",
+    replay_directory: Path | None = None,
 ) -> CapabilitySeparatedLab:
     """Start the first WP4 process/capability slice for local PyCharm execution."""
 
     stack, permit_private, permit_public = start_capability_process_stack(
         fixed_now=now,
         observer_post_snapshot_source=observer_post_snapshot_source,
+        replay_directory=replay_directory,
     )
     try:
         initial = stack.telemetry.capture_pre(

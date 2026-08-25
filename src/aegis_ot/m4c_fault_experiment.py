@@ -32,6 +32,7 @@ from .capability_models import (
     CapabilityClosedLoopResult,
     CapabilityClosedLoopStatus,
     CapabilityExecutionPermit,
+    DispatchPhase,
     PlcCommandAcknowledgment,
     SignedObservationEnvelope,
 )
@@ -45,7 +46,7 @@ from .m4b_models import (
     sha256_bytes,
 )
 from .models import ActionProposal, Decision, Operation
-from .physical_models import CandidateAssessment
+from .physical_models import CandidateAssessment, CommandStatus
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = ROOT / "fixtures/m4b/cigre-mv-topology-v1.json"
@@ -388,6 +389,126 @@ def _run_evaluator_adversarial_checks() -> dict[str, JsonValue]:
     }
 
 
+def _run_full_stack_restart_replay() -> dict[str, JsonValue]:
+    with tempfile.TemporaryDirectory(prefix="aegis-ot-m4c-replay-") as temporary:
+        replay_directory = Path(temporary) / "retained-ledger"
+        replay_directory.mkdir(mode=0o700)
+        first = start_capability_separated_lab(
+            REFERENCE_TIME + timedelta(minutes=10),
+            replay_directory=replay_directory,
+        )
+        first_closed = False
+        try:
+            observation = first.capture_observation(
+                correlation_id="m4c:full-stack-replay:first",
+                challenge_nonce="m4c:full-stack-replay:first-challenge-0001",
+            )
+            proposal = _proposal(first, observation, "full_stack_restart_replay")
+            result = first.controller.execute(first.request_for(proposal, observation))
+            if result.status is not CapabilityClosedLoopStatus.COMPLETED:
+                raise RuntimeError("full-stack replay setup transaction did not complete")
+            if any(
+                item is None
+                for item in (
+                    result.permit,
+                    result.pre_observation,
+                    result.decision,
+                    result.assessment,
+                )
+            ):
+                raise RuntimeError("full-stack replay setup lost transaction artifacts")
+            first_plc_boot = first.processes.plc_info.boot_epoch
+            first_observer_boot = first.processes.observer_info.boot_epoch
+            ledger_path = first.processes.replay_ledger_path
+            if not ledger_path.is_file() or ledger_path.is_symlink():
+                raise RuntimeError("full-stack replay ledger was not retained as a regular file")
+            ledger_before = sha256_bytes(ledger_path.read_bytes())
+            first.close()
+            first_closed = True
+            if not replay_directory.is_dir() or not ledger_path.is_file():
+                raise RuntimeError("externally owned replay ledger was removed at stack shutdown")
+        finally:
+            if not first_closed:
+                first.close()
+
+        second = start_capability_separated_lab(
+            REFERENCE_TIME + timedelta(minutes=11),
+            replay_directory=replay_directory,
+        )
+        try:
+            before = second.capture_observation(
+                correlation_id="m4c:full-stack-replay:before",
+                challenge_nonce="m4c:full-stack-replay:before-challenge-0001",
+            )
+            assert result.permit is not None
+            assert result.pre_observation is not None
+            assert result.decision is not None
+            assert result.assessment is not None
+            replay_acknowledgment = second.processes.plc_gateway.execute(
+                request=result.request,
+                permit=result.permit,
+                pre_observation=result.pre_observation,
+                decision=result.decision,
+                assessment=result.assessment,
+            )
+            after = second.capture_observation(
+                correlation_id="m4c:full-stack-replay:after",
+                challenge_nonce="m4c:full-stack-replay:after-challenge-0001",
+            )
+            ledger_after = sha256_bytes(second.processes.replay_ledger_path.read_bytes())
+            acknowledgment_valid = replay_acknowledgment.verify_for_transaction(
+                second.processes.plc_info.public_key,
+                request=result.request,
+                permit=result.permit,
+                pre_observation=result.pre_observation,
+                expected_plc_id=second.processes.plc_info.plc_id,
+                expected_plc_key_id=second.processes.plc_info.key_id,
+                expected_plc_boot_epoch=second.processes.plc_info.boot_epoch,
+            )
+            state_unchanged = (
+                before.snapshot.state_digest
+                == after.snapshot.state_digest
+                == replay_acknowledgment.pre_state_digest
+            )
+            criteria_met = all(
+                (
+                    replay_acknowledgment.status is CommandStatus.REJECTED,
+                    replay_acknowledgment.dispatch_phase is DispatchPhase.PRE_DISPATCH,
+                    replay_acknowledgment.reason == "transaction_replayed",
+                    acknowledgment_valid,
+                    state_unchanged,
+                    ledger_before == ledger_after,
+                    first_plc_boot != second.processes.plc_info.boot_epoch,
+                    first_observer_boot != second.processes.observer_info.boot_epoch,
+                )
+            )
+            if not criteria_met:
+                raise RuntimeError("full-stack restart replay criteria were not met")
+            return {
+                "condition": "full_stack_restart_replay",
+                "first_stack_closed": True,
+                "plant_process_restarted": first.processes.plant_info.pid
+                != second.processes.plant_info.pid,
+                "observer_process_restarted": first.processes.observer_info.pid
+                != second.processes.observer_info.pid,
+                "plc_process_restarted": first.processes.plc_info.pid
+                != second.processes.plc_info.pid,
+                "plc_boot_epoch_changed": True,
+                "observer_boot_epoch_changed": True,
+                "ledger_retained_across_restart": True,
+                "ledger_unchanged_by_replay": ledger_before == ledger_after,
+                "replay_status": replay_acknowledgment.status.value,
+                "replay_phase": replay_acknowledgment.dispatch_phase.value,
+                "replay_reason": replay_acknowledgment.reason,
+                "replay_acknowledgment_valid": acknowledgment_valid,
+                "fresh_stack_state_unchanged": state_unchanged,
+                "fresh_stack_isolated_resources": list(after.snapshot.isolated_resources),
+                "criteria_met": criteria_met,
+            }
+        finally:
+            second.close()
+
+
 def _git_value(*arguments: str) -> str:
     completed = subprocess.run(  # noqa: S603 - fixed git executable/arguments
         ["/usr/bin/git", *arguments],
@@ -428,7 +549,10 @@ def run_fault_campaign(
     for index, condition in enumerate(CONDITION_ORDER):
         cases.append(_run_controller_condition(condition, index))
         if progress is not None:
-            progress(index + 1, len(CONDITION_ORDER))
+            progress(index + 1, len(CONDITION_ORDER) + 1)
+    restart_replay = _run_full_stack_restart_replay()
+    if progress is not None:
+        progress(len(CONDITION_ORDER) + 1, len(CONDITION_ORDER) + 1)
     evaluator = _run_evaluator_adversarial_checks()
     git_end = _git_state()
     if git_start["commit"] != git_end["commit"]:
@@ -446,6 +570,7 @@ def run_fault_campaign(
             for case in cases
         ],
         "evaluator": evaluator,
+        "full_stack_restart_replay": restart_replay,
     }
     criteria_met = all(
         case["actual_status"] == case["expected_status"]
@@ -454,7 +579,7 @@ def run_fault_campaign(
         and case["effect_observed_by_followup_signed_capture"] is True
         and case["evidence_chain_valid"] is True
         for case in cases
-    ) and all(
+    ) and restart_replay["criteria_met"] is True and all(
         (
             evaluator["signed_report_status"] == "input_rejected",
             evaluator["signed_report_valid"] is True,
@@ -463,7 +588,7 @@ def run_fault_campaign(
         )
     )
     return {
-        "schema_version": "m4c-fault-campaign-v2",
+        "schema_version": "m4c-fault-campaign-v3",
         "started_at_utc": started.isoformat(),
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "git": {
@@ -474,6 +599,7 @@ def run_fault_campaign(
         },
         "controller_cases": cast(list[JsonValue], cases),
         "evaluator_adversarial_checks": evaluator,
+        "full_stack_restart_replay": restart_replay,
         "deterministic_projection_sha256": sha256_bytes(canonical_json_bytes(projection)),
         "experiment_criteria_met": criteria_met,
         "claim_boundary": (
