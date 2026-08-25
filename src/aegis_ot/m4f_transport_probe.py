@@ -120,8 +120,15 @@ def _verify_response(
     payload: dict[str, Any],
 ) -> tuple[SignedSegmentedExecutionResponse, bool]:
     response = SignedSegmentedExecutionResponse.model_validate(payload)
+    gateway_private = _load_private_key(
+        os.environ["AEGIS_GATEWAY_PRIVATE_KEY_FILE"]
+    )
     verified = (
-        response.request_sha256 == _sha256(request)
+        request.audience == "aegis-ot:ot-adapter"
+        and request.gateway_key_id == os.environ["AEGIS_GATEWAY_KEY_ID"]
+        and request.verify(gateway_private.public_key())
+        and response.ot_key_id == os.getenv("AEGIS_OT_KEY_ID", "m4e-ot-key-v1")
+        and response.request_sha256 == _sha256(request)
         and response.execution.proposal_id == request.request.proposal.proposal_id
         and response.execution.decision_id == request.request.decision.decision_id
         and response.verify(_load_public_key(os.environ["AEGIS_OT_PUBLIC_KEY_FILE"]))

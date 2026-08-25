@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
+import aegis_ot
 from aegis_ot.segmented_runtime import (
     SignedSegmentedExecutionRequest,
     SignedSegmentedExecutionResponse,
@@ -34,6 +35,23 @@ ROOT = Path(__file__).resolve().parents[1]
 AUDIENCE = "aegis-ot:ot-adapter"
 GATEWAY_KEY_ID = "m4e-gateway-key-v1"
 CRASH_KEY_SHA256 = "d" * 64
+OT_KEY_ID = "m4e-ot-key-v1"
+
+
+def _assert_source_checkout() -> dict[str, str]:
+    module_file = aegis_ot.__file__
+    if module_file is None:
+        raise m4d.ExperimentError("aegis_ot package has no filesystem source")
+    actual = Path(module_file).resolve().parent
+    expected = (ROOT / "src" / "aegis_ot").resolve()
+    if actual != expected:
+        raise m4d.ExperimentError(
+            f"aegis_ot imported from stale source: expected {expected}, got {actual}"
+        )
+    return {
+        "package_directory": str(actual.relative_to(ROOT)),
+        "checkout_root": str(ROOT),
+    }
 
 
 def _raw_private(key: Ed25519PrivateKey) -> bytes:
@@ -210,7 +228,12 @@ def _verify_artifact_record(
     request_verified = request.verify(Ed25519PublicKey.from_public_bytes(gateway_public_raw))
     response_verified = response.verify(Ed25519PublicKey.from_public_bytes(ot_public_raw))
     return {
+        "request_audience_verified_offline": request.audience == AUDIENCE,
+        "request_gateway_key_id_verified_offline": (
+            request.gateway_key_id == GATEWAY_KEY_ID
+        ),
         "request_signature_verified_offline": request_verified,
+        "response_ot_key_id_verified_offline": response.ot_key_id == OT_KEY_ID,
         "response_signature_verified_offline": response_verified,
         "response_request_binding_verified_offline": response.request_sha256 == _sha256(request),
         "response_proposal_binding_verified_offline": (
@@ -446,6 +469,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
     evidence: dict[str, Any] | None = None
     cleanup: dict[str, bool] = {}
     try:
+        source_checkout_binding = _assert_source_checkout()
         compose = json.loads(
             m4d._run(
                 *prefix,
@@ -667,6 +691,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
         semantic_material = {
             "git_commit": commit,
             "normalized_compose_sha256": normalized_compose_sha256,
+            "source_package_directory": source_checkout_binding["package_directory"],
             "network_inventory": _normalize(networks, key_directory, project_name),
             "agent_probe": semantic_agent,
             "transport_probe": _semantic_transport(transport),
@@ -692,13 +717,14 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             "clean_checkout_start": True,
             "project_name": project_name,
             "normalized_compose_sha256": normalized_compose_sha256,
+            "source_checkout_binding": source_checkout_binding,
             "public_verification_material": {
                 "gateway_key_id": GATEWAY_KEY_ID,
                 "gateway_public_key_base64": base64.b64encode(gateway_public_raw).decode(),
                 "gateway_public_key_sha256": hashlib.sha256(
                     gateway_public_raw
                 ).hexdigest(),
-                "ot_key_id": "m4e-ot-key-v1",
+                "ot_key_id": OT_KEY_ID,
                 "ot_public_key_base64": base64.b64encode(ot_public_raw).decode(),
                 "ot_public_key_sha256": hashlib.sha256(ot_public_raw).hexdigest(),
             },
@@ -805,6 +831,7 @@ def run_pair(
     primary_project: str,
     reproduction_project: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    _assert_source_checkout()
     if (
         output.exists()
         or output.is_symlink()
