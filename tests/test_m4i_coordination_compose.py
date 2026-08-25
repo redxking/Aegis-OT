@@ -11,17 +11,27 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
+CAPABILITY_PATH = ROOT / "docker-compose.capability.yml"
+CAPABILITY = yaml.safe_load(CAPABILITY_PATH.read_text(encoding="utf-8"))
 COORDINATION_PATH = ROOT / "docker-compose.coordination.yml"
 COORDINATION = yaml.safe_load(COORDINATION_PATH.read_text(encoding="utf-8"))
 
 GATEWAY_DIRECTORY = "/var/lib/aegis-ot/gateway-coordination"
 OT_DIRECTORY = "/var/lib/aegis-ot/ot-coordination"
+PLANT_DIRECTORY = "/var/lib/aegis-ot/plant-checkpoint"
 GATEWAY_FILE = f"{GATEWAY_DIRECTORY}/gateway-coordination.json"
 OT_FILE = f"{OT_DIRECTORY}/ot-coordination.json"
+PLANT_FILE = f"{PLANT_DIRECTORY}/plant-checkpoint.json"
 
 
 def _service(name: str) -> dict[str, Any]:
     service = COORDINATION["services"][name]
+    assert isinstance(service, dict)
+    return service
+
+
+def _capability_service(name: str) -> dict[str, Any]:
+    service = CAPABILITY["services"][name]
     assert isinstance(service, dict)
     return service
 
@@ -103,7 +113,7 @@ def test_coordination_initializer_is_bounded_offline_and_secretless() -> None:
     assert initializer["restart"] == "no"
     assert initializer["network_mode"] == "none"
     assert initializer["pids_limit"] == 64
-    assert initializer["mem_limit"] == "128m"
+    assert initializer["mem_limit"] == "256m"
     assert "secrets" not in initializer
     assert initializer["environment"] == {
         "AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE": GATEWAY_FILE,
@@ -118,22 +128,38 @@ def test_coordination_initializer_is_bounded_offline_and_secretless() -> None:
         ),
         "AEGIS_OT_RUNTIME_UID": "65532",
         "AEGIS_OT_RUNTIME_GID": "65535",
+        "AEGIS_PLANT_CHECKPOINT_FILE": PLANT_FILE,
+        "AEGIS_PLANT_KEY_ID": "m4g-plant-key-v1",
+        "AEGIS_PLANT_RUNTIME_UID": "65532",
+        "AEGIS_PLANT_RUNTIME_GID": "65536",
     }
+
+
+def test_capability_base_disables_coordination_for_simulation() -> None:
+    simulation = _capability_service("simulation")
+    assert simulation["environment"]["AEGIS_EFFECT_COORDINATION_MODE"] == "disabled"
 
 
 def test_coordination_volumes_are_distinct_nested_mounts_with_closed_startup() -> None:
     initializer = _service("coordination-init")
     gateway = _service("segmented-gateway")
     ot = _service("ot-adapter")
+    simulation = _service("simulation")
 
     assert initializer["volumes"] == [
         f"gateway_coordination:{GATEWAY_DIRECTORY}",
         f"ot_coordination:{OT_DIRECTORY}",
+        f"plant_checkpoint:{PLANT_DIRECTORY}",
     ]
     assert gateway["volumes"] == [f"gateway_coordination:{GATEWAY_DIRECTORY}"]
     assert ot["volumes"] == [f"ot_coordination:{OT_DIRECTORY}"]
-    assert set(COORDINATION["volumes"]) == {"gateway_coordination", "ot_coordination"}
-    for service in (initializer, gateway, ot):
+    assert simulation["volumes"] == [f"plant_checkpoint:{PLANT_DIRECTORY}"]
+    assert set(COORDINATION["volumes"]) == {
+        "gateway_coordination",
+        "ot_coordination",
+        "plant_checkpoint",
+    }
+    for service in (initializer, gateway, ot, simulation):
         assert all(
             not mount.endswith(":/var/lib/aegis-ot")
             and "workload_replay" not in mount
@@ -148,7 +174,11 @@ def test_coordination_volumes_are_distinct_nested_mounts_with_closed_startup() -
         "AEGIS_EFFECT_COORDINATION_MODE": "required",
         "AEGIS_OT_COORDINATION_JOURNAL_FILE": OT_FILE,
     }
-    for service in (gateway, ot):
+    assert simulation["environment"] == {
+        "AEGIS_EFFECT_COORDINATION_MODE": "required",
+        "AEGIS_PLANT_CHECKPOINT_FILE": PLANT_FILE,
+    }
+    for service in (gateway, ot, simulation):
         assert service["depends_on"] == {
             "coordination-init": {"condition": "service_completed_successfully"}
         }
@@ -164,20 +194,40 @@ def test_seven_layer_compose_preserves_replay_and_coordination_mounts(
 
     gateway = services["segmented-gateway"]
     ot = services["ot-adapter"]
+    simulation = services["simulation"]
     assert gateway["user"] == "65532:65532"
     assert ot["user"] == "65532:65535"
+    assert simulation["user"] == "65532:65536"
     assert gateway["environment"]["AEGIS_EFFECT_COORDINATION_MODE"] == "required"
     assert ot["environment"]["AEGIS_EFFECT_COORDINATION_MODE"] == "required"
+    assert simulation["environment"]["AEGIS_EFFECT_COORDINATION_MODE"] == "required"
+    assert simulation["environment"]["AEGIS_PLANT_CHECKPOINT_FILE"] == PLANT_FILE
     assert gateway["depends_on"]["coordination-init"]["condition"] == (
         "service_completed_successfully"
     )
     assert ot["depends_on"]["coordination-init"]["condition"] == (
         "service_completed_successfully"
     )
+    assert simulation["depends_on"]["coordination-init"]["condition"] == (
+        "service_completed_successfully"
+    )
 
     gateway_mounts = {item["target"]: item["source"] for item in gateway["volumes"]}
     ot_mounts = {item["target"]: item["source"] for item in ot["volumes"]}
+    plant_mounts = {item["target"]: item["source"] for item in simulation["volumes"]}
     assert gateway_mounts[GATEWAY_DIRECTORY] == "gateway_coordination"
     assert ot_mounts[OT_DIRECTORY] == "ot_coordination"
+    assert plant_mounts[PLANT_DIRECTORY] == "plant_checkpoint"
     assert ot_mounts["/var/lib/aegis-ot"] == "workload_replay"
-    assert gateway_mounts[GATEWAY_DIRECTORY] != ot_mounts[OT_DIRECTORY]
+    assert (
+        len(
+            {
+                gateway_mounts[GATEWAY_DIRECTORY],
+                ot_mounts[OT_DIRECTORY],
+                plant_mounts[PLANT_DIRECTORY],
+            }
+        )
+        == 3
+    )
+    assert initializer["environment"]["AEGIS_PLANT_RUNTIME_UID"] == "65532"
+    assert initializer["environment"]["AEGIS_PLANT_RUNTIME_GID"] == "65536"

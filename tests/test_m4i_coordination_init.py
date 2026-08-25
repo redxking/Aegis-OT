@@ -15,6 +15,7 @@ from aegis_ot.m4g_identity_init import (
     GATEWAY_COORDINATION_AUDIENCE,
 )
 from aegis_ot.m4g_identity_init import initialize as initialize_identity
+from aegis_ot.pandapower_plant import PandapowerCigreMVPlant
 from aegis_ot.segmented_capability_models import (
     GATEWAY_CAPABILITY_AUDIENCE,
     OT_CAPABILITY_AUDIENCE,
@@ -27,16 +28,23 @@ from aegis_ot.workload_identity import (
 NOW = datetime(2026, 8, 25, 16, 0, tzinfo=UTC)
 
 
+class _PlantModelStub:
+    model_digest = "0" * 64
+
+
 def _configure_coordination(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     gateway_directory = tmp_path / "gateway-coordination"
     ot_directory = tmp_path / "ot-coordination"
+    plant_directory = tmp_path / "plant-checkpoint"
     gateway_directory.mkdir()
     ot_directory.mkdir()
+    plant_directory.mkdir()
     gateway_path = gateway_directory / "gateway-coordination.json"
     ot_path = ot_directory / "ot-coordination.json"
+    plant_path = plant_directory / "plant-checkpoint.json"
     environment = {
         "AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE": gateway_path,
         "AEGIS_GATEWAY_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:gateway",
@@ -46,41 +54,51 @@ def _configure_coordination(
         "AEGIS_OT_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:ot-adapter",
         "AEGIS_OT_RUNTIME_UID": os.getuid(),
         "AEGIS_OT_RUNTIME_GID": os.getgid(),
+        "AEGIS_PLANT_CHECKPOINT_FILE": plant_path,
+        "AEGIS_PLANT_KEY_ID": "m4g-plant-key-v1",
+        "AEGIS_PLANT_RUNTIME_UID": os.getuid(),
+        "AEGIS_PLANT_RUNTIME_GID": os.getgid(),
     }
     for name, value in environment.items():
         monkeypatch.setenv(name, str(value))
-    return gateway_path, ot_path
+    return gateway_path, ot_path, plant_path
 
 
 def _writer_lock_path(path: Path) -> Path:
     return path.with_name(f".{path.name}.writer.lock")
 
 
-def test_initializer_creates_two_closed_private_journals(
+def test_initializer_creates_three_closed_private_state_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gateway_path, ot_path = _configure_coordination(tmp_path, monkeypatch)
+    gateway_path, ot_path, plant_path = _configure_coordination(tmp_path, monkeypatch)
 
     summary = coordination_init.initialize()
+    model_digest = PandapowerCigreMVPlant().model_digest
 
     expected_documents = {
-        gateway_path: (
-            "gateway",
-            "urn:aegis-ot:m4g:workload:gateway",
-        ),
-        ot_path: (
-            "effect_coordinator",
-            "urn:aegis-ot:m4g:workload:ot-adapter",
-        ),
-    }
-    for path, (role, owner_subject) in expected_documents.items():
-        assert json.loads(path.read_bytes()) == {
+        gateway_path: {
             "entries": [],
-            "journal_role": role,
-            "owner_subject": owner_subject,
+            "journal_role": "gateway",
+            "owner_subject": "urn:aegis-ot:m4g:workload:gateway",
             "schema_version": "m4i-coordination-journal-v2",
-        }
+        },
+        ot_path: {
+            "entries": [],
+            "journal_role": "effect_coordinator",
+            "owner_subject": "urn:aegis-ot:m4g:workload:ot-adapter",
+            "schema_version": "m4i-coordination-journal-v2",
+        },
+        plant_path: {
+            "checkpoint": None,
+            "model_digest": model_digest,
+            "plant_key_id": "m4g-plant-key-v1",
+            "schema_version": "m4i-plant-checkpoint-v1",
+        },
+    }
+    for path, expected_document in expected_documents.items():
+        assert json.loads(path.read_bytes()) == expected_document
         assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
         assert path.parent.stat().st_uid == os.getuid()
         assert path.parent.stat().st_gid == os.getgid()
@@ -92,7 +110,8 @@ def test_initializer_creates_two_closed_private_journals(
             assert artifact.stat().st_gid == os.getgid()
 
     assert summary == {
-        "schema_version": "m4i-coordination-volume-initialization-v1",
+        "schema_version": "m4i-coordination-volume-initialization-v2",
+        "state_artifact_count": 3,
         "gateway_journal_file": str(gateway_path),
         "gateway_journal_role": "gateway",
         "gateway_owner_subject": "urn:aegis-ot:m4g:workload:gateway",
@@ -103,6 +122,12 @@ def test_initializer_creates_two_closed_private_journals(
         "ot_owner_subject": "urn:aegis-ot:m4g:workload:ot-adapter",
         "ot_runtime_uid": os.getuid(),
         "ot_runtime_gid": os.getgid(),
+        "plant_checkpoint_file": str(plant_path),
+        "plant_checkpoint_role": "plant_checkpoint",
+        "plant_key_id": "m4g-plant-key-v1",
+        "plant_model_digest": model_digest,
+        "plant_runtime_uid": os.getuid(),
+        "plant_runtime_gid": os.getgid(),
         "directory_mode": "0700",
         "artifact_mode": "0600",
         "secrets_consumed": 0,
@@ -113,7 +138,8 @@ def test_initializer_refuses_shared_or_populated_storage(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gateway_path, ot_path = _configure_coordination(tmp_path, monkeypatch)
+    gateway_path, ot_path, plant_path = _configure_coordination(tmp_path, monkeypatch)
+    monkeypatch.setattr(coordination_init, "PandapowerCigreMVPlant", _PlantModelStub)
     monkeypatch.setenv(
         "AEGIS_OT_COORDINATION_JOURNAL_FILE",
         str(gateway_path.parent / "ot-coordination.json"),
@@ -122,36 +148,61 @@ def test_initializer_refuses_shared_or_populated_storage(
         coordination_init.initialize()
     assert list(gateway_path.parent.iterdir()) == []
     assert list(ot_path.parent.iterdir()) == []
+    assert list(plant_path.parent.iterdir()) == []
 
     monkeypatch.setenv("AEGIS_OT_COORDINATION_JOURNAL_FILE", str(ot_path))
+    monkeypatch.setenv("AEGIS_PLANT_CHECKPOINT_FILE", str(gateway_path))
+    with pytest.raises(RuntimeError, match="distinct files"):
+        coordination_init.initialize()
+    assert list(gateway_path.parent.iterdir()) == []
+    assert list(ot_path.parent.iterdir()) == []
+    assert list(plant_path.parent.iterdir()) == []
+
+    monkeypatch.setenv(
+        "AEGIS_PLANT_CHECKPOINT_FILE",
+        str(ot_path.parent / "plant-checkpoint.json"),
+    )
+    with pytest.raises(RuntimeError, match="distinct directories"):
+        coordination_init.initialize()
+    assert list(gateway_path.parent.iterdir()) == []
+    assert list(ot_path.parent.iterdir()) == []
+    assert list(plant_path.parent.iterdir()) == []
+
+    monkeypatch.setenv("AEGIS_PLANT_CHECKPOINT_FILE", str(plant_path))
     existing = gateway_path.parent / "retained-state"
     existing.write_text("do-not-overwrite", encoding="utf-8")
     with pytest.raises(RuntimeError, match="must be empty"):
         coordination_init.initialize()
     assert existing.read_text(encoding="utf-8") == "do-not-overwrite"
     assert list(ot_path.parent.iterdir()) == []
+    assert list(plant_path.parent.iterdir()) == []
 
 
-def test_initializer_removes_first_journal_if_second_creation_fails(
+def test_initializer_removes_both_journals_if_checkpoint_creation_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gateway_path, ot_path = _configure_coordination(tmp_path, monkeypatch)
+    gateway_path, ot_path, plant_path = _configure_coordination(tmp_path, monkeypatch)
+    monkeypatch.setattr(coordination_init, "PandapowerCigreMVPlant", _PlantModelStub)
 
-    class FailedOtJournal:
+    class FailedPlantCheckpoint:
         def __init__(self, *_args: object, **_kwargs: object) -> None:
-            raise RuntimeError("injected OT initialization failure")
+            raise RuntimeError("injected plant checkpoint initialization failure")
 
     monkeypatch.setattr(
         coordination_init,
-        "DurableEffectCoordinationJournal",
-        FailedOtJournal,
+        "DurablePlantCheckpointStore",
+        FailedPlantCheckpoint,
     )
-    with pytest.raises(RuntimeError, match="injected OT initialization failure"):
+    with pytest.raises(
+        RuntimeError,
+        match="injected plant checkpoint initialization failure",
+    ):
         coordination_init.initialize()
 
     assert list(gateway_path.parent.iterdir()) == []
     assert list(ot_path.parent.iterdir()) == []
+    assert list(plant_path.parent.iterdir()) == []
 
 
 def test_identity_initializer_adds_m4i_audiences_without_removing_m4g_audiences(

@@ -14,7 +14,7 @@ services:
     restart: "no"
     network_mode: none
     pids_limit: 64
-    mem_limit: 128m
+    mem_limit: 256m
     environment:
       AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/gateway-coordination/gateway-coordination.json
       AEGIS_GATEWAY_WORKLOAD_SUBJECT: "${AEGIS_GATEWAY_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:gateway}"
@@ -24,9 +24,14 @@ services:
       AEGIS_OT_WORKLOAD_SUBJECT: "${AEGIS_OT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:ot-adapter}"
       AEGIS_OT_RUNTIME_UID: "65532"
       AEGIS_OT_RUNTIME_GID: "65535"
+      AEGIS_PLANT_CHECKPOINT_FILE: /var/lib/aegis-ot/plant-checkpoint/plant-checkpoint.json
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_RUNTIME_UID: "65532"
+      AEGIS_PLANT_RUNTIME_GID: "65536"
     volumes:
       - gateway_coordination:/var/lib/aegis-ot/gateway-coordination
       - ot_coordination:/var/lib/aegis-ot/ot-coordination
+      - plant_checkpoint:/var/lib/aegis-ot/plant-checkpoint
 
   segmented-gateway:
     environment:
@@ -48,6 +53,17 @@ services:
       coordination-init:
         condition: service_completed_successfully
 
+  simulation:
+    environment:
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_PLANT_CHECKPOINT_FILE: /var/lib/aegis-ot/plant-checkpoint/plant-checkpoint.json
+    volumes:
+      - plant_checkpoint:/var/lib/aegis-ot/plant-checkpoint
+    depends_on:
+      coordination-init:
+        condition: service_completed_successfully
+
 volumes:
   gateway_coordination: {}
   ot_coordination: {}
+  plant_checkpoint: {}

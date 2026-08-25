@@ -125,6 +125,7 @@ services:
       - --port
       - "8084"
     environment:
+      AEGIS_EFFECT_COORDINATION_MODE: disabled
       AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
       AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate_public

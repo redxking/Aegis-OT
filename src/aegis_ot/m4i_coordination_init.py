@@ -1,4 +1,4 @@
-"""Provision the two M4i coordination journals as isolated one-shot state."""
+"""Provision three isolated M4i state artifacts as one-shot state."""
 
 from __future__ import annotations
 
@@ -13,16 +13,28 @@ from .coordination_journal import (
     DurableEffectCoordinationJournal,
     DurableGatewayCoordinationJournal,
 )
+from .pandapower_plant import PandapowerCigreMVPlant
+from .plant_checkpoint import DurablePlantCheckpointStore
 
 
 @dataclass(frozen=True)
-class _JournalDefinition:
+class _StateArtifactDefinition:
     label: str
     path: Path
-    owner_subject: str
     target_uid: int
     target_gid: int
     kind: str
+
+
+@dataclass(frozen=True)
+class _JournalDefinition(_StateArtifactDefinition):
+    owner_subject: str
+
+
+@dataclass(frozen=True)
+class _PlantCheckpointDefinition(_StateArtifactDefinition):
+    plant_key_id: str
+    model_digest: str
 
 
 def _required_environment(name: str) -> str:
@@ -94,7 +106,11 @@ def _assign_runtime_directory(
         raise RuntimeError(f"{label} directory mode was not preserved as 0700")
 
 
-def _definitions() -> tuple[_JournalDefinition, _JournalDefinition]:
+def _definitions() -> tuple[
+    _JournalDefinition,
+    _JournalDefinition,
+    _PlantCheckpointDefinition,
+]:
     gateway = _JournalDefinition(
         label="M4i gateway coordination journal",
         path=Path(_required_environment("AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE")),
@@ -111,25 +127,41 @@ def _definitions() -> tuple[_JournalDefinition, _JournalDefinition]:
         target_gid=_runtime_id("AEGIS_OT_RUNTIME_GID"),
         kind="effect_coordinator",
     )
-    return gateway, ot
+    plant_path = Path(_required_environment("AEGIS_PLANT_CHECKPOINT_FILE"))
+    plant_key_id = _required_environment("AEGIS_PLANT_KEY_ID")
+    plant_runtime_uid = _runtime_id("AEGIS_PLANT_RUNTIME_UID")
+    plant_runtime_gid = _runtime_id("AEGIS_PLANT_RUNTIME_GID")
+    plant = _PlantCheckpointDefinition(
+        label="M4i plant checkpoint",
+        path=plant_path,
+        plant_key_id=plant_key_id,
+        model_digest=PandapowerCigreMVPlant().model_digest,
+        target_uid=plant_runtime_uid,
+        target_gid=plant_runtime_gid,
+        kind="plant_checkpoint",
+    )
+    return gateway, ot, plant
 
 
 def _require_isolated_targets(
-    gateway: _JournalDefinition,
-    ot: _JournalDefinition,
+    definitions: tuple[_StateArtifactDefinition, ...],
 ) -> None:
-    gateway_path = gateway.path.resolve(strict=False)
-    ot_path = ot.path.resolve(strict=False)
-    if gateway_path == ot_path:
-        raise RuntimeError("gateway and OT coordination journals must use distinct files")
-    if gateway_path.parent == ot_path.parent:
-        raise RuntimeError("gateway and OT coordination journals must use distinct directories")
-    for definition in (gateway, ot):
+    resolved_paths = tuple(definition.path.resolve(strict=False) for definition in definitions)
+    if len(set(resolved_paths)) != len(resolved_paths):
+        raise RuntimeError("M4i state artifacts must use distinct files")
+    resolved_directories = tuple(path.parent for path in resolved_paths)
+    if len(set(resolved_directories)) != len(resolved_directories):
+        raise RuntimeError("M4i state artifacts must use distinct directories")
+    if set(resolved_paths) & set(resolved_directories):
+        raise RuntimeError("M4i state artifact files and directories must not overlap")
+    for definition in definitions:
         if definition.path.exists() or definition.path.is_symlink():
             raise RuntimeError(f"{definition.label} already exists; refusing to initialize")
 
 
-def _remove_initialized_artifacts(definitions: tuple[_JournalDefinition, ...]) -> None:
+def _remove_initialized_artifacts(
+    definitions: tuple[_StateArtifactDefinition, ...],
+) -> None:
     for definition in definitions:
         # A late failure can occur after the directory was transferred to the
         # runtime account. CAP_CHOWN is sufficient to recover ownership before
@@ -144,11 +176,11 @@ def _remove_initialized_artifacts(definitions: tuple[_JournalDefinition, ...]) -
 
 
 def initialize() -> dict[str, str | int]:
-    """Create closed, empty gateway and OT journals without secret access."""
+    """Create closed, empty gateway, OT, and plant state without secret access."""
 
-    gateway, ot = _definitions()
-    _require_isolated_targets(gateway, ot)
-    definitions = (gateway, ot)
+    gateway, ot, plant = _definitions()
+    definitions: tuple[_StateArtifactDefinition, ...] = (gateway, ot, plant)
+    _require_isolated_targets(definitions)
     for definition in definitions:
         _prepare_empty_directory(definition.path.parent, label=definition.label)
 
@@ -166,9 +198,16 @@ def initialize() -> dict[str, str | int]:
             initialize=True,
         ) as ot_journal:
             lock_paths[ot.kind] = ot_journal.writer_lock_path
+        with DurablePlantCheckpointStore(
+            plant.path,
+            plant_key_id=plant.plant_key_id,
+            model_digest=plant.model_digest,
+            initialize=True,
+        ) as plant_checkpoint:
+            lock_paths[plant.kind] = plant_checkpoint.writer_lock_path
         for definition in definitions:
             for path, suffix in (
-                (definition.path, "journal"),
+                (definition.path, "state file"),
                 (lock_paths[definition.kind], "writer lock"),
             ):
                 _assign_runtime_file(
@@ -189,7 +228,8 @@ def initialize() -> dict[str, str | int]:
         raise
 
     return {
-        "schema_version": "m4i-coordination-volume-initialization-v1",
+        "schema_version": "m4i-coordination-volume-initialization-v2",
+        "state_artifact_count": 3,
         "gateway_journal_file": str(gateway.path),
         "gateway_journal_role": gateway.kind,
         "gateway_owner_subject": gateway.owner_subject,
@@ -200,6 +240,12 @@ def initialize() -> dict[str, str | int]:
         "ot_owner_subject": ot.owner_subject,
         "ot_runtime_uid": ot.target_uid,
         "ot_runtime_gid": ot.target_gid,
+        "plant_checkpoint_file": str(plant.path),
+        "plant_checkpoint_role": plant.kind,
+        "plant_key_id": plant.plant_key_id,
+        "plant_model_digest": plant.model_digest,
+        "plant_runtime_uid": plant.target_uid,
+        "plant_runtime_gid": plant.target_gid,
         "directory_mode": "0700",
         "artifact_mode": "0600",
         "secrets_consumed": 0,
