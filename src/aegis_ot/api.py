@@ -102,14 +102,16 @@ def public_demo_asset(asset_name: str) -> Response:
 
 
 @public_app.get("/health")
-def health() -> dict[str, str]:
+def health(response: Response) -> dict[str, str]:
+    response.headers.update(DEMO_SECURITY_HEADERS)
     return {"status": "ok", "mode": "synthetic-local", "public_demo": "/demo"}
 
 
 @public_app.get("/v1/demo/evidence", response_model=PublicDemoEvidence)
-def public_demo_evidence() -> PublicDemoEvidence:
+def public_demo_evidence(response: Response) -> PublicDemoEvidence:
     """Return a generated, read-only summary of committed M2 and M3 evidence."""
 
+    response.headers.update(DEMO_SECURITY_HEADERS)
     return load_public_demo_evidence()
 
 

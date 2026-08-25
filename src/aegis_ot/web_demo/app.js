@@ -403,16 +403,30 @@ function renderFatalError(error) {
   element("main-content").prepend(panel);
 }
 
-async function fetchJson(path) {
-  const response = await fetch(path, {
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error(`${path} returned HTTP ${response.status}.`);
+const REQUEST_TIMEOUT_MS = 5000;
+
+async function fetchJson(path, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(path, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`${path} returned HTTP ${response.status}.`);
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`${path} timed out after ${timeoutMs} ms.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return response.json();
 }
 
 async function fetchJsonWithRetry(path, attempts = 3) {

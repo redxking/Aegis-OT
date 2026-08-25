@@ -17,6 +17,18 @@ from aegis_ot.capability_models import (
     PlcCommandAcknowledgment,
     SignedObservationEnvelope,
 )
+from aegis_ot.m4b_models import (
+    IndependentConsequenceReport,
+    IndependentEvaluationRequest,
+    M4bArtifactDescriptor,
+    M4bCapabilityProbeBundle,
+    M4bComponentRegistration,
+    M4bEvidenceManifest,
+    M4bManifestSignature,
+    M4bOrderlyRestartReplayRecord,
+    M4bTransactionRecord,
+    M4bTrustAnchor,
+)
 from aegis_ot.modbus_wire import SignedWireResponse, WireRequest
 from aegis_ot.physical_models import (
     CandidateAssessment,
@@ -31,6 +43,22 @@ from aegis_ot.schema import action_proposal_schema
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
 MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
+    ROOT / "schemas" / "m4b-artifact-descriptor.schema.json": M4bArtifactDescriptor,
+    ROOT / "schemas" / "m4b-capability-probe-bundle.schema.json": M4bCapabilityProbeBundle,
+    ROOT / "schemas" / "m4b-component-registration.schema.json": M4bComponentRegistration,
+    ROOT / "schemas" / "m4b-evidence-manifest.schema.json": M4bEvidenceManifest,
+    ROOT / "schemas" / "m4b-independent-consequence-report.schema.json": (
+        IndependentConsequenceReport
+    ),
+    ROOT / "schemas" / "m4b-independent-evaluation-request.schema.json": (
+        IndependentEvaluationRequest
+    ),
+    ROOT / "schemas" / "m4b-manifest-signature.schema.json": M4bManifestSignature,
+    ROOT / "schemas" / "m4b-orderly-restart-replay.schema.json": (
+        M4bOrderlyRestartReplayRecord
+    ),
+    ROOT / "schemas" / "m4b-transaction-record.schema.json": M4bTransactionRecord,
+    ROOT / "schemas" / "m4b-trust-anchor.schema.json": M4bTrustAnchor,
     ROOT / "schemas" / "m4a-action-request.schema.json": CapabilityActionRequest,
     ROOT / "schemas" / "m4a-closed-loop-result.schema.json": CapabilityClosedLoopResult,
     ROOT / "schemas" / "m4a-execution-permit.schema.json": CapabilityExecutionPermit,

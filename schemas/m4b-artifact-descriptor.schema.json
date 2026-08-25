@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "Exact-byte descriptor for one regular file in an M4b evidence package.",
+  "properties": {
+    "byte_length": {
+      "minimum": 0,
+      "title": "Byte Length",
+      "type": "integer"
+    },
+    "media_type": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Media Type",
+      "type": "string"
+    },
+    "path": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "record_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Count"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "media_type",
+    "byte_length",
+    "sha256"
+  ],
+  "title": "M4bArtifactDescriptor",
+  "type": "object"
+}

@@ -144,6 +144,102 @@ def test_verify_physical_evidence_command_fails_closed(monkeypatch: Any) -> None
     assert json.loads(result.output)["valid"] is False
 
 
+def test_capability_experiment_writes_and_verifies_requested_package(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    output = tmp_path / "m4b"
+    anchor = tmp_path / "m4b-anchor.json"
+    captured: dict[str, Any] = {}
+
+    def fake_write(requested_output: Path, **kwargs: Any) -> None:
+        captured["write"] = (requested_output, kwargs)
+        kwargs["progress"](1, 2)
+        kwargs["progress"](2, 2)
+
+    def fake_verify(
+        requested_output: Path,
+        requested_anchor: Path,
+        *,
+        checkout_root: Path | None,
+    ) -> dict[str, Any]:
+        captured["verify"] = (requested_output, requested_anchor, checkout_root)
+        return {
+            "package_valid": True,
+            "experiment_accepted": True,
+            "checkout_matches": True,
+        }
+
+    monkeypatch.setattr(cli, "write_m4b_experiment", fake_write)
+    monkeypatch.setattr(cli, "verify_m4b_package", fake_verify)
+    result = runner.invoke(
+        cli.app,
+        [
+            "capability-experiment",
+            "--seed-count",
+            "2",
+            "--seed",
+            "77",
+            "--output-dir",
+            str(output),
+            "--trust-anchor",
+            str(anchor),
+            "--allow-dirty",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["write"][0] == output
+    assert captured["write"][1]["trust_anchor_path"] == anchor
+    assert captured["write"][1]["root_seed"] == 77
+    assert captured["write"][1]["seed_count"] == 2
+    assert captured["write"][1]["require_clean_checkout"] is False
+    assert captured["verify"] == (output, anchor, Path.cwd())
+    assert "M4b process sessions complete: 2/2" in result.output
+
+
+@pytest.mark.parametrize(
+    ("verification", "expected_exit"),
+    [
+        (
+            {
+                "package_valid": True,
+                "experiment_accepted": True,
+                "checkout_matches": True,
+            },
+            0,
+        ),
+        (
+            {
+                "package_valid": True,
+                "experiment_accepted": False,
+                "checkout_matches": True,
+            },
+            1,
+        ),
+        (
+            {
+                "package_valid": False,
+                "experiment_accepted": False,
+                "checkout_matches": False,
+            },
+            1,
+        ),
+    ],
+)
+def test_verify_capability_evidence_fails_closed(
+    verification: dict[str, bool],
+    expected_exit: int,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(cli, "verify_m4b_package", lambda *args, **kwargs: verification)
+
+    result = runner.invoke(cli.app, ["verify-capability-evidence"])
+
+    assert result.exit_code == expected_exit, result.output
+    assert json.loads(result.output) == verification
+
+
 @pytest.mark.parametrize(
     ("status", "expected_exit"),
     [

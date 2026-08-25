@@ -70,4 +70,5 @@ ignore = ["S101"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-packages = ["aegis_ot"]
+mypy_path = "src"
+packages = ["aegis_ot", "aegis_ot_independent"]

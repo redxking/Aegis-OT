@@ -1,0 +1,720 @@
+{
+  "$defs": {
+    "CommandStatus": {
+      "enum": [
+        "applied",
+        "rejected",
+        "unknown_effect"
+      ],
+      "title": "CommandStatus",
+      "type": "string"
+    },
+    "DispatchPhase": {
+      "description": "PLC evidence boundary for one and only one dispatch attempt.",
+      "enum": [
+        "pre_dispatch",
+        "known_no_effect",
+        "committed",
+        "effect_unknown"
+      ],
+      "title": "DispatchPhase",
+      "type": "string"
+    },
+    "ObservationPhase": {
+      "enum": [
+        "pre_authorization",
+        "post_dispatch"
+      ],
+      "title": "ObservationPhase",
+      "type": "string"
+    },
+    "PhysicalStateSnapshot": {
+      "additionalProperties": false,
+      "description": "Authoritative, versioned steady-state result returned by the plant model.",
+      "properties": {
+        "battery_injection_mw": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Battery Injection Mw",
+          "type": "object"
+        },
+        "bus_voltage_pu": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Bus Voltage Pu",
+          "type": "array"
+        },
+        "converged": {
+          "title": "Converged",
+          "type": "boolean"
+        },
+        "input_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "isolated_resources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Isolated Resources",
+          "type": "array"
+        },
+        "line_loading_pct": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Line Loading Pct",
+          "type": "array"
+        },
+        "maximum_line_loading_pct": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Line Loading Pct"
+        },
+        "maximum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Voltage Pu"
+        },
+        "minimum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Voltage Pu"
+        },
+        "model_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Digest",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "observation_clock_domain": {
+          "minLength": 1,
+          "title": "Observation Clock Domain",
+          "type": "string"
+        },
+        "observation_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Digest",
+          "type": "string"
+        },
+        "observation_sequence": {
+          "minimum": 0,
+          "title": "Observation Sequence",
+          "type": "integer"
+        },
+        "observation_source_id": {
+          "minLength": 1,
+          "title": "Observation Source Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "priority_load_demand_mw": {
+          "minimum": 0,
+          "title": "Priority Load Demand Mw",
+          "type": "number"
+        },
+        "priority_load_served_mw": {
+          "minimum": 0,
+          "title": "Priority Load Served Mw",
+          "type": "number"
+        },
+        "priority_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority Load Served Pct",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "physical-state-v1",
+          "default": "physical-state-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "served_load_mw": {
+          "minimum": 0,
+          "title": "Served Load Mw",
+          "type": "number"
+        },
+        "simulation_time_s": {
+          "minimum": 0,
+          "title": "Simulation Time S",
+          "type": "number"
+        },
+        "simulator_version": {
+          "minLength": 1,
+          "title": "Simulator Version",
+          "type": "string"
+        },
+        "state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Digest",
+          "type": "string"
+        },
+        "state_version": {
+          "minimum": 0,
+          "title": "State Version",
+          "type": "integer"
+        },
+        "thermal_violation_count": {
+          "minimum": 0,
+          "title": "Thermal Violation Count",
+          "type": "integer"
+        },
+        "topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Topology Digest",
+          "type": "string"
+        },
+        "total_load_demand_mw": {
+          "minimum": 0,
+          "title": "Total Load Demand Mw",
+          "type": "number"
+        },
+        "total_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Load Served Pct",
+          "type": "number"
+        },
+        "unsafe_state": {
+          "title": "Unsafe State",
+          "type": "boolean"
+        },
+        "unserved_load_mw": {
+          "minimum": 0,
+          "title": "Unserved Load Mw",
+          "type": "number"
+        },
+        "voltage_violation_count": {
+          "minimum": 0,
+          "title": "Voltage Violation Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "simulator_version",
+        "model_digest",
+        "input_digest",
+        "topology_digest",
+        "state_digest",
+        "observation_digest",
+        "observation_sequence",
+        "observation_source_id",
+        "observation_clock_domain",
+        "state_version",
+        "simulation_time_s",
+        "observed_at",
+        "converged",
+        "total_load_demand_mw",
+        "served_load_mw",
+        "unserved_load_mw",
+        "total_load_served_pct",
+        "priority_load_demand_mw",
+        "priority_load_served_mw",
+        "priority_load_served_pct",
+        "voltage_violation_count",
+        "thermal_violation_count",
+        "unsafe_state",
+        "bus_voltage_pu",
+        "line_loading_pct"
+      ],
+      "title": "PhysicalStateSnapshot",
+      "type": "object"
+    },
+    "PlcCommandAcknowledgment": {
+      "additionalProperties": false,
+      "description": "PLC-signed disposition with boot epoch and an explicit dispatch certainty phase.",
+      "properties": {
+        "acknowledged_at": {
+          "format": "date-time",
+          "title": "Acknowledged At",
+          "type": "string"
+        },
+        "acknowledgment_id": {
+          "minLength": 1,
+          "title": "Acknowledgment Id",
+          "type": "string"
+        },
+        "assessment_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Assessment Digest",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "command_id": {
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "minLength": 1,
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "dispatch_attempt": {
+          "const": 1,
+          "default": 1,
+          "title": "Dispatch Attempt",
+          "type": "integer"
+        },
+        "dispatch_phase": {
+          "$ref": "#/$defs/DispatchPhase"
+        },
+        "observation_envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Envelope Digest",
+          "type": "string"
+        },
+        "permit_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Permit Digest",
+          "type": "string"
+        },
+        "permit_id": {
+          "minLength": 1,
+          "title": "Permit Id",
+          "type": "string"
+        },
+        "permit_nonce": {
+          "minLength": 16,
+          "title": "Permit Nonce",
+          "type": "string"
+        },
+        "plc_boot_epoch": {
+          "minLength": 16,
+          "title": "Plc Boot Epoch",
+          "type": "string"
+        },
+        "plc_id": {
+          "minLength": 1,
+          "title": "Plc Id",
+          "type": "string"
+        },
+        "plc_key_id": {
+          "minLength": 1,
+          "title": "Plc Key Id",
+          "type": "string"
+        },
+        "plc_scan": {
+          "minimum": 1,
+          "title": "Plc Scan",
+          "type": "integer"
+        },
+        "post_actuator_setpoint": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post Actuator Setpoint"
+        },
+        "post_state_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post State Digest"
+        },
+        "post_state_version": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post State Version"
+        },
+        "post_topology_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post Topology Digest"
+        },
+        "pre_actuator_setpoint": {
+          "title": "Pre Actuator Setpoint",
+          "type": "number"
+        },
+        "pre_state": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        "pre_state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pre State Digest",
+          "type": "string"
+        },
+        "pre_state_version": {
+          "minimum": 0,
+          "title": "Pre State Version",
+          "type": "integer"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "plc-command-ack-v1",
+          "default": "plc-command-ack-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "simulation_time_s": {
+          "minimum": 0,
+          "title": "Simulation Time S",
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/$defs/CommandStatus"
+        }
+      },
+      "required": [
+        "request_digest",
+        "permit_digest",
+        "observation_envelope_digest",
+        "permit_id",
+        "permit_nonce",
+        "command_id",
+        "command_digest",
+        "assessment_digest",
+        "proposal_id",
+        "decision_id",
+        "plc_id",
+        "plc_key_id",
+        "plc_boot_epoch",
+        "plc_scan",
+        "status",
+        "dispatch_phase",
+        "reason",
+        "acknowledged_at",
+        "pre_state",
+        "pre_state_digest",
+        "pre_state_version",
+        "pre_actuator_setpoint",
+        "simulation_time_s"
+      ],
+      "title": "PlcCommandAcknowledgment",
+      "type": "object"
+    },
+    "SignedObservationEnvelope": {
+      "additionalProperties": false,
+      "description": "Observer-signed state artifact with boot, sequence, time, and correlation binding.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "challenge_nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Challenge Nonce",
+          "type": "string"
+        },
+        "command_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command Digest"
+        },
+        "correlation_id": {
+          "minLength": 1,
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Envelope Digest",
+          "type": "string"
+        },
+        "logical_time_s": {
+          "minimum": 0,
+          "title": "Logical Time S",
+          "type": "number"
+        },
+        "observation_id": {
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "observer_boot_epoch": {
+          "minLength": 16,
+          "title": "Observer Boot Epoch",
+          "type": "string"
+        },
+        "observer_id": {
+          "minLength": 1,
+          "title": "Observer Id",
+          "type": "string"
+        },
+        "observer_key_id": {
+          "minLength": 1,
+          "title": "Observer Key Id",
+          "type": "string"
+        },
+        "observer_sequence": {
+          "minimum": 1,
+          "title": "Observer Sequence",
+          "type": "integer"
+        },
+        "permit_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permit Id"
+        },
+        "phase": {
+          "$ref": "#/$defs/ObservationPhase"
+        },
+        "plc_acknowledgment_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plc Acknowledgment Digest"
+        },
+        "previous_envelope_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For a post-dispatch observation, the exact pre-authorization envelope for the same transaction; it is not a continuous global-chain claim.",
+          "title": "Previous Envelope Digest"
+        },
+        "schema_version": {
+          "const": "signed-observation-v1",
+          "default": "signed-observation-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        }
+      },
+      "required": [
+        "correlation_id",
+        "phase",
+        "challenge_nonce",
+        "observer_id",
+        "observer_key_id",
+        "observer_boot_epoch",
+        "observer_sequence",
+        "captured_at",
+        "logical_time_s",
+        "snapshot",
+        "envelope_digest"
+      ],
+      "title": "SignedObservationEnvelope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidence that one prior command is rejected by a replacement PLC instance.",
+  "properties": {
+    "after_plant_health_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "After Plant Health Sha256",
+      "type": "string"
+    },
+    "before_plant_health_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Before Plant Health Sha256",
+      "type": "string"
+    },
+    "original_command_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Command Digest",
+      "type": "string"
+    },
+    "original_permit_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Permit Digest",
+      "type": "string"
+    },
+    "original_request_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Request Digest",
+      "type": "string"
+    },
+    "original_transaction_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Transaction Sha256",
+      "type": "string"
+    },
+    "post_replay_observation": {
+      "$ref": "#/$defs/SignedObservationEnvelope"
+    },
+    "prior_plc_registration_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prior Plc Registration Sha256",
+      "type": "string"
+    },
+    "recorded_at": {
+      "format": "date-time",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "replacement_plc_registration_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Replacement Plc Registration Sha256",
+      "type": "string"
+    },
+    "replay_acknowledgment": {
+      "$ref": "#/$defs/PlcCommandAcknowledgment"
+    },
+    "replay_state_unchanged": {
+      "title": "Replay State Unchanged",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "m4b-orderly-restart-replay-v1",
+      "default": "m4b-orderly-restart-replay-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "original_transaction_sha256",
+    "original_request_digest",
+    "original_permit_digest",
+    "original_command_digest",
+    "prior_plc_registration_sha256",
+    "replacement_plc_registration_sha256",
+    "replay_acknowledgment",
+    "before_plant_health_sha256",
+    "after_plant_health_sha256",
+    "post_replay_observation",
+    "replay_state_unchanged",
+    "recorded_at"
+  ],
+  "title": "M4bOrderlyRestartReplayRecord",
+  "type": "object"
+}

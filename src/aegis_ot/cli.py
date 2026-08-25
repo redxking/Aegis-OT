@@ -19,6 +19,7 @@ from .m3_experiment import (
     verify_m3_package,
     write_m3_experiment,
 )
+from .m4b_package import verify_m4b_package, write_m4b_experiment
 from .models import ActionProposal, Operation
 
 app = typer.Typer(no_args_is_help=True)
@@ -145,6 +146,71 @@ def verify_physical_evidence(
     report = verify_m3_package(output_dir)
     typer.echo(json.dumps(report, indent=2))
     if not report["valid"]:
+        raise typer.Exit(code=1)
+
+
+@app.command("capability-experiment")
+def capability_experiment(
+    seed_count: int = typer.Option(30, min=1, max=100),
+    seed: int = 20260825,
+    output_dir: Path = Path("results/m4b-capability-evidence"),
+    trust_anchor: Path = Path("results/m4b-capability-evidence.trust-anchor.json"),
+    require_clean_checkout: bool = typer.Option(
+        True,
+        "--require-clean/--allow-dirty",
+    ),
+) -> None:
+    """Run and retain the bounded M4b capability/consequence experiment."""
+
+    def progress(completed: int, total: int) -> None:
+        typer.echo(f"M4b process sessions complete: {completed}/{total}")
+
+    write_m4b_experiment(
+        output_dir,
+        trust_anchor_path=trust_anchor,
+        root_seed=seed,
+        seed_count=seed_count,
+        progress=progress,
+        require_clean_checkout=require_clean_checkout,
+    )
+    report = verify_m4b_package(
+        output_dir,
+        trust_anchor,
+        checkout_root=Path.cwd(),
+    )
+    typer.echo(json.dumps(report, indent=2))
+    if (
+        report["package_valid"] is not True
+        or report["experiment_accepted"] is not True
+        or report["checkout_matches"] is not True
+    ):
+        raise typer.Exit(code=1)
+
+
+@app.command("verify-capability-evidence")
+def verify_capability_evidence(
+    output_dir: Path = Path("results/m4b-capability-evidence"),
+    trust_anchor: Path = Path("results/m4b-capability-evidence.trust-anchor.json"),
+    checkout_root: Path = Path("."),
+    check_checkout: bool = typer.Option(
+        True,
+        "--check-checkout/--skip-checkout",
+    ),
+) -> None:
+    """Offline-verify M4b integrity, acceptance, and optional checkout binding."""
+
+    report = verify_m4b_package(
+        output_dir,
+        trust_anchor,
+        checkout_root=checkout_root if check_checkout else None,
+    )
+    typer.echo(json.dumps(report, indent=2))
+    failed = (
+        report["package_valid"] is not True
+        or report["experiment_accepted"] is not True
+        or (check_checkout and report["checkout_matches"] is not True)
+    )
+    if failed:
         raise typer.Exit(code=1)
 
 

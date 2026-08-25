@@ -1,0 +1,291 @@
+{
+  "$defs": {
+    "IndependentConsequenceValues": {
+      "additionalProperties": false,
+      "description": "Independent evaluator consequence values; Decimal fields serialize as strings.",
+      "properties": {
+        "isolated_resources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Isolated Resources",
+          "type": "array"
+        },
+        "priority_load_demand_mw": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Priority Load Demand Mw",
+          "type": "string"
+        },
+        "priority_load_served_mw": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Priority Load Served Mw",
+          "type": "string"
+        },
+        "priority_load_served_pct": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Priority Load Served Pct",
+          "type": "string"
+        },
+        "served_load_mw": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Served Load Mw",
+          "type": "string"
+        },
+        "source_connected_bus_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Connected Bus Count"
+        },
+        "total_load_demand_mw": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Total Load Demand Mw",
+          "type": "string"
+        },
+        "total_load_served_pct": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Total Load Served Pct",
+          "type": "string"
+        }
+      },
+      "required": [
+        "total_load_demand_mw",
+        "served_load_mw",
+        "priority_load_demand_mw",
+        "priority_load_served_mw",
+        "total_load_served_pct",
+        "priority_load_served_pct",
+        "isolated_resources"
+      ],
+      "title": "IndependentConsequenceValues",
+      "type": "object"
+    },
+    "IndependentEvaluationStatus": {
+      "enum": [
+        "agree",
+        "contradict",
+        "indeterminate",
+        "not_applicable",
+        "input_rejected"
+      ],
+      "title": "IndependentEvaluationStatus",
+      "type": "string"
+    },
+    "IndependentMetricComparison": {
+      "additionalProperties": false,
+      "description": "One evaluator-to-observer comparison and its declared tolerance.",
+      "properties": {
+        "expected": {
+          "minLength": 1,
+          "title": "Expected",
+          "type": "string"
+        },
+        "metric": {
+          "$ref": "#/$defs/IndependentMetricName"
+        },
+        "observed": {
+          "minLength": 1,
+          "title": "Observed",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "match",
+            "mismatch"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "tolerance": {
+          "minLength": 1,
+          "title": "Tolerance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "expected",
+        "observed",
+        "tolerance",
+        "outcome"
+      ],
+      "title": "IndependentMetricComparison",
+      "type": "object"
+    },
+    "IndependentMetricName": {
+      "enum": [
+        "total_load_demand_mw",
+        "served_load_mw",
+        "priority_load_demand_mw",
+        "priority_load_served_mw",
+        "total_load_served_pct",
+        "priority_load_served_pct",
+        "isolated_resources"
+      ],
+      "title": "IndependentMetricName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Signed result from the separately implemented topology consequence evaluator.",
+  "properties": {
+    "algorithm_id": {
+      "const": "m4b-topology-consequence-bfs-decimal-v1",
+      "default": "m4b-topology-consequence-bfs-decimal-v1",
+      "title": "Algorithm Id",
+      "type": "string"
+    },
+    "boot_epoch": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Boot Epoch",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "evaluator_id": {
+      "const": "m4b-independent-topology-evaluator",
+      "default": "m4b-independent-topology-evaluator",
+      "title": "Evaluator Id",
+      "type": "string"
+    },
+    "evaluator_profile": {
+      "const": "topology-connectivity-v1",
+      "default": "topology-connectivity-v1",
+      "title": "Evaluator Profile",
+      "type": "string"
+    },
+    "evaluator_source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evaluator Source Sha256",
+      "type": "string"
+    },
+    "fixture_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fixture Digest",
+      "type": "string"
+    },
+    "fixture_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Fixture Id",
+      "type": "string"
+    },
+    "key_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Key Id",
+      "type": "string"
+    },
+    "metric_comparisons": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/IndependentMetricComparison"
+      },
+      "title": "Metric Comparisons",
+      "type": "array"
+    },
+    "observed_values": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IndependentConsequenceValues"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pid": {
+      "minimum": 1,
+      "title": "Pid",
+      "type": "integer"
+    },
+    "predicted_values": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IndependentConsequenceValues"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "public_key_b64": {
+      "title": "Public Key B64",
+      "type": "string"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "report_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Report Id",
+      "type": "string"
+    },
+    "request_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Digest",
+      "type": "string"
+    },
+    "request_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "m4b-independent-consequence-report-v1",
+      "default": "m4b-independent-consequence-report-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/IndependentEvaluationStatus"
+    }
+  },
+  "required": [
+    "report_id",
+    "request_id",
+    "request_digest",
+    "key_id",
+    "public_key_b64",
+    "boot_epoch",
+    "pid",
+    "sequence",
+    "evaluated_at",
+    "fixture_id",
+    "fixture_digest",
+    "evaluator_source_sha256",
+    "status",
+    "reasons"
+  ],
+  "title": "IndependentConsequenceReport",
+  "type": "object"
+}

@@ -81,9 +81,12 @@ def test_compose_entrypoint_resolves_to_the_read_only_public_app() -> None:
 def test_public_app_does_not_mount_mutable_decision_surface() -> None:
     client = TestClient(public_app)
     response = client.post("/v1/decisions", json={"proposal": {}, "state": {}})
+    health = client.get("/health")
     schema = client.get("/openapi.json").json()
 
     assert response.status_code == 404
+    assert health.headers["cache-control"] == "no-store"
+    assert health.headers["x-content-type-options"] == "nosniff"
     assert client.get("/docs").status_code == 404
     assert client.get("/redoc").status_code == 404
     assert "/v1/decisions" not in schema["paths"]
@@ -130,6 +133,10 @@ def test_demo_assets_are_allowlisted_and_do_not_call_control_api() -> None:
     assert "Demo service reachable" in javascript.text
     assert "fetchJsonWithRetry" in javascript.text
     assert 'fetchJsonWithRetry("/v1/demo/evidence")' in javascript.text
+    assert "const REQUEST_TIMEOUT_MS = 5000" in javascript.text
+    assert "new AbortController()" in javascript.text
+    assert "signal: controller.signal" in javascript.text
+    assert "window.clearTimeout(timeout)" in javascript.text
     for key in ("ArrowRight", "ArrowLeft", "Home", "End"):
         assert key in javascript.text
     assert missing.status_code == 404
@@ -138,6 +145,8 @@ def test_demo_assets_are_allowlisted_and_do_not_call_control_api() -> None:
 def test_packaged_demo_evidence_retains_claim_boundaries() -> None:
     response = TestClient(public_app).get("/v1/demo/evidence")
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
     evidence = PublicDemoEvidence.model_validate_json(response.text)
 
     assert evidence.schema_version == "public-demo-v2"

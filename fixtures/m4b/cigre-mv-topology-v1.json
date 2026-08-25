@@ -1,0 +1,324 @@
+{
+  "branches": [
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:0",
+      "from_bus": 1,
+      "kind": "line",
+      "target_index": 0,
+      "to_bus": 2
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:1",
+      "from_bus": 2,
+      "kind": "line",
+      "target_index": 1,
+      "to_bus": 3
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:2",
+      "from_bus": 3,
+      "kind": "line",
+      "target_index": 2,
+      "to_bus": 4
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:3",
+      "from_bus": 4,
+      "kind": "line",
+      "target_index": 3,
+      "to_bus": 5
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:4",
+      "from_bus": 5,
+      "kind": "line",
+      "target_index": 4,
+      "to_bus": 6
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:5",
+      "from_bus": 7,
+      "kind": "line",
+      "target_index": 5,
+      "to_bus": 8
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:6",
+      "from_bus": 8,
+      "kind": "line",
+      "target_index": 6,
+      "to_bus": 9
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:7",
+      "from_bus": 9,
+      "kind": "line",
+      "target_index": 7,
+      "to_bus": 10
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:8",
+      "from_bus": 10,
+      "kind": "line",
+      "target_index": 8,
+      "to_bus": 11
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:9",
+      "from_bus": 3,
+      "kind": "line",
+      "target_index": 9,
+      "to_bus": 8
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:10",
+      "from_bus": 12,
+      "kind": "line",
+      "target_index": 10,
+      "to_bus": 13
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "line:11",
+      "from_bus": 13,
+      "kind": "line",
+      "target_index": 11,
+      "to_bus": 14
+    },
+    {
+      "baseline_in_service": false,
+      "branch_id": "line:12",
+      "from_bus": 6,
+      "kind": "line",
+      "target_index": 12,
+      "to_bus": 7
+    },
+    {
+      "baseline_in_service": false,
+      "branch_id": "line:13",
+      "from_bus": 11,
+      "kind": "line",
+      "target_index": 13,
+      "to_bus": 4
+    },
+    {
+      "baseline_in_service": false,
+      "branch_id": "line:14",
+      "from_bus": 14,
+      "kind": "line",
+      "target_index": 14,
+      "to_bus": 8
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "transformer:0",
+      "from_bus": 0,
+      "kind": "transformer",
+      "target_index": 0,
+      "to_bus": 1
+    },
+    {
+      "baseline_in_service": true,
+      "branch_id": "transformer:1",
+      "from_bus": 0,
+      "kind": "transformer",
+      "target_index": 1,
+      "to_bus": 12
+    }
+  ],
+  "buses": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "controlled_resources": [
+    {
+      "branch_id": "line:4",
+      "command_type": "set_line_service",
+      "resource": "feeder-1",
+      "target": "Line 5-6",
+      "target_index": 4
+    },
+    {
+      "branch_id": "line:6",
+      "command_type": "set_line_service",
+      "resource": "feeder-2",
+      "target": "Line 8-9",
+      "target_index": 6
+    }
+  ],
+  "fixture_digest": "58ed983e507811935c448e6d468e952ff34620958eae893d16d454a89651709f",
+  "fixture_id": "pandapower-cigre-mv-all-neutral-topology-v1",
+  "loads": [
+    {
+      "bus": 1,
+      "in_service": true,
+      "load_id": "load:0",
+      "p_mw": "14.994",
+      "priority": false
+    },
+    {
+      "bus": 3,
+      "in_service": true,
+      "load_id": "load:1",
+      "p_mw": "0.27645",
+      "priority": false
+    },
+    {
+      "bus": 4,
+      "in_service": true,
+      "load_id": "load:2",
+      "p_mw": "0.43165",
+      "priority": false
+    },
+    {
+      "bus": 5,
+      "in_service": true,
+      "load_id": "load:3",
+      "p_mw": "0.7275",
+      "priority": false
+    },
+    {
+      "bus": 6,
+      "in_service": true,
+      "load_id": "load:4",
+      "p_mw": "0.54805",
+      "priority": false
+    },
+    {
+      "bus": 8,
+      "in_service": true,
+      "load_id": "load:5",
+      "p_mw": "0.58685",
+      "priority": false
+    },
+    {
+      "bus": 10,
+      "in_service": true,
+      "load_id": "load:6",
+      "p_mw": "0.4753",
+      "priority": false
+    },
+    {
+      "bus": 11,
+      "in_service": true,
+      "load_id": "load:7",
+      "p_mw": "0.3298",
+      "priority": false
+    },
+    {
+      "bus": 12,
+      "in_service": true,
+      "load_id": "load:8",
+      "p_mw": "14.994",
+      "priority": false
+    },
+    {
+      "bus": 14,
+      "in_service": true,
+      "load_id": "load:9",
+      "p_mw": "0.20855",
+      "priority": false
+    },
+    {
+      "bus": 1,
+      "in_service": true,
+      "load_id": "load:10",
+      "p_mw": "4.845",
+      "priority": false
+    },
+    {
+      "bus": 3,
+      "in_service": true,
+      "load_id": "load:11",
+      "p_mw": "0.22525",
+      "priority": false
+    },
+    {
+      "bus": 7,
+      "in_service": true,
+      "load_id": "load:12",
+      "p_mw": "0.0765",
+      "priority": true
+    },
+    {
+      "bus": 9,
+      "in_service": true,
+      "load_id": "load:13",
+      "p_mw": "0.57375",
+      "priority": true
+    },
+    {
+      "bus": 10,
+      "in_service": true,
+      "load_id": "load:14",
+      "p_mw": "0.068",
+      "priority": false
+    },
+    {
+      "bus": 12,
+      "in_service": true,
+      "load_id": "load:15",
+      "p_mw": "5.016",
+      "priority": false
+    },
+    {
+      "bus": 13,
+      "in_service": true,
+      "load_id": "load:16",
+      "p_mw": "0.034",
+      "priority": true
+    },
+    {
+      "bus": 14,
+      "in_service": true,
+      "load_id": "load:17",
+      "p_mw": "0.3315",
+      "priority": true
+    }
+  ],
+  "schema_version": "m4b-neutral-topology-fixture-v1",
+  "source": {
+    "boundary": "derived from the packaged pandapower benchmark; not an independent sensor, AC solver, dynamic model, or external model validation",
+    "constructor": "pandapower.networks.create_cigre_network_mv(with_der='all')",
+    "model_id": "pandapower-cigre-mv-all",
+    "pandapower_version": "3.5.4",
+    "priority_load_indices": [
+      12,
+      13,
+      16,
+      17
+    ],
+    "projection": "solver-neutral bus, switched-branch, source, active-load, and controlled-line mapping"
+  },
+  "sources": [
+    {
+      "bus": 0,
+      "in_service": true,
+      "source_id": "ext_grid:0"
+    }
+  ]
+}
