@@ -6,7 +6,7 @@ import json
 import os
 import secrets
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -15,8 +15,20 @@ from .capability_models import (
     SignedObservationEnvelope,
 )
 from .models import ActionProposal, Operation
-from .segmented_capability_models import SegmentedCapabilityClosedLoopResult
+from .segmented_capability_models import (
+    GATEWAY_CAPABILITY_AUDIENCE,
+    SegmentedCapabilityClosedLoopResult,
+    WorkloadAuthenticatedCapabilityAction,
+)
 from .segmented_runtime import ServiceExchangeError, request_json
+from .workload_identity import WorkloadRole
+from .workload_runtime import (
+    local_identity_from_environment,
+    verifier_from_environment,
+    workload_identity_enabled,
+)
+
+AGENT_PROOF_TTL = timedelta(seconds=30)
 
 
 def _gateway_url() -> str:
@@ -83,7 +95,7 @@ def _request(
 
 def _execute(
     url: str,
-    request: CapabilityActionRequest,
+    request: CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction,
 ) -> SegmentedCapabilityClosedLoopResult:
     payload = request_json(
         "POST",
@@ -92,6 +104,28 @@ def _execute(
         timeout_seconds=15.0,
     )
     return SegmentedCapabilityClosedLoopResult.model_validate(payload)
+
+
+def _wire_request(
+    request: CapabilityActionRequest,
+) -> CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction:
+    if not workload_identity_enabled():
+        return request
+    verifier = verifier_from_environment()
+    agent = local_identity_from_environment(
+        verifier,
+        "AGENT",
+        role=WorkloadRole.AGENT,
+        audience=GATEWAY_CAPABILITY_AUDIENCE,
+    )
+    issued_at = datetime.now(UTC)
+    return WorkloadAuthenticatedCapabilityAction.issue(
+        request=request,
+        signer=agent.signer,
+        request_nonce=request.proposal.nonce,
+        issued_at=issued_at,
+        expires_at=issued_at + AGENT_PROOF_TTL,
+    )
 
 
 def _bypass_results() -> dict[str, bool]:
@@ -125,8 +159,9 @@ def run_probe() -> dict[str, Any]:
         proposal_id=f"m4g-nominal-{uuid4()}",
         critical_load_impact_pct=5.0,
     )
-    nominal = _execute(url, nominal_request)
-    replay = _execute(url, nominal_request)
+    nominal_wire_request = _wire_request(nominal_request)
+    nominal = _execute(url, nominal_wire_request)
+    replay = _execute(url, nominal_wire_request)
 
     unsafe_observation = _capture_pre(url, str(uuid4()))
     unsafe_request = _request(
@@ -134,7 +169,7 @@ def run_probe() -> dict[str, Any]:
         proposal_id=f"m4g-unsafe-{uuid4()}",
         critical_load_impact_pct=30.0,
     )
-    unsafe = _execute(url, unsafe_request)
+    unsafe = _execute(url, _wire_request(unsafe_request))
 
     return {
         "schema_version": "m4g-capability-probe-v1",

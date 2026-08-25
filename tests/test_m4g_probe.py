@@ -193,6 +193,7 @@ def test_bypass_results_classify_each_direct_service_independently(
 def test_run_probe_sequences_nominal_replay_and_unsafe_without_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("AEGIS_WORKLOAD_IDENTITY_MODE", "disabled")
     observations = [object(), object()]
     nominal_request = object()
     unsafe_request = object()

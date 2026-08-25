@@ -1,6 +1,9 @@
 ARG PYTHON_IMAGE=python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689
 FROM ${PYTHON_IMAGE}
 
+ARG AEGIS_SOURCE_REVISION=unknown
+LABEL org.opencontainers.image.revision="${AEGIS_SOURCE_REVISION}"
+
 # The default multi-platform digest was verified on 2026-08-24. Override PYTHON_IMAGE
 # only with another version-and-digest-pinned official image.
 

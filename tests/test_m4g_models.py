@@ -546,7 +546,7 @@ def test_segmented_closed_loop_result_has_distinct_backend_and_inherited_shape(
             reasons=("invalid_terminal_shape",),
             request=artifacts.dispatch.request,
             permit=artifacts.dispatch.permit,
-            dispatch_attempts=0,
+            dispatch_attempts=1,
             execution_evidence_hash=canonical_digest({"terminal": "invalid"}),
         )
 

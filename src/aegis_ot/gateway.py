@@ -42,7 +42,8 @@ class AegisGateway:
         reasons: list[str] = []
         outcome = DecisionOutcome.DENY
 
-        if not self.identity.verify(proposal.actor_id):
+        identity_verified = self.identity.verify(proposal.actor_id)
+        if not identity_verified:
             reasons.append("identity_not_verified")
 
         delegation = self.delegation.validate(proposal, evaluated_at)
@@ -60,7 +61,12 @@ class AegisGateway:
         safety = self.safety.evaluate(proposal, state)
         reasons.extend(safety.reasons)
 
-        if not self.replay.reserve(proposal.nonce, evaluated_at):
+        # An unauthenticated caller must not be able to poison the replay
+        # namespace for a later authenticated proposal using the same nonce.
+        # Authenticated proposals are reserved even when another assurance
+        # check denies them so the authenticated actor cannot replay a changed
+        # context under the same identity-bound nonce.
+        if identity_verified and not self.replay.reserve(proposal.nonce, evaluated_at):
             reasons.append("replayed_nonce")
 
         if reasons == ["human_approval_required"]:

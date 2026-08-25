@@ -3,6 +3,7 @@ x-m4g-build: &m4g-build
   args:
     PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
     AEGIS_INSTALL_TARGET: ".[simulation]"
+    AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
 
 services:
   segmented-gateway:
@@ -15,6 +16,7 @@ services:
       - --port
       - "8081"
     environment:
+      AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_CANDIDATE_URL: http://candidate:8085
       AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
       AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate_public
@@ -45,6 +47,7 @@ services:
       - --port
       - "8082"
     environment:
+      AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
       AEGIS_OBSERVER_PRIVATE_KEY_FILE: /run/secrets/observer_private
       AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
@@ -87,6 +90,7 @@ services:
       - --port
       - "8083"
     environment:
+      AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
       AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
       AEGIS_OBSERVER_URL: http://observer:8082
@@ -137,6 +141,8 @@ services:
   agent-probe:
     build: *m4g-build
     command: [python, -m, aegis_ot.m4g_probe]
+    environment:
+      AEGIS_WORKLOAD_IDENTITY_MODE: disabled
 
 secrets:
   permit_private:

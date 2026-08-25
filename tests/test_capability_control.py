@@ -587,6 +587,39 @@ def test_lost_plc_response_has_at_most_one_dispatch_and_no_automatic_retry(
     assert harness.observer.post_calls == 0
 
 
+def test_known_no_effect_pre_dispatch_rejection_is_not_reported_as_unknown(
+    base_case: BaseCase,
+) -> None:
+    class KnownNoEffectRejection(RuntimeError):
+        known_no_effect = True
+        reason_code = "workload_identity_rejected_before_effect"
+
+        def __init__(self) -> None:
+            super().__init__(self.reason_code)
+            self.dispatch_attempts = 0
+
+    harness = _harness(base_case)
+
+    def reject(**_: object) -> PlcCommandAcknowledgment:
+        harness.plc.calls += 1
+        raise KnownNoEffectRejection
+
+    harness.plc.execute = reject  # type: ignore[method-assign]
+
+    result = harness.controller.execute(harness.request)
+
+    assert result.status is CapabilityClosedLoopStatus.NOT_DISPATCHED
+    assert result.reasons == (
+        "workload_identity_rejected_before_effect",
+        "KnownNoEffectRejection",
+    )
+    assert result.dispatch_attempts == 0
+    assert result.automatic_retry_count == 0
+    assert result.acknowledgment is None
+    assert harness.plc.calls == 1
+    assert harness.observer.post_calls == 0
+
+
 @pytest.mark.parametrize(
     ("post_mode", "error_type"),
     [("missing", "ObserverServiceError"), ("lost", "IpcTransportError")],

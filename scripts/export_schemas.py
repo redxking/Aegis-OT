@@ -39,10 +39,48 @@ from aegis_ot.physical_models import (
     PhysicalStateSnapshot,
 )
 from aegis_ot.schema import action_proposal_schema
+from aegis_ot.segmented_capability_models import (
+    SegmentedCapabilityClosedLoopResult,
+    SegmentedCapabilityDispatch,
+    SignedSegmentedCapabilityDispatch,
+    SignedSegmentedCapabilityResponse,
+    WorkloadAuthenticatedCapabilityAction,
+    WorkloadSignedCapabilityDispatch,
+    WorkloadSignedCapabilityResponse,
+)
+from aegis_ot.workload_identity import (
+    SignedWorkloadCredential,
+    WorkloadCredential,
+    WorkloadTrustBundle,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
 MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
+    ROOT / "schemas" / "m4g-capability-dispatch.schema.json": (
+        SegmentedCapabilityDispatch
+    ),
+    ROOT / "schemas" / "m4g-segmented-capability-result.schema.json": (
+        SegmentedCapabilityClosedLoopResult
+    ),
+    ROOT / "schemas" / "m4g-signed-capability-dispatch.schema.json": (
+        SignedSegmentedCapabilityDispatch
+    ),
+    ROOT / "schemas" / "m4g-signed-capability-response.schema.json": (
+        SignedSegmentedCapabilityResponse
+    ),
+    ROOT / "schemas" / "m4g-workload-capability-action.schema.json": (
+        WorkloadAuthenticatedCapabilityAction
+    ),
+    ROOT / "schemas" / "m4g-workload-credential-claims.schema.json": WorkloadCredential,
+    ROOT / "schemas" / "m4g-workload-credential.schema.json": SignedWorkloadCredential,
+    ROOT / "schemas" / "m4g-workload-capability-dispatch.schema.json": (
+        WorkloadSignedCapabilityDispatch
+    ),
+    ROOT / "schemas" / "m4g-workload-capability-response.schema.json": (
+        WorkloadSignedCapabilityResponse
+    ),
+    ROOT / "schemas" / "m4g-workload-trust-bundle.schema.json": WorkloadTrustBundle,
     ROOT / "schemas" / "m4b-artifact-descriptor.schema.json": M4bArtifactDescriptor,
     ROOT / "schemas" / "m4b-capability-probe-bundle.schema.json": M4bCapabilityProbeBundle,
     ROOT / "schemas" / "m4b-component-registration.schema.json": M4bComponentRegistration,

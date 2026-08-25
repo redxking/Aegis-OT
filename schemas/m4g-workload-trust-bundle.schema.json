@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "WorkloadRevocation": {
+      "additionalProperties": false,
+      "description": "A listed credential is denied immediately, regardless of timestamp.",
+      "properties": {
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "revoked_at": {
+          "format": "date-time",
+          "title": "Revoked At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential_id",
+        "revoked_at",
+        "reason"
+      ],
+      "title": "WorkloadRevocation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Pinned-authority-signed lifecycle state for one research trust domain.",
+  "properties": {
+    "authority_key_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Authority Key Id",
+      "type": "string"
+    },
+    "authority_public_key_b64": {
+      "maxLength": 44,
+      "minLength": 44,
+      "title": "Authority Public Key B64",
+      "type": "string"
+    },
+    "bundle_id": {
+      "maxLength": 128,
+      "minLength": 16,
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "issued_at": {
+      "format": "date-time",
+      "title": "Issued At",
+      "type": "string"
+    },
+    "revocations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/WorkloadRevocation"
+      },
+      "title": "Revocations",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "m4g-workload-trust-bundle-v1",
+      "pattern": "^m4g-workload-trust-bundle-v1$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    },
+    "trust_domain": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Trust Domain",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "sequence",
+    "trust_domain",
+    "authority_key_id",
+    "authority_public_key_b64",
+    "issued_at",
+    "expires_at"
+  ],
+  "title": "WorkloadTrustBundle",
+  "type": "object"
+}

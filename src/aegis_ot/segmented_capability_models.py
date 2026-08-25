@@ -37,9 +37,11 @@ from .physical_models import (
     canonical_digest,
     proposal_digest,
 )
+from .workload_identity import SignedWorkloadCredential, WorkloadSigner
 
 MAX_SIGNED_CALL_TTL = timedelta(seconds=60)
 OT_CAPABILITY_AUDIENCE = "aegis-ot:m4g:ot-adapter"
+GATEWAY_CAPABILITY_AUDIENCE = "aegis-ot:m4g:gateway"
 PHYSICAL_PLANT_AUDIENCE = "aegis-ot:m4g:physical-plant"
 
 
@@ -452,6 +454,203 @@ class SignedSegmentedCapabilityResponse(_StrictFrozenModel):
             )
             and request.issued_at <= acknowledgment.acknowledged_at <= self.signed_at
             and self.signed_at <= evaluated_at + maximum_future_skew
+        )
+
+
+class WorkloadAuthenticatedCapabilityAction(_StrictFrozenModel):
+    """Agent action proof bound to the exact gateway method, path, and request."""
+
+    schema_version: Literal["m4g-workload-capability-action-v1"] = (
+        "m4g-workload-capability-action-v1"
+    )
+    method: Literal["POST"] = "POST"
+    path: Literal["/v1/capability/actions"] = "/v1/capability/actions"
+    audience: str = Field(default=GATEWAY_CAPABILITY_AUDIENCE, min_length=1)
+    request: CapabilityActionRequest
+    sender_credential: SignedWorkloadCredential
+    request_nonce: str = Field(min_length=16, max_length=256)
+    issued_at: datetime
+    expires_at: datetime
+    signature: str = ""
+
+    @model_validator(mode="after")
+    def require_window(self) -> WorkloadAuthenticatedCapabilityAction:
+        _validate_window(self.issued_at, self.expires_at, label="agent action proof")
+        if self.request_nonce != self.request.proposal.nonce:
+            raise ValueError("agent proof nonce must match the proposal replay nonce")
+        return self
+
+    def signing_payload(self) -> bytes:
+        return _canonical_json(self.model_dump(mode="json", exclude={"signature"}))
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        request: CapabilityActionRequest,
+        signer: WorkloadSigner,
+        request_nonce: str,
+        issued_at: datetime,
+        expires_at: datetime,
+    ) -> WorkloadAuthenticatedCapabilityAction:
+        proof = cls(
+            request=request,
+            sender_credential=signer.credential,
+            request_nonce=request_nonce,
+            issued_at=issued_at,
+            expires_at=expires_at,
+        )
+        return proof.model_copy(
+            update={"signature": sign_bytes(signer.private_key, proof.signing_payload())}
+        )
+
+    def verify(self, public_key: Ed25519PublicKey, *, evaluated_at: datetime) -> bool:
+        return (
+            self.audience == GATEWAY_CAPABILITY_AUDIENCE
+            and _valid_at(self.issued_at, self.expires_at, evaluated_at)
+            and bool(self.signature)
+            and verify_bytes(public_key, self.signing_payload(), self.signature)
+        )
+
+
+class WorkloadSignedCapabilityDispatch(_StrictFrozenModel):
+    """Credential-bearing outer proof for the existing full dispatch envelope."""
+
+    schema_version: Literal["m4g-workload-capability-dispatch-v1"] = (
+        "m4g-workload-capability-dispatch-v1"
+    )
+    request: SignedSegmentedCapabilityDispatch
+    sender_credential: SignedWorkloadCredential
+    signature: str = ""
+
+    @model_validator(mode="after")
+    def require_leaf_binding(self) -> WorkloadSignedCapabilityDispatch:
+        if self.request.gateway_key_id != self.sender_credential.credential.key_id:
+            raise ValueError("gateway dispatch key does not match its workload credential")
+        return self
+
+    @property
+    def transport_nonce(self) -> str:
+        return self.request.transport_nonce
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+    def signing_payload(self) -> bytes:
+        return _canonical_json(self.model_dump(mode="json", exclude={"signature"}))
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        dispatch: SegmentedCapabilityDispatch,
+        signer: WorkloadSigner,
+        transport_nonce: str,
+        issued_at: datetime,
+        expires_at: datetime,
+    ) -> WorkloadSignedCapabilityDispatch:
+        inner = SignedSegmentedCapabilityDispatch.issue(
+            dispatch=dispatch,
+            gateway_key_id=signer.credential.credential.key_id,
+            transport_nonce=transport_nonce,
+            issued_at=issued_at,
+            expires_at=expires_at,
+            private_key=signer.private_key,
+        )
+        proof = cls(request=inner, sender_credential=signer.credential)
+        return proof.model_copy(
+            update={"signature": sign_bytes(signer.private_key, proof.signing_payload())}
+        )
+
+    def verify(self, public_key: Ed25519PublicKey, *, evaluated_at: datetime) -> bool:
+        return (
+            self.request.verify_for_admission(
+                public_key,
+                expected_audience=OT_CAPABILITY_AUDIENCE,
+                expected_gateway_key_id=self.sender_credential.credential.key_id,
+                evaluated_at=evaluated_at,
+            )
+            and bool(self.signature)
+            and verify_bytes(public_key, self.signing_payload(), self.signature)
+        )
+
+
+class WorkloadSignedCapabilityResponse(_StrictFrozenModel):
+    """Credential-bearing OT proof bound to the exact outer gateway request."""
+
+    schema_version: Literal["m4g-workload-capability-response-v1"] = (
+        "m4g-workload-capability-response-v1"
+    )
+    request_sha256: str = Field(pattern=SHA256_PATTERN)
+    response: SignedSegmentedCapabilityResponse
+    audience: str = Field(default=GATEWAY_CAPABILITY_AUDIENCE, min_length=1)
+    sender_credential: SignedWorkloadCredential
+    signature: str = ""
+
+    @model_validator(mode="after")
+    def require_leaf_binding(self) -> WorkloadSignedCapabilityResponse:
+        if self.response.ot_key_id != self.sender_credential.credential.key_id:
+            raise ValueError("OT response key does not match its workload credential")
+        return self
+
+    def signing_payload(self) -> bytes:
+        return _canonical_json(self.model_dump(mode="json", exclude={"signature"}))
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        request: WorkloadSignedCapabilityDispatch,
+        acknowledgment: PlcCommandAcknowledgment,
+        signer: WorkloadSigner,
+        signed_at: datetime,
+    ) -> WorkloadSignedCapabilityResponse:
+        inner = SignedSegmentedCapabilityResponse.issue(
+            request=request.request,
+            acknowledgment=acknowledgment,
+            ot_key_id=signer.credential.credential.key_id,
+            signed_at=signed_at,
+            private_key=signer.private_key,
+        )
+        proof = cls(
+            request_sha256=request.digest,
+            response=inner,
+            sender_credential=signer.credential,
+        )
+        return proof.model_copy(
+            update={"signature": sign_bytes(signer.private_key, proof.signing_payload())}
+        )
+
+    def verify_for_request(
+        self,
+        public_key: Ed25519PublicKey,
+        *,
+        request: WorkloadSignedCapabilityDispatch,
+        expected_plc_id: str,
+        expected_plc_boot_epoch: str,
+        evaluated_at: datetime,
+    ) -> bool:
+        key_id = self.sender_credential.credential.key_id
+        return (
+            self.audience == GATEWAY_CAPABILITY_AUDIENCE
+            and self.request_sha256 == request.digest
+            and self.response.verify_complete_for_request(
+                public_key,
+                request=request.request,
+                expected_ot_key_id=key_id,
+                plc_public_key=public_key,
+                expected_plc_id=expected_plc_id,
+                expected_plc_key_id=key_id,
+                expected_plc_boot_epoch=expected_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+            )
+            and bool(self.signature)
+            and verify_bytes(public_key, self.signing_payload(), self.signature)
         )
 
 

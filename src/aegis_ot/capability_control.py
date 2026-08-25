@@ -490,6 +490,28 @@ class CapabilityClosedLoopController:
                 assessment=assessment,
             )
         except Exception as exc:
+            known_no_effect = getattr(exc, "known_no_effect", False) is True
+            dispatch_attempts = getattr(exc, "dispatch_attempts", 1)
+            if known_no_effect and dispatch_attempts == 0:
+                reason_code = getattr(
+                    exc,
+                    "reason_code",
+                    "plc_dispatch_rejected_before_effect",
+                )
+                if not isinstance(reason_code, str) or not reason_code:
+                    reason_code = "plc_dispatch_rejected_before_effect"
+                return self._record(
+                    status=CapabilityClosedLoopStatus.NOT_DISPATCHED,
+                    reasons=(reason_code, type(exc).__name__),
+                    request=request,
+                    dispatch_attempts=dispatch_attempts,
+                    pre_observation=observed,
+                    decision=decision,
+                    command=command,
+                    assessment=assessment,
+                    permit=permit,
+                    last_observation=observed,
+                )
             return self._record(
                 status=CapabilityClosedLoopStatus.UNKNOWN_EFFECT,
                 reasons=("plc_dispatch_outcome_unavailable", type(exc).__name__),

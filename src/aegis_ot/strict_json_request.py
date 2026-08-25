@@ -12,7 +12,7 @@ import json
 from enum import StrEnum
 from typing import Any, Final, NoReturn, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from starlette.requests import ClientDisconnect, Request
 
 from .segmented_capability_transport import MAX_JSON_BYTES
@@ -173,6 +173,25 @@ def _prevalidate_json_object(material: bytes) -> None:
 
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+AdapterT = TypeVar("AdapterT")
+
+
+async def _strict_json_material(
+    request: Request,
+    *,
+    max_bytes: int,
+) -> bytes:
+    if max_bytes < 1 or max_bytes > MAX_JSON_BYTES:
+        raise ValueError("max_bytes must be within the M4g JSON size limit")
+    _require_application_json(request)
+    declared_length = _require_content_length(request, max_bytes=max_bytes)
+    material = await _read_bounded_body(
+        request,
+        declared_length=declared_length,
+        max_bytes=max_bytes,
+    )
+    _prevalidate_json_object(material)
+    return material
 
 
 async def parse_strict_json_request(
@@ -190,17 +209,23 @@ async def parse_strict_json_request(
     fields, which are represented as strings on the wire.
     """
 
-    if max_bytes < 1 or max_bytes > MAX_JSON_BYTES:
-        raise ValueError("max_bytes must be within the M4g JSON size limit")
-    _require_application_json(request)
-    declared_length = _require_content_length(request, max_bytes=max_bytes)
-    material = await _read_bounded_body(
-        request,
-        declared_length=declared_length,
-        max_bytes=max_bytes,
-    )
-    _prevalidate_json_object(material)
+    material = await _strict_json_material(request, max_bytes=max_bytes)
     try:
         return model.model_validate_json(material, strict=True)
+    except (ValidationError, ValueError, TypeError):
+        _reject(400, StrictJsonRequestReason.MODEL_VALIDATION_FAILED)
+
+
+async def parse_strict_json_request_adapter(
+    request: Request,
+    adapter: TypeAdapter[AdapterT],
+    *,
+    max_bytes: int = MAX_JSON_BYTES,
+) -> AdapterT:
+    """Strictly parse a closed union without initializing a runtime first."""
+
+    material = await _strict_json_material(request, max_bytes=max_bytes)
+    try:
+        return adapter.validate_json(material, strict=True)
     except (ValidationError, ValueError, TypeError):
         _reject(400, StrictJsonRequestReason.MODEL_VALIDATION_FAILED)

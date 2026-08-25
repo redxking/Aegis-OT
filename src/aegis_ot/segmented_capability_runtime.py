@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from .capability_control import (
     CapabilityClosedLoopController,
@@ -63,6 +63,7 @@ from .physical_models import (
 )
 from .safety import SafetyKernel, SafetyLimits
 from .segmented_capability_models import (
+    GATEWAY_CAPABILITY_AUDIENCE,
     OT_CAPABILITY_AUDIENCE,
     PHYSICAL_PLANT_AUDIENCE,
     PlantApplyPayload,
@@ -81,6 +82,9 @@ from .segmented_capability_models import (
     SignedPlantResponse,
     SignedSegmentedCapabilityDispatch,
     SignedSegmentedCapabilityResponse,
+    WorkloadAuthenticatedCapabilityAction,
+    WorkloadSignedCapabilityDispatch,
+    WorkloadSignedCapabilityResponse,
 )
 from .segmented_capability_transport import (
     CandidateHealthMetadata,
@@ -95,20 +99,48 @@ from .segmented_capability_transport import (
     RemoteVirtualPlcPort,
     SegmentedCapabilityDiscovery,
     TransportFailureBody,
+    WorkloadRemoteVirtualPlcPort,
     discover_segmented_capabilities_via_ot,
     fetch_observer_health,
     fetch_plant_health,
 )
 from .segmented_runtime import OpaBackedPolicy
-from .strict_json_request import StrictJsonRequestError, parse_strict_json_request
+from .strict_json_request import (
+    StrictJsonRequestError,
+    parse_strict_json_request,
+    parse_strict_json_request_adapter,
+)
 from .transport_replay import (
     DurableTransportReplayLedger,
     TransportReplayLedgerError,
+)
+from .workload_identity import (
+    WorkloadCredentialBinding,
+    WorkloadCredentialRejected,
+    WorkloadIdentityError,
+    WorkloadIdentityUnavailable,
+    WorkloadIdentityVerifier,
+    WorkloadRole,
+)
+from .workload_replay import DurableWorkloadReplayLedger, WorkloadReplayLedgerError
+from .workload_runtime import (
+    LocalWorkloadIdentity,
+    credential_binding_from_environment,
+    local_identity_from_environment,
+    verifier_from_environment,
+    workload_identity_enabled,
 )
 
 PLANT_BACKEND = "pandapower-cigre-mv-segmented-http-v1"
 PLC_ID = "virtual-control-device:m4g-segmented"
 MAX_OBSERVATION_CACHE = 128
+
+_OT_EXECUTE_REQUEST_ADAPTER: TypeAdapter[
+    SignedSegmentedCapabilityDispatch | WorkloadSignedCapabilityDispatch
+] = TypeAdapter(SignedSegmentedCapabilityDispatch | WorkloadSignedCapabilityDispatch)
+_GATEWAY_ACTION_REQUEST_ADAPTER: TypeAdapter[
+    CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction
+] = TypeAdapter(CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction)
 
 
 class CapabilityRuntimeError(RuntimeError):
@@ -629,7 +661,7 @@ class CapabilityOtRuntime:
         self,
         *,
         device: CapabilityVirtualPlc,
-        transport_replay: DurableTransportReplayLedger,
+        transport_replay: DurableTransportReplayLedger | DurableWorkloadReplayLedger,
         gateway_public_key: Ed25519PublicKey,
         gateway_key_id: str,
         observer_info: ObserverProcessInfo,
@@ -641,8 +673,12 @@ class CapabilityOtRuntime:
         boot_epoch: str,
         plant_info: PlantHealthMetadata,
         semantic_replay: OrderlyRestartReplayReservations,
+        gateway_workload_identity: WorkloadCredentialBinding | None = None,
+        local_workload_identity: LocalWorkloadIdentity | None = None,
         clock: Clock = utc_now,
     ) -> None:
+        if (gateway_workload_identity is None) != (local_workload_identity is None):
+            raise ValueError("gateway and OT workload identities must be configured together")
         if device.acknowledgment_key_id != key_id or device.plc_id != plc_id:
             raise ValueError("OT runtime identity does not match its virtual PLC")
         if device.boot_epoch != boot_epoch:
@@ -684,6 +720,8 @@ class CapabilityOtRuntime:
         self.boot_epoch = boot_epoch
         self.plant_info = plant_info
         self.semantic_replay = semantic_replay
+        self.gateway_workload_identity = gateway_workload_identity
+        self.local_workload_identity = local_workload_identity
         self.clock = clock
         self._lock = RLock()
         self.execute_requests = 0
@@ -692,7 +730,26 @@ class CapabilityOtRuntime:
         try:
             transport_count = self.transport_replay.reservation_count
             semantic_count = self.semantic_replay.reservation_count
-        except (TransportReplayLedgerError, ValueError, OSError) as exc:
+            gateway_key_id = self.gateway_key_id
+            gateway_public_key = self.gateway_public_key
+            key_id = self.key_id
+            public_key = self.public_key
+            if self.gateway_workload_identity is not None:
+                evaluated_at = self.clock()
+                gateway = self.gateway_workload_identity.resolve(now=evaluated_at)
+                assert self.local_workload_identity is not None
+                local = self.local_workload_identity.resolve(now=evaluated_at)
+                gateway_key_id = gateway.key_id
+                gateway_public_key = gateway.public_key
+                key_id = local.key_id
+                public_key = local.public_key
+        except (
+            TransportReplayLedgerError,
+            WorkloadReplayLedgerError,
+            WorkloadIdentityError,
+            ValueError,
+            OSError,
+        ) as exc:
             raise CapabilityRuntimeUnavailable("OT replay state is unavailable") from exc
         with self._lock:
             execute_requests = self.execute_requests
@@ -701,10 +758,10 @@ class CapabilityOtRuntime:
             pid=os.getpid(),
             plc_id=self.plc_id,
             boot_epoch=self.boot_epoch,
-            key_id=self.key_id,
-            public_key_b64=_public_key_b64(self.public_key),
-            gateway_key_id=self.gateway_key_id,
-            gateway_public_key_b64=_public_key_b64(self.gateway_public_key),
+            key_id=key_id,
+            public_key_b64=_public_key_b64(public_key),
+            gateway_key_id=gateway_key_id,
+            gateway_public_key_b64=_public_key_b64(gateway_public_key),
             permit_key_id=self.permit_key_id,
             permit_public_key_b64=_public_key_b64(self.permit_public_key),
             plant_boot_epoch=self.plant_info.boot_epoch,
@@ -719,13 +776,49 @@ class CapabilityOtRuntime:
 
     def execute(
         self,
-        request: SignedSegmentedCapabilityDispatch,
-    ) -> SignedSegmentedCapabilityResponse:
+        request: SignedSegmentedCapabilityDispatch | WorkloadSignedCapabilityDispatch,
+    ) -> SignedSegmentedCapabilityResponse | WorkloadSignedCapabilityResponse:
         evaluated_at = self.clock()
-        if not request.verify_complete_for_ot(
-            self.gateway_public_key,
+        workload_request: WorkloadSignedCapabilityDispatch | None = None
+        gateway_public_key = self.gateway_public_key
+        expected_gateway_key_id = self.gateway_key_id
+        signed_request: SignedSegmentedCapabilityDispatch
+        if self.gateway_workload_identity is not None:
+            if not isinstance(request, WorkloadSignedCapabilityDispatch):
+                raise CapabilityAdmissionRejected("gateway_workload_credential_required")
+            assert self.local_workload_identity is not None
+            try:
+                gateway = self.gateway_workload_identity.resolve(now=evaluated_at)
+                local = self.local_workload_identity.resolve(now=evaluated_at)
+            except WorkloadCredentialRejected as exc:
+                raise CapabilityAdmissionRejected(
+                    "capability_workload_identity_rejected"
+                ) from exc
+            except WorkloadIdentityUnavailable as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "capability_workload_trust_unavailable"
+                ) from exc
+            if (
+                request.sender_credential != gateway.credential
+                or not request.verify(gateway.public_key, evaluated_at=evaluated_at)
+                or local.key_id != self.key_id
+                or local.public_key.public_bytes_raw() != self.public_key.public_bytes_raw()
+            ):
+                raise CapabilityAdmissionRejected(
+                    "capability_workload_identity_rejected"
+                )
+            workload_request = request
+            signed_request = request.request
+            gateway_public_key = gateway.public_key
+            expected_gateway_key_id = gateway.key_id
+        else:
+            if not isinstance(request, SignedSegmentedCapabilityDispatch):
+                raise CapabilityAdmissionRejected("workload_identity_is_disabled")
+            signed_request = request
+        if not signed_request.verify_complete_for_ot(
+            gateway_public_key,
             expected_audience=OT_CAPABILITY_AUDIENCE,
-            expected_gateway_key_id=self.gateway_key_id,
+            expected_gateway_key_id=expected_gateway_key_id,
             observer_public_key=self.observer_info.public_key,
             expected_observer_id=self.observer_info.observer_id,
             expected_observer_key_id=self.observer_info.key_id,
@@ -743,11 +836,11 @@ class CapabilityOtRuntime:
                 request.transport_nonce,
                 request.digest,
             )
-        except TransportReplayLedgerError as exc:
+        except (TransportReplayLedgerError, WorkloadReplayLedgerError) as exc:
             raise CapabilityRuntimeUnavailable("OT transport replay state is unavailable") from exc
         if not reserved:
             raise CapabilityAdmissionRejected("transport_request_replayed")
-        dispatch = request.dispatch
+        dispatch = signed_request.dispatch
         with self._lock:
             self.execute_requests += 1
         try:
@@ -760,8 +853,16 @@ class CapabilityOtRuntime:
             )
         except (ValueError, OSError) as exc:
             raise CapabilityRuntimeUnavailable("OT semantic replay state is unavailable") from exc
+        if workload_request is not None:
+            assert self.local_workload_identity is not None
+            return WorkloadSignedCapabilityResponse.issue(
+                request=workload_request,
+                acknowledgment=acknowledgment,
+                signer=self.local_workload_identity.signer,
+                signed_at=self.clock(),
+            )
         return SignedSegmentedCapabilityResponse.issue(
-            request=request,
+            request=signed_request,
             acknowledgment=acknowledgment,
             ot_key_id=self.key_id,
             signed_at=self.clock(),
@@ -773,6 +874,22 @@ class SegmentedCapabilityController(CapabilityClosedLoopController):
     """Capability controller that retains the verified candidate exchange."""
 
     simulator: RemoteCandidatePort
+
+    def _execute_locked(
+        self,
+        request: CapabilityActionRequest,
+    ) -> CapabilityClosedLoopResult:
+        if isinstance(self.plc, WorkloadRemoteVirtualPlcPort):
+            try:
+                self.plc.preflight_identity()
+            except Exception as exc:
+                return self._record(
+                    status=CapabilityClosedLoopStatus.NOT_DISPATCHED,
+                    reasons=("ot_workload_identity_unavailable", type(exc).__name__),
+                    request=request,
+                    dispatch_attempts=0,
+                )
+        return super()._execute_locked(request)
 
     def _record(
         self,
@@ -873,12 +990,22 @@ class CapabilityGatewayRuntime:
         observer: RemoteObservationPort,
         discovery: SegmentedCapabilityDiscovery,
         gateway_key_id: str,
+        agent_workload_verifier: WorkloadIdentityVerifier | None = None,
+        agent_workload_subject: str | None = None,
+        clock: Clock = utc_now,
     ) -> None:
+        if (agent_workload_verifier is None) != (agent_workload_subject is None):
+            raise ValueError(
+                "agent workload verifier and stable subject must be configured together"
+            )
         self.authorization = authorization
         self.controller = controller
         self.observer = observer
         self.discovery = discovery
         self.gateway_key_id = gateway_key_id
+        self.agent_workload_verifier = agent_workload_verifier
+        self.agent_workload_subject = agent_workload_subject
+        self.clock = clock
         # Agent-facing pre-capture and action entry points share this lock.  A
         # capture flood therefore cannot evict the active predecessor after an
         # action has entered authorization and before its post observation.
@@ -896,15 +1023,62 @@ class CapabilityGatewayRuntime:
 
     def execute(
         self,
-        request: CapabilityActionRequest,
+        request: CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction,
     ) -> SegmentedCapabilityClosedLoopResult:
+        if self.agent_workload_verifier is not None:
+            if not isinstance(request, WorkloadAuthenticatedCapabilityAction):
+                raise CapabilityAdmissionRejected("agent_workload_credential_required")
+            evaluated_at = self.clock()
+            assert self.agent_workload_subject is not None
+            try:
+                verification = self.agent_workload_verifier.verify_credential_with_receipt(
+                    request.sender_credential,
+                    expected_role=WorkloadRole.AGENT,
+                    expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
+                    expected_subject=self.agent_workload_subject,
+                    now=evaluated_at,
+                )
+            except WorkloadCredentialRejected as exc:
+                raise CapabilityAdmissionRejected(
+                    "agent_workload_identity_rejected"
+                ) from exc
+            except WorkloadIdentityUnavailable as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "agent_workload_trust_unavailable"
+                ) from exc
+            if not request.verify(
+                verification.public_key,
+                evaluated_at=evaluated_at,
+            ):
+                raise CapabilityAdmissionRejected("agent_workload_proof_rejected")
+            action = request.request
+            self.authorization.gateway.evidence.append(
+                proposal_id=action.proposal.proposal_id,
+                decision_id=f"identity-admission:{action.request_id}",
+                payload={
+                    "event_type": "workload_identity_admission",
+                    "entrypoint": "agent-to-segmented-gateway",
+                    "proof_sha256": request.digest,
+                    **verification.evidence_fields(),
+                },
+            )
+        else:
+            if isinstance(request, WorkloadAuthenticatedCapabilityAction):
+                raise CapabilityAdmissionRejected("workload_identity_is_disabled")
+            action = request
         with self._transaction_lock:
-            result = self.controller.execute(request)
+            result = self.controller.execute(action)
             if not isinstance(result, SegmentedCapabilityClosedLoopResult):
                 raise RuntimeError("segmented controller returned an invalid terminal model")
             return result
 
     def health(self) -> dict[str, Any]:
+        plc = getattr(self.controller, "plc", None)
+        if isinstance(plc, WorkloadRemoteVirtualPlcPort):
+            # Readiness is a current trust decision. A stale health response
+            # must not hide a missing, corrupt, rolled-back, or revoked
+            # consequence-path credential.
+            plc.preflight_identity()
         return {
             "schema_version": "m4g-gateway-health-v1",
             "status": "ready",
@@ -1128,15 +1302,39 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
         or observer.plant_model_digest != plant.model_digest
     ):
         raise CapabilityRuntimeUnavailable("observer and plant discovery are inconsistent")
-    private_key = _load_private_key(_expected_environment("AEGIS_OT_PRIVATE_KEY_FILE"))
-    key_id = _expected_environment("AEGIS_OT_KEY_ID")
+    gateway_workload_identity: WorkloadCredentialBinding | None = None
+    local_workload_identity: LocalWorkloadIdentity | None = None
+    workload_verifier: WorkloadIdentityVerifier | None = None
+    if workload_identity_enabled():
+        workload_verifier = verifier_from_environment()
+        gateway_workload_identity = credential_binding_from_environment(
+            workload_verifier,
+            "GATEWAY",
+            role=WorkloadRole.GATEWAY,
+            audience=OT_CAPABILITY_AUDIENCE,
+        )
+        local_workload_identity = local_identity_from_environment(
+            workload_verifier,
+            "OT",
+            role=WorkloadRole.OT_ADAPTER,
+            audience=GATEWAY_CAPABILITY_AUDIENCE,
+        )
+        gateway_identity = gateway_workload_identity.resolve()
+        local_identity = local_workload_identity.resolve()
+        private_key = local_workload_identity.signer.private_key
+        key_id = local_identity.key_id
+        gateway_key_id = gateway_identity.key_id
+        gateway_public = gateway_identity.public_key
+    else:
+        private_key = _load_private_key(_expected_environment("AEGIS_OT_PRIVATE_KEY_FILE"))
+        key_id = _expected_environment("AEGIS_OT_KEY_ID")
+        gateway_key_id = _expected_environment("AEGIS_GATEWAY_KEY_ID")
+        gateway_public = _load_public_key(
+            _expected_environment("AEGIS_GATEWAY_PUBLIC_KEY_FILE")
+        )
     permit_key_id = _expected_environment("AEGIS_PERMIT_KEY_ID")
     permit_public = _load_public_key(
         _expected_environment("AEGIS_PERMIT_PUBLIC_KEY_FILE")
-    )
-    gateway_key_id = _expected_environment("AEGIS_GATEWAY_KEY_ID")
-    gateway_public = _load_public_key(
-        _expected_environment("AEGIS_GATEWAY_PUBLIC_KEY_FILE")
     )
     boot_epoch = str(uuid4())
     provisional = OtHealthMetadata(
@@ -1179,14 +1377,26 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
         acknowledgment_key_id=key_id,
         replay=semantic_replay,
     )
-    transport_replay = DurableTransportReplayLedger(
-        Path(_expected_environment("AEGIS_TRANSPORT_REPLAY_LEDGER_FILE")),
-        audience=OT_CAPABILITY_AUDIENCE,
-        gateway_key_id=gateway_key_id,
-        gateway_public_key_sha256=hashlib.sha256(
-            gateway_public.public_bytes_raw()
-        ).hexdigest(),
-    )
+    if workload_verifier is not None:
+        assert gateway_workload_identity is not None
+        transport_replay: DurableTransportReplayLedger | DurableWorkloadReplayLedger = (
+            DurableWorkloadReplayLedger(
+                Path(_expected_environment("AEGIS_WORKLOAD_REPLAY_LEDGER_FILE")),
+                audience=OT_CAPABILITY_AUDIENCE,
+                trust_domain=workload_verifier.trust_domain,
+                workload_subject=gateway_workload_identity.expected_subject,
+                authority_key_id=workload_verifier.trust_root_key_id,
+            )
+        )
+    else:
+        transport_replay = DurableTransportReplayLedger(
+            Path(_expected_environment("AEGIS_TRANSPORT_REPLAY_LEDGER_FILE")),
+            audience=OT_CAPABILITY_AUDIENCE,
+            gateway_key_id=gateway_key_id,
+            gateway_public_key_sha256=hashlib.sha256(
+                gateway_public.public_bytes_raw()
+            ).hexdigest(),
+        )
     return CapabilityOtRuntime(
         device=device,
         transport_replay=transport_replay,
@@ -1201,11 +1411,32 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
         boot_epoch=boot_epoch,
         plant_info=plant,
         semantic_replay=semantic_replay,
+        gateway_workload_identity=gateway_workload_identity,
+        local_workload_identity=local_workload_identity,
     )
 
 
 def _build_gateway_runtime() -> CapabilityGatewayRuntime:
-    gateway_key_id = _expected_environment("AEGIS_GATEWAY_KEY_ID")
+    workload_verifier: WorkloadIdentityVerifier | None = None
+    gateway_workload_identity: LocalWorkloadIdentity | None = None
+    ot_workload_identity: WorkloadCredentialBinding | None = None
+    if workload_identity_enabled():
+        workload_verifier = verifier_from_environment()
+        gateway_workload_identity = local_identity_from_environment(
+            workload_verifier,
+            "GATEWAY",
+            role=WorkloadRole.GATEWAY,
+            audience=OT_CAPABILITY_AUDIENCE,
+        )
+        ot_workload_identity = credential_binding_from_environment(
+            workload_verifier,
+            "OT",
+            role=WorkloadRole.OT_ADAPTER,
+            audience=GATEWAY_CAPABILITY_AUDIENCE,
+        )
+        gateway_key_id = gateway_workload_identity.resolve().key_id
+    else:
+        gateway_key_id = _expected_environment("AEGIS_GATEWAY_KEY_ID")
     discovery = discover_segmented_capabilities_via_ot(
         observer_url=_expected_environment("AEGIS_OBSERVER_URL"),
         candidate_url=_expected_environment("AEGIS_CANDIDATE_URL"),
@@ -1213,7 +1444,7 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         gateway_key_id=gateway_key_id,
     )
     _validate_plant_pin(discovery.plant)
-    for label, actual_id, actual_key, id_env, key_env in (
+    pinned_peers = [
         (
             "observer",
             discovery.observer.key_id,
@@ -1228,14 +1459,29 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
             "AEGIS_CANDIDATE_KEY_ID",
             "AEGIS_CANDIDATE_PUBLIC_KEY_FILE",
         ),
-        (
-            "OT",
-            discovery.ot.key_id,
-            discovery.ot.public_key,
-            "AEGIS_OT_KEY_ID",
-            "AEGIS_OT_PUBLIC_KEY_FILE",
-        ),
-    ):
+    ]
+    if workload_verifier is None:
+        pinned_peers.append(
+            (
+                "OT",
+                discovery.ot.key_id,
+                discovery.ot.public_key,
+                "AEGIS_OT_KEY_ID",
+                "AEGIS_OT_PUBLIC_KEY_FILE",
+            )
+        )
+    else:
+        assert ot_workload_identity is not None
+        target = ot_workload_identity.resolve()
+        if (
+            target.key_id != discovery.ot.key_id
+            or target.public_key.public_bytes_raw()
+            != discovery.ot.public_key.public_bytes_raw()
+        ):
+            raise CapabilityRuntimeUnavailable(
+                "OT discovery does not match its workload identity"
+            )
+    for label, actual_id, actual_key, id_env, key_env in pinned_peers:
         _require_pin(
             label=label,
             actual_key_id=actual_id,
@@ -1246,8 +1492,10 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
     permit_key_id = _expected_environment("AEGIS_PERMIT_KEY_ID")
     if discovery.ot.permit_key_id != permit_key_id:
         raise CapabilityRuntimeUnavailable("OT permit key ID does not match the gateway")
-    gateway_private = _load_private_key(
-        _expected_environment("AEGIS_GATEWAY_PRIVATE_KEY_FILE")
+    gateway_private = (
+        gateway_workload_identity.signer.private_key
+        if gateway_workload_identity is not None
+        else _load_private_key(_expected_environment("AEGIS_GATEWAY_PRIVATE_KEY_FILE"))
     )
     permit_private = _load_private_key(
         _expected_environment("AEGIS_PERMIT_PRIVATE_KEY_FILE")
@@ -1293,12 +1541,21 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         candidate=discovery.candidate,
         plant=discovery.plant,
     )
-    plc_port = RemoteVirtualPlcPort(
-        _expected_environment("AEGIS_OT_URL"),
-        ot=discovery.ot,
-        gateway_key_id=gateway_key_id,
-        gateway_private_key=gateway_private,
-    )
+    if gateway_workload_identity is not None:
+        assert ot_workload_identity is not None
+        plc_port: RemoteVirtualPlcPort = WorkloadRemoteVirtualPlcPort(
+            _expected_environment("AEGIS_OT_URL"),
+            ot=discovery.ot,
+            gateway_identity=gateway_workload_identity,
+            ot_identity=ot_workload_identity,
+        )
+    else:
+        plc_port = RemoteVirtualPlcPort(
+            _expected_environment("AEGIS_OT_URL"),
+            ot=discovery.ot,
+            gateway_key_id=gateway_key_id,
+            gateway_private_key=gateway_private,
+        )
     plc_info = _plc_process_info(discovery.ot)
     base_issuer = ExecutionPermitIssuer(
         permit_private,
@@ -1328,6 +1585,12 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         observer=observer_port,
         discovery=discovery,
         gateway_key_id=gateway_key_id,
+        agent_workload_verifier=workload_verifier,
+        agent_workload_subject=(
+            _expected_environment("AEGIS_AGENT_WORKLOAD_SUBJECT")
+            if workload_verifier is not None
+            else None
+        ),
     )
 
 
@@ -1464,18 +1727,30 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
 
     @app.post(
         "/v1/capability/execute",
-        response_model=SignedSegmentedCapabilityResponse,
+        response_model=(
+            SignedSegmentedCapabilityResponse | WorkloadSignedCapabilityResponse
+        ),
     )
-    async def execute(request: Request) -> SignedSegmentedCapabilityResponse | JSONResponse:
+    async def execute(
+        request: Request,
+    ) -> (
+        SignedSegmentedCapabilityResponse
+        | WorkloadSignedCapabilityResponse
+        | JSONResponse
+    ):
         try:
-            parsed = await parse_strict_json_request(
+            parsed = await parse_strict_json_request_adapter(
                 request,
-                SignedSegmentedCapabilityDispatch,
+                _OT_EXECUTE_REQUEST_ADAPTER,
             )
         except StrictJsonRequestError as exc:
             return _wire_rejection(exc)
         try:
-            return runtime().execute(parsed)
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
+        try:
+            return instance.execute(parsed)
         except CapabilityAdmissionRejected as exc:
             status_code = 409 if "replayed" in str(exc) else 403
             return _failure_response(status_code, str(exc), status="rejected")
@@ -1513,11 +1788,20 @@ def create_gateway_app(
     @app.post("/v1/capability/actions", response_model=SegmentedCapabilityClosedLoopResult)
     async def execute(request: Request) -> SegmentedCapabilityClosedLoopResult | JSONResponse:
         try:
-            parsed = await parse_strict_json_request(request, CapabilityActionRequest)
+            parsed = await parse_strict_json_request_adapter(
+                request,
+                _GATEWAY_ACTION_REQUEST_ADAPTER,
+            )
         except StrictJsonRequestError as exc:
             return _wire_rejection(exc)
         try:
-            return runtime().execute(parsed)
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "gateway_runtime_unavailable", status="error")
+        try:
+            return instance.execute(parsed)
+        except CapabilityAdmissionRejected as exc:
+            return _failure_response(403, str(exc), status="rejected")
         except Exception:
             return _failure_response(503, "gateway_runtime_unavailable", status="error")
 

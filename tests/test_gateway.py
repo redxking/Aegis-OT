@@ -27,6 +27,16 @@ def test_unknown_identity_is_denied(lab, proposal, state, now) -> None:
     assert "identity_not_verified" in decision.reasons
 
 
+def test_unknown_identity_cannot_poison_authenticated_nonce(lab, proposal, state, now) -> None:
+    unknown = proposal.model_copy(update={"actor_id": "agent:unknown"})
+    rejected = lab.gateway.decide(unknown, state, now)
+    permitted = lab.gateway.decide(proposal, state, now)
+
+    assert "identity_not_verified" in rejected.reasons
+    assert "replayed_nonce" not in rejected.reasons
+    assert permitted.outcome is DecisionOutcome.PERMIT
+
+
 def test_stale_state_is_denied(lab, proposal, state, now) -> None:
     decision = lab.gateway.decide(proposal, state, now + timedelta(seconds=6))
     assert "state_not_fresh" in decision.reasons

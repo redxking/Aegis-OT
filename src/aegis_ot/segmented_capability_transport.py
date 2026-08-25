@@ -64,7 +64,17 @@ from .segmented_capability_models import (
     SignedPlantResponse,
     SignedSegmentedCapabilityDispatch,
     SignedSegmentedCapabilityResponse,
+    WorkloadSignedCapabilityDispatch,
+    WorkloadSignedCapabilityResponse,
 )
+from .workload_identity import (
+    WorkloadCredentialBinding,
+    WorkloadCredentialRejected,
+    WorkloadIdentityError,
+    WorkloadIdentityUnavailable,
+    WorkloadRole,
+)
+from .workload_runtime import LocalWorkloadIdentity
 
 MAX_JSON_BYTES: Final = 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS: Final = 5.0
@@ -86,9 +96,26 @@ class CapabilityTransportUnavailable(CapabilityTransportError):
 class CapabilityTransportRejected(CapabilityTransportError):
     """A peer returned a closed HTTP 4xx rejection before a usable result."""
 
-    def __init__(self, reason: str, *, status_code: int) -> None:
+    def __init__(
+        self,
+        reason: str,
+        *,
+        status_code: int,
+        dispatch_attempts: Literal[0, 1] = 1,
+    ) -> None:
         super().__init__(reason)
         self.status_code = status_code
+        self.reason_code = reason
+        self.dispatch_attempts = dispatch_attempts
+        self.known_no_effect = dispatch_attempts == 0
+
+
+class CapabilityPreDispatchUnavailable(CapabilityTransportUnavailable):
+    """A local prerequisite failed before any consequential request was sent."""
+
+    known_no_effect = True
+    dispatch_attempts = 0
+    reason_code = "plc_pre_dispatch_unavailable"
 
 
 class ConsequentialTransportOutcomeUnknown(CapabilityTransportError):
@@ -1071,6 +1098,149 @@ class RemoteVirtualPlcPort(_RemoteJsonService, VirtualPlcPort):
                 "OT response signature or transaction binding is invalid"
             )
         return acknowledgment
+
+
+class WorkloadRemoteVirtualPlcPort(RemoteVirtualPlcPort):
+    """Lifecycle-aware gateway/OT transport preserving the full inner contract."""
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        ot: OtHealthMetadata,
+        gateway_identity: LocalWorkloadIdentity,
+        ot_identity: WorkloadCredentialBinding,
+        exchange: HttpExchange = urllib_http_exchange,
+        clock: Clock = utc_now,
+        call_ttl: timedelta = DEFAULT_CALL_TTL,
+        nonce_factory: Callable[[], str] = lambda: secrets.token_urlsafe(24),
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        gateway = gateway_identity.resolve()
+        target = ot_identity.resolve()
+        if gateway.credential.credential.role is not WorkloadRole.GATEWAY:
+            raise ValueError("local workload identity is not a gateway")
+        if target.credential.credential.role is not WorkloadRole.OT_ADAPTER:
+            raise ValueError("target workload identity is not an OT adapter")
+        if (
+            target.key_id != ot.key_id
+            or target.public_key.public_bytes_raw() != ot.public_key.public_bytes_raw()
+        ):
+            raise ValueError("OT discovery does not match its workload credential")
+        super().__init__(
+            base_url,
+            ot=ot,
+            gateway_key_id=gateway.key_id,
+            gateway_private_key=gateway_identity.signer.private_key,
+            exchange=exchange,
+            clock=clock,
+            call_ttl=call_ttl,
+            nonce_factory=nonce_factory,
+            timeout_seconds=timeout_seconds,
+        )
+        self.gateway_identity = gateway_identity
+        self.ot_identity = ot_identity
+
+    def preflight_identity(self) -> None:
+        """Fail before POST when either consequence-path credential is unusable."""
+
+        try:
+            gateway = self.gateway_identity.resolve()
+            target = self.ot_identity.resolve()
+        except WorkloadCredentialRejected as exc:
+            raise CapabilityTransportRejected(
+                "workload_identity_rejected_before_dispatch",
+                status_code=403,
+                dispatch_attempts=0,
+            ) from exc
+        except WorkloadIdentityUnavailable as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "workload_identity_unavailable_before_dispatch"
+            ) from exc
+        if (
+            gateway.key_id != self.gateway_key_id
+            or gateway.public_key.public_bytes_raw()
+            != self.gateway_private_key.public_key().public_bytes_raw()
+            or target.key_id != self.ot.key_id
+            or target.public_key.public_bytes_raw() != self.ot.public_key.public_bytes_raw()
+        ):
+            raise CapabilityTransportRejected(
+                "workload_identity_changed_before_dispatch",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+
+    def execute(
+        self,
+        *,
+        request: CapabilityActionRequest,
+        permit: CapabilityExecutionPermit,
+        pre_observation: SignedObservationEnvelope,
+        decision: Decision,
+        assessment: CandidateAssessment,
+    ) -> PlcCommandAcknowledgment:
+        self.preflight_identity()
+        dispatch = SegmentedCapabilityDispatch(
+            request=request,
+            pre_observation=pre_observation,
+            decision=decision,
+            assessment=assessment,
+            permit=permit,
+        )
+        issued_at = self.clock()
+        signed = WorkloadSignedCapabilityDispatch.issue(
+            dispatch=dispatch,
+            signer=self.gateway_identity.signer,
+            transport_nonce=_nonce(self.nonce_factory),
+            issued_at=issued_at,
+            expires_at=issued_at + self.call_ttl,
+        )
+        response = self._raw(
+            "POST",
+            "/v1/capability/execute",
+            signed,
+            consequential=True,
+        )
+        if response.status_code >= 500:
+            raise ConsequentialTransportOutcomeUnknown(
+                "OT returned a server failure after consequential dispatch"
+            )
+        if 400 <= response.status_code < 500:
+            try:
+                failure = _parse_model(response, TransportFailureBody)
+            except CapabilityTransportProtocolError as exc:
+                raise ConsequentialTransportOutcomeUnknown(
+                    "OT rejection response was unverifiable"
+                ) from exc
+            if failure.status == "rejected":
+                raise CapabilityTransportRejected(
+                    failure.reason,
+                    status_code=response.status_code,
+                )
+            raise ConsequentialTransportOutcomeUnknown(failure.reason)
+        if not 200 <= response.status_code < 300:
+            raise ConsequentialTransportOutcomeUnknown("OT returned an invalid HTTP status")
+        try:
+            verified = _parse_model(response, WorkloadSignedCapabilityResponse)
+            target = self.ot_identity.resolve()
+        except (CapabilityTransportProtocolError, WorkloadIdentityError) as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "OT workload response was not a trusted signed artifact"
+            ) from exc
+        if (
+            verified.sender_credential != target.credential
+            or not verified.verify_for_request(
+                target.public_key,
+                request=signed,
+                expected_plc_id=self.ot.plc_id,
+                expected_plc_boot_epoch=self.ot.boot_epoch,
+                evaluated_at=self.clock(),
+            )
+        ):
+            raise ConsequentialTransportOutcomeUnknown(
+                "OT workload response or transaction binding is invalid"
+            )
+        return verified.response.acknowledgment
 
 
 def _is_sha256(value: Any) -> bool:

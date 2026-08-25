@@ -249,6 +249,7 @@ def _configure_runtime_environment(
     tmp_path: Path,
     artifacts: RuntimeArtifacts,
 ) -> dict[str, Path]:
+    monkeypatch.setenv("AEGIS_WORKLOAD_IDENTITY_MODE", "disabled")
     roles = {
         "PLANT": (PLANT_KEY_ID, artifacts.plant_private),
         "OBSERVER": (OBSERVER_KEY_ID, artifacts.observer_private),

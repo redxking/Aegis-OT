@@ -635,11 +635,13 @@ class CapabilityClosedLoopResult(BaseModel):
         if self.status is CapabilityClosedLoopStatus.NOT_DISPATCHED:
             if (
                 self.dispatch_attempts != 0
-                or self.permit is not None
                 or self.acknowledgment is not None
                 or self.post_observation is not None
             ):
-                raise ValueError("not-dispatched result cannot retain dispatch artifacts")
+                raise ValueError(
+                    "not-dispatched result cannot retain dispatch artifacts from an "
+                    "attempted dispatch"
+                )
         if self.status is CapabilityClosedLoopStatus.CANDIDATE_REJECTED:
             if self.post_observation is not None:
                 raise ValueError("candidate-rejected result cannot retain a post observation")

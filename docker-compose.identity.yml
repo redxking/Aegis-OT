@@ -1,0 +1,142 @@
+x-m4g-workload-common: &m4g-workload-common
+  AEGIS_WORKLOAD_IDENTITY_MODE: required
+  AEGIS_WORKLOAD_TRUST_DOMAIN: "${AEGIS_WORKLOAD_TRUST_DOMAIN:-aegis-ot.m4g.local}"
+  AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: "${AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID:?derive from the workload authority public key}"
+  AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
+  AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+
+x-m4g-workload-subjects: &m4g-workload-subjects
+  AEGIS_AGENT_WORKLOAD_SUBJECT: "${AEGIS_AGENT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:agent-probe}"
+  AEGIS_GATEWAY_WORKLOAD_SUBJECT: "${AEGIS_GATEWAY_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:gateway}"
+  AEGIS_OT_WORKLOAD_SUBJECT: "${AEGIS_OT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:ot-adapter}"
+
+services:
+  identity-init:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m4g_identity_init]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    restart: "no"
+    network_mode: none
+    environment:
+      <<: *m4g-workload-subjects
+      AEGIS_WORKLOAD_IDENTITY_DIRECTORY: /var/lib/aegis-ot/identity
+      AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE: /run/secrets/workload_authority_private
+      AEGIS_WORKLOAD_TRUST_DOMAIN: "${AEGIS_WORKLOAD_TRUST_DOMAIN:-aegis-ot.m4g.local}"
+      AEGIS_AGENT_PUBLIC_KEY_FILE: /run/secrets/agent_public
+      AEGIS_GATEWAY_PUBLIC_KEY_FILE: /run/secrets/gateway_public
+      AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot_public
+      AEGIS_RUNTIME_UID: "${AEGIS_RUNTIME_UID:-65532}"
+      AEGIS_RUNTIME_GID: "${AEGIS_RUNTIME_GID:-65532}"
+    secrets:
+      - workload_authority_private
+      - agent_public
+      - gateway_public
+      - ot_public
+    volumes:
+      - workload_identity:/var/lib/aegis-ot/identity
+
+  identity-admin:
+    profiles: [identity-admin]
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    entrypoint: [python, -m, aegis_ot.m4g_identity_admin]
+    command: [--help]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    restart: "no"
+    network_mode: none
+    environment:
+      AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE: /run/secrets/workload_authority_private
+      AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /var/lib/aegis-ot/identity/trust-bundle.json
+    secrets:
+      - workload_authority_private
+    volumes:
+      - workload_identity:/var/lib/aegis-ot/identity
+
+  segmented-gateway:
+    environment:
+      <<: [*m4g-workload-common, *m4g-workload-subjects]
+      AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
+      AEGIS_GATEWAY_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/gateway_private
+      AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
+    secrets:
+      - gateway_private
+    volumes:
+      - workload_identity:/run/aegis-identity:ro
+    depends_on:
+      identity-init:
+        condition: service_completed_successfully
+
+  ot-adapter:
+    environment:
+      <<: [*m4g-workload-common, *m4g-workload-subjects]
+      AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
+      AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
+      AEGIS_OT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/ot_private
+      AEGIS_WORKLOAD_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/workload-replay.json
+    secrets:
+      - ot_private
+    volumes:
+      - workload_identity:/run/aegis-identity:ro
+      - workload_replay:/var/lib/aegis-ot
+    depends_on:
+      identity-init:
+        condition: service_completed_successfully
+      replay-init:
+        condition: service_completed_successfully
+
+  replay-init:
+    command: [python, -m, aegis_ot.m4g_replay_init]
+    environment:
+      <<: [*m4g-workload-common, *m4g-workload-subjects]
+      AEGIS_WORKLOAD_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/workload-replay.json
+    volumes:
+      - workload_identity:/run/aegis-identity:ro
+      - workload_replay:/var/lib/aegis-ot
+    depends_on:
+      identity-init:
+        condition: service_completed_successfully
+
+  simulation:
+    environment:
+      AEGIS_OT_KEY_ID: "${AEGIS_OT_WORKLOAD_KEY_ID:?derive from the OT workload leaf public key}"
+
+  agent-probe:
+    environment:
+      <<: [*m4g-workload-common, *m4g-workload-subjects]
+      AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/agent.credential.json
+      AEGIS_AGENT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/agent_private
+    secrets:
+      - agent_private
+    volumes:
+      - workload_identity:/run/aegis-identity:ro
+    depends_on:
+      identity-init:
+        condition: service_completed_successfully
+      segmented-gateway:
+        condition: service_started
+
+secrets:
+  workload_authority_private:
+    file: ${AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE:?set by the M4g identity runner}
+  agent_private:
+    file: ${AEGIS_AGENT_PRIVATE_KEY_FILE:?set by the M4g identity runner}
+  agent_public:
+    file: ${AEGIS_AGENT_PUBLIC_KEY_FILE:?set by the M4g identity runner}
+
+volumes:
+  workload_identity: {}
+  workload_replay: {}
