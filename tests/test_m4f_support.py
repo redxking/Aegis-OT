@@ -206,3 +206,26 @@ def test_m4f_semantic_difference_reports_the_first_stable_path(
     )
 
     assert difference == ("$.a[1].status", 409, 503)
+
+
+def test_m4f_path_normalization_accepts_raw_and_resolved_aliases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    m4f_runner = import_module("run_m4f_experiment")
+    real_directory = tmp_path / "real-keys"
+    alias_directory = tmp_path / "alias-keys"
+    real_directory.mkdir()
+    alias_directory.symlink_to(real_directory, target_is_directory=True)
+
+    assert m4f_runner._replace_path_prefix(
+        str(alias_directory / "gateway.public"),
+        alias_directory,
+        "<keys>",
+    ) == "<keys>/gateway.public"
+    assert m4f_runner._replace_path_prefix(
+        str(real_directory / "gateway.public"),
+        alias_directory,
+        "<keys>",
+    ) == "<keys>/gateway.public"

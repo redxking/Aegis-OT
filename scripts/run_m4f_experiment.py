@@ -71,11 +71,12 @@ def _raw_public(key: Ed25519PrivateKey) -> bytes:
 
 
 def _replace_path_prefix(value: str, path: Path, marker: str) -> str:
-    prefix = str(path.resolve())
-    if value == prefix:
-        return marker
-    if value.startswith(f"{prefix}{os.sep}"):
-        return f"{marker}{value[len(prefix):]}"
+    prefixes = sorted({str(path), str(path.absolute()), str(path.resolve())}, key=len, reverse=True)
+    for prefix in prefixes:
+        if value == prefix:
+            return marker
+        if value.startswith(f"{prefix}{os.sep}"):
+            return f"{marker}{value[len(prefix):]}"
     return value
 
 
