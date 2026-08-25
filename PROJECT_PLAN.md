@@ -206,20 +206,66 @@ Evidence boundary and next hypothesis-critical gate:
   AC power-flow solver. It checks signed retained observations against a neutral
   topology/load fixture using graph and decimal arithmetic. Agreement therefore
   does not validate the plant model, measurements, voltage or thermal behavior.
-- The retained protocol does not yet exercise signed contradiction,
+- The M4b package itself does not exercise signed contradiction,
   missing-observation, malformed evaluator input, lost-response/unknown-effect,
-  concurrent-controller, crash-recovery, or hostile-host conditions. Relevant
-  implementation tests fail closed, but they are not retained multi-session
-  experimental evidence.
+  concurrent-controller, crash-recovery, or hostile-host conditions. The
+  subsequent M4c campaign below covers a bounded subset of these faults but is
+  not a replacement for M4b's raw signed package.
 - M4b is not external custody, independent replication, segmented or multi-host
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
-- The next shortest claim-critical increment is retained fault/adversarial
-  evaluation of contradiction, missing post-observation, malformed independent
-  input, lost response/unknown effect, and durable replay across crash/full-stack
-  restart. After that, identity/policy/control separation must move across an
-  actual segmented deployment before the central system claim can be tested
-  beyond a single-host process-capability boundary.
+- The next shortest claim-critical increment after M4c is a validly signed live
+  contradiction plus durable replay across crash/full-stack restart. After that,
+  identity/policy/control separation must move across an actual segmented
+  deployment before the central system claim can be tested beyond a single-host
+  process-capability boundary.
+
+## Active M4c fault and adversarial increment
+
+Implemented and locally reproduced from clean detached checkout
+`f6f030d59b58bf63407f744d2aa47ad66ef8e1da`:
+
+- A four-condition live-process campaign, with a fresh capability-separated
+  plant, observer, virtual PLC, and controller stack for every condition.
+- One nominal control completed with a valid acknowledgment and signed post-
+  observation. Three after-dispatch faults—PLC response loss after an actual
+  commit, post-observation unavailability after an acknowledged commit, and a
+  post-observation altered after signing—each terminated as `unknown_effect`
+  with exactly one dispatch and zero automatic retry.
+- In all four conditions, a separate follow-up signed capture observed the
+  modeled feeder isolation at state version 1. This matters because the three
+  fault cases did not mean “no effect”; they meant the controller lacked enough
+  trustworthy completion evidence to claim a known outcome.
+- The post-signature tamper initially exposed a controller defect: terminal
+  result construction attempted to retain an internally inconsistent envelope
+  and raised a validation exception. The controller now revalidates rejected
+  envelopes, retains only the last known-valid observation, and returns the
+  terminal `unknown_effect` result. A regression test covers the failure.
+- A separate evaluator process received strict-JSON duplicate-key input,
+  returned exit code 2 with a self-verifying signed `input_rejected` report, and
+  rejected a post-signature alteration of that report.
+- Two separately retained read-only campaign reports both met their registered
+  criteria and reproduced deterministic projection hash
+  `f6066a725e1b5f88c65cce4a7c9c013ddb94354389621aff7d545f6867e81b15`.
+- The clean checkout passed 519 tests; ruff, strict mypy across 44 source files,
+  schema drift, and topology-fixture drift checks were clean.
+
+Evidence boundary and remaining critical tests:
+
+- M4c is injected-port, same-host deterministic-local fault evidence. The
+  retained JSON reports summarize the validated outcomes but do not retain the
+  complete raw signed transaction/evidence artifacts or an external package
+  trust anchor as M4b does. Git retention provides repository integrity after
+  commit; it is not external custody or independent validation.
+- The observed `unknown_effect` transitions support fail-closed outcome
+  classification and no-retry behavior under the three registered injections.
+  Four deterministic cases do not estimate failure rates, recovery times, or
+  behavior under arbitrary faults.
+- A validly signed contradictory post-observation, missing independent post-
+  observation, concurrent state transition, process crash during dispatch,
+  durable replay across full-stack restart, hostile coordinator/host,
+  segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
+  retained experimental evidence.
 
 ## Read-only public demonstration increment
 

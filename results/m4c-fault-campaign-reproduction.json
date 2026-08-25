@@ -1,0 +1,116 @@
+{
+  "claim_boundary": "same-host injected-port fault evidence over the deterministic local process lab; not fault-rate estimation, hostile-host isolation, segmented deployment, hardware, field evidence, or independent validation",
+  "completed_at_utc": "2026-08-25T12:56:43.545920+00:00",
+  "controller_cases": [
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "completed",
+      "automatic_retry_count": 0,
+      "condition": "nominal_control",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "completed",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": true,
+      "reasons": [
+        "plc_acknowledgment_and_signed_post_observation_match"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": false,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "plc_response_lost_after_commit",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": true,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "plc_dispatch_outcome_unavailable",
+        "IpcOutcomeUnknownError"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "post_observation_unavailable_after_commit",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "original_pre_tamper_observation_valid": false,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "post_observation_unavailable",
+        "ObserverServiceError"
+      ],
+      "tampered_observation_rejected": false
+    },
+    {
+      "acknowledgment_retained_by_controller": true,
+      "actual_status": "unknown_effect",
+      "automatic_retry_count": 0,
+      "condition": "post_observation_tampered_after_signing",
+      "dispatch_attempts": 1,
+      "effect_observed_by_followup_signed_capture": true,
+      "evidence_chain_valid": true,
+      "expected_status": "unknown_effect",
+      "followup_isolated_resources": [
+        "feeder-1"
+      ],
+      "followup_observation_signature_valid": true,
+      "followup_state_version": 1,
+      "hidden_lost_response_acknowledgment_valid": false,
+      "original_pre_tamper_observation_valid": true,
+      "post_observation_retained_by_controller": false,
+      "reasons": [
+        "post_observation_invalid",
+        "observation_signature_invalid",
+        "post_observation_challenge_mismatch"
+      ],
+      "tampered_observation_rejected": true
+    }
+  ],
+  "deterministic_projection_sha256": "f6066a725e1b5f88c65cce4a7c9c013ddb94354389621aff7d545f6867e81b15",
+  "evaluator_adversarial_checks": {
+    "evaluator_exit_code": 2,
+    "evaluator_process_separate": true,
+    "malformed_request_sha256": "b450f9e75ccb81da64a2b8a6a30600d6a4aa282a545a8d93741402d755465998",
+    "signed_report_status": "input_rejected",
+    "signed_report_valid": true,
+    "tampered_report_valid": false
+  },
+  "experiment_criteria_met": true,
+  "git": {
+    "branch": "DETACHED",
+    "commit": "f6f030d59b58bf63407f744d2aa47ad66ef8e1da",
+    "working_tree_dirty_at_end": false,
+    "working_tree_dirty_at_start": false
+  },
+  "schema_version": "m4c-fault-campaign-v1",
+  "started_at_utc": "2026-08-25T12:56:25.628835+00:00"
+}
