@@ -48,7 +48,10 @@ from .coordination_journal import (
 from .coordination_models import (
     EFFECT_COORDINATOR_AUDIENCE,
     GATEWAY_COORDINATION_AUDIENCE,
+    CapabilityOutcomePending,
+    CapabilityOutcomeResolution,
     CoordinationReceipt,
+    CoordinationState,
     EffectDisposition,
     EffectIdentity,
     SignedEffectCommitRequest,
@@ -1997,6 +2000,194 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
             dispatch_attempts=0,
         )
 
+    @staticmethod
+    def _query_attempt_for_outcome(
+        record: CoordinationJournalRecord,
+        outcome: SignedEffectOutcome,
+    ) -> EffectQueryAttempt | None:
+        return next(
+            (
+                attempt
+                for attempt in reversed(record.attempts)
+                if isinstance(attempt, EffectQueryAttempt)
+                and attempt.outcome == outcome
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _prior_state_for_query(
+        record: CoordinationJournalRecord,
+        attempt: EffectQueryAttempt,
+    ) -> Literal[
+        CoordinationState.DISPATCH_ARMED,
+        CoordinationState.COMMIT_ACCEPTED,
+        CoordinationState.UNKNOWN_EFFECT,
+    ]:
+        current_evidence: set[str] = set()
+        if attempt.outcome is not None:
+            current_evidence.add(attempt.outcome.digest)
+            if attempt.outcome.acceptance is not None:
+                current_evidence.add(attempt.outcome.acceptance.digest)
+        prior_state: CoordinationState | None = None
+        for transition in record.transitions:
+            if transition.recorded_at > attempt.retained_at:
+                break
+            if transition.evidence_sha256 in current_evidence:
+                continue
+            if transition.state in {
+                CoordinationState.DISPATCH_ARMED,
+                CoordinationState.COMMIT_ACCEPTED,
+                CoordinationState.UNKNOWN_EFFECT,
+            }:
+                prior_state = transition.state
+        if prior_state is CoordinationState.DISPATCH_ARMED:
+            return CoordinationState.DISPATCH_ARMED
+        if prior_state is CoordinationState.COMMIT_ACCEPTED:
+            return CoordinationState.COMMIT_ACCEPTED
+        if prior_state is CoordinationState.UNKNOWN_EFFECT:
+            return CoordinationState.UNKNOWN_EFFECT
+        raise ConsequentialTransportOutcomeUnknown(
+            "retained_effect_verification_failed"
+        )
+
+    def _verify_reconciliation_evidence(
+        self,
+        evidence: CapabilityOutcomeResolution | CapabilityOutcomePending,
+    ) -> None:
+        evaluated_at = self.clock()
+        try:
+            self._current_identities(
+                evaluated_at=evaluated_at,
+                require_pinned_target=False,
+            )
+        except CapabilityTransportError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            ) from exc
+        (
+            observer_id,
+            observer_key_id,
+            observer_boot_epoch,
+            permit_key_id,
+            plc_id,
+            plc_key_id,
+            plc_boot_epoch,
+        ) = self._outcome_identity_bindings(evidence.outcome)
+        if not evidence.verify_historical_complete(
+            self.workload_verifier,
+            expected_gateway_subject=self.gateway_subject,
+            expected_coordinator_subject=self.coordinator_subject,
+            observer_public_key=self.observer.public_key,
+            expected_observer_id=observer_id,
+            expected_observer_key_id=observer_key_id,
+            expected_observer_boot_epoch=observer_boot_epoch,
+            permit_public_key=self.ot.permit_public_key,
+            expected_permit_key_id=permit_key_id,
+            expected_plc_id=plc_id,
+            expected_plc_key_id=plc_key_id,
+            expected_plc_boot_epoch=plc_boot_epoch,
+            evaluated_at=evaluated_at,
+        ):
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            )
+
+    def _resolution_from_record(
+        self,
+        record: CoordinationJournalRecord,
+    ) -> CapabilityOutcomeResolution:
+        outcome = record.terminal_outcome
+        if outcome is None:
+            raise CapabilityTransportRejected(
+                "effect_was_not_committed",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+        attempt = self._query_attempt_for_outcome(record, outcome)
+        if attempt is None:
+            raise CapabilityTransportRejected(
+                "effect_not_query_resolved",
+                status_code=409,
+                dispatch_attempts=1,
+            )
+        acceptance = outcome.acceptance
+        if acceptance is None:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            )
+        disposition: Literal[
+            EffectDisposition.APPLIED,
+            EffectDisposition.REJECTED,
+        ]
+        if outcome.disposition is EffectDisposition.APPLIED:
+            disposition = EffectDisposition.APPLIED
+        elif outcome.disposition is EffectDisposition.REJECTED:
+            disposition = EffectDisposition.REJECTED
+        else:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            )
+        try:
+            resolution = CapabilityOutcomeResolution(
+                effect=record.effect,
+                prior_state=self._prior_state_for_query(record, attempt),
+                disposition=disposition,
+                query=attempt.request,
+                acceptance=acceptance,
+                outcome=outcome,
+                resolved_at=attempt.updated_at,
+            )
+        except ValidationError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            ) from exc
+        try:
+            self._verify_retained_terminal_outcome(record, outcome)
+        except CapabilityTransportError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            ) from exc
+        self._verify_reconciliation_evidence(resolution)
+        return resolution
+
+    def _pending_from_record(
+        self,
+        record: CoordinationJournalRecord,
+    ) -> CapabilityOutcomePending | None:
+        attempt = next(
+            (
+                item
+                for item in reversed(record.attempts)
+                if isinstance(item, EffectQueryAttempt)
+                and item.outcome is not None
+                and item.outcome.disposition is EffectDisposition.UNKNOWN_EFFECT
+            ),
+            None,
+        )
+        if attempt is None or attempt.outcome is None:
+            return None
+        acceptance = attempt.outcome.acceptance
+        if acceptance is None:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            )
+        try:
+            pending = CapabilityOutcomePending(
+                effect=record.effect,
+                prior_state=self._prior_state_for_query(record, attempt),
+                query=attempt.request,
+                acceptance=acceptance,
+                outcome=attempt.outcome,
+                retained_at=attempt.updated_at,
+            )
+        except ValidationError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            ) from exc
+        self._verify_reconciliation_evidence(pending)
+        return pending
+
     def execute(
         self,
         *,
@@ -2069,6 +2260,106 @@ class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
         if record is None:
             raise CapabilityPreDispatchUnavailable("coordination effect is not recorded")
         return self._reconcile(record)
+
+    def reconcile_effect_evidence(
+        self,
+        effect: EffectIdentity | str,
+    ) -> CapabilityOutcomeResolution | CapabilityOutcomePending:
+        """Return exact query evidence without ever initiating or retrying a commit."""
+
+        try:
+            record = self.coordination_journal.get(effect)
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "gateway_coordination_journal_unavailable"
+            ) from exc
+        if record is None:
+            raise CapabilityTransportRejected(
+                "coordination_effect_not_recorded",
+                status_code=404,
+                dispatch_attempts=0,
+            )
+        if record.state is CoordinationState.NOT_DISPATCHED:
+            raise CapabilityTransportRejected(
+                "effect_was_not_committed",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+        if record.state in {
+            CoordinationState.APPLIED,
+            CoordinationState.REJECTED,
+        }:
+            return self._resolution_from_record(record)
+
+        if self._latest_commit(record) is None:
+            receipt = record.latest_receipt
+            evidence_sha256 = (
+                receipt.digest if receipt is not None else record.effect.digest
+            )
+            self._close_before_commit(
+                record.effect,
+                reason="effect_was_not_committed",
+                evidence_sha256=evidence_sha256,
+                recorded_at=self.clock(),
+            )
+            raise CapabilityTransportRejected(
+                "effect_was_not_committed",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+
+        try:
+            self._query(record)
+        except CapabilityTransportRejected as exc:
+            try:
+                updated = self.coordination_journal.get(record.effect)
+            except CoordinationJournalError as journal_exc:
+                raise ConsequentialTransportOutcomeUnknown(
+                    "gateway_coordination_journal_unavailable"
+                ) from journal_exc
+            if updated is not None and updated.state is CoordinationState.NOT_DISPATCHED:
+                raise CapabilityTransportRejected(
+                    "effect_was_not_committed",
+                    status_code=409,
+                    dispatch_attempts=0,
+                ) from exc
+            raise
+        except CapabilityTransportError as exc:
+            try:
+                updated = self.coordination_journal.get(record.effect)
+            except CoordinationJournalError as journal_exc:
+                raise ConsequentialTransportOutcomeUnknown(
+                    "gateway_coordination_journal_unavailable"
+                ) from journal_exc
+            if updated is not None:
+                pending = self._pending_from_record(updated)
+                if pending is not None:
+                    return pending
+            raise ConsequentialTransportOutcomeUnknown(
+                "effect_reconciliation_unavailable"
+            ) from exc
+
+        try:
+            updated = self.coordination_journal.get(record.effect)
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "gateway_coordination_journal_unavailable"
+            ) from exc
+        if updated is None:
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained_effect_verification_failed"
+            )
+        if updated.state in {
+            CoordinationState.APPLIED,
+            CoordinationState.REJECTED,
+        }:
+            return self._resolution_from_record(updated)
+        pending = self._pending_from_record(updated)
+        if pending is not None:
+            return pending
+        raise ConsequentialTransportOutcomeUnknown(
+            "effect_reconciliation_unavailable"
+        )
 
     def reconcile_pending_once(self) -> PlcCommandAcknowledgment | None:
         """Reconcile at most one pending entry and never loop or retry."""

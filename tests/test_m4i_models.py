@@ -22,6 +22,7 @@ from aegis_ot.capability_models import (
 from aegis_ot.coordination_models import (
     EFFECT_COORDINATOR_AUDIENCE,
     GATEWAY_COORDINATION_AUDIENCE,
+    CapabilityOutcomePending,
     CapabilityOutcomeResolution,
     CoordinationReceipt,
     CoordinationState,
@@ -32,6 +33,7 @@ from aegis_ot.coordination_models import (
     SignedEffectOutcome,
     SignedEffectPrepareRequest,
     SignedEffectQueryRequest,
+    WorkloadAuthenticatedEffectReconciliation,
 )
 from aegis_ot.crypto import generate_keypair, sign_bytes
 from aegis_ot.models import ActionProposal, Operation
@@ -41,7 +43,10 @@ from aegis_ot.physical_control import (
 )
 from aegis_ot.physical_factory import build_physical_local_lab
 from aegis_ot.physical_models import CommandStatus, canonical_digest
-from aegis_ot.segmented_capability_models import SegmentedCapabilityDispatch
+from aegis_ot.segmented_capability_models import (
+    GATEWAY_CAPABILITY_AUDIENCE,
+    SegmentedCapabilityDispatch,
+)
 from aegis_ot.workload_identity import (
     SignedWorkloadCredential,
     WorkloadCredential,
@@ -58,6 +63,7 @@ from aegis_ot.workload_identity import (
 NOW = datetime(2026, 8, 25, 15, 0, tzinfo=UTC)
 GATEWAY_SUBJECT = "spiffe://aegis-ot.test/workload/gateway"
 COORDINATOR_SUBJECT = "spiffe://aegis-ot.test/workload/ot-adapter"
+AGENT_SUBJECT = "spiffe://aegis-ot.test/workload/agent"
 TRUST_DOMAIN = "aegis-ot.test"
 PLC_BOOT_EPOCH = "m4i-plc-boot-epoch-0001"
 
@@ -731,6 +737,148 @@ def test_outcome_future_bound_and_exact_query_resolution(
         CapabilityOutcomeResolution.model_validate(
             {**resolution.model_dump(mode="python"), "query": different_query}
         )
+
+
+def test_agent_reconciliation_proof_binds_exact_action_and_fresh_nonce(
+    artifacts: M4iArtifacts,
+) -> None:
+    agent_private = Ed25519PrivateKey.generate()
+    agent_signer = WorkloadSigner(
+        _issue_credential(
+            artifacts.authority,
+            agent_private,
+            credential_id="credential-agent-reconciliation-0001",
+            subject=AGENT_SUBJECT,
+            role=WorkloadRole.AGENT,
+            audience=GATEWAY_CAPABILITY_AUDIENCE,
+        ),
+        agent_private,
+    )
+    proof = WorkloadAuthenticatedEffectReconciliation.issue(
+        request=artifacts.dispatch.request,
+        signer=agent_signer,
+        request_nonce="reconciliation-request-nonce-0001",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(seconds=30),
+    )
+
+    assert proof.method == "POST"
+    assert proof.path == "/v1/capability/effects/reconcile"
+    assert proof.request_sha256 == artifacts.dispatch.request.digest
+    assert proof.verify_for_admission(
+        artifacts.verifier,
+        expected_agent_subject=AGENT_SUBJECT,
+        evaluated_at=NOW,
+    )
+    assert not proof.verify_for_admission(
+        artifacts.verifier,
+        expected_agent_subject=AGENT_SUBJECT,
+        evaluated_at=proof.expires_at,
+    )
+    assert not proof.model_copy(update={"signature": "forged"}).verify_for_admission(
+        artifacts.verifier,
+        expected_agent_subject=AGENT_SUBJECT,
+        evaluated_at=NOW,
+    )
+
+    with pytest.raises(ValidationError, match="action hash"):
+        WorkloadAuthenticatedEffectReconciliation.model_validate(
+            {**proof.model_dump(mode="python"), "request_sha256": "0" * 64}
+        )
+    with pytest.raises(ValidationError, match="nonce must be fresh"):
+        WorkloadAuthenticatedEffectReconciliation.issue(
+            request=artifacts.dispatch.request,
+            signer=agent_signer,
+            request_nonce=artifacts.dispatch.request.proposal.nonce,
+            issued_at=NOW,
+            expires_at=NOW + timedelta(seconds=30),
+        )
+
+
+def test_query_resolution_and_pending_evidence_verify_after_query_ttl(
+    artifacts: M4iArtifacts,
+) -> None:
+    receipt = _receipt(artifacts, _prepare(artifacts))
+    commit = _commit(artifacts, receipt)
+    acceptance = _acceptance(artifacts, commit)
+    query = SignedEffectQueryRequest.issue(
+        effect=receipt.effect,
+        signer=artifacts.gateway_signer,
+        request_nonce="historical-query-nonce-0001",
+        issued_at=NOW + timedelta(seconds=10),
+        expires_at=NOW + timedelta(seconds=40),
+    )
+    applied = SignedEffectOutcome.issue(
+        request=query,
+        disposition=EffectDisposition.APPLIED,
+        reason="durable_terminal_record",
+        signer=artifacts.coordinator_signer,
+        signed_at=NOW + timedelta(seconds=11),
+        acceptance=acceptance,
+        acknowledgment=artifacts.acknowledgment,
+    )
+    resolution = CapabilityOutcomeResolution(
+        effect=receipt.effect,
+        prior_state=CoordinationState.DISPATCH_ARMED,
+        disposition=EffectDisposition.APPLIED,
+        query=query,
+        acceptance=acceptance,
+        outcome=applied,
+        resolved_at=NOW + timedelta(seconds=12),
+    )
+    unknown = SignedEffectOutcome.issue(
+        request=query,
+        disposition=EffectDisposition.UNKNOWN_EFFECT,
+        reason="durable_outcome_still_unknown",
+        signer=artifacts.coordinator_signer,
+        signed_at=NOW + timedelta(seconds=11),
+        acceptance=acceptance,
+    )
+    pending = CapabilityOutcomePending(
+        effect=receipt.effect,
+        prior_state=CoordinationState.COMMIT_ACCEPTED,
+        query=query,
+        acceptance=acceptance,
+        outcome=unknown,
+        retained_at=NOW + timedelta(seconds=12),
+    )
+    verification = {
+        "expected_gateway_subject": GATEWAY_SUBJECT,
+        "expected_coordinator_subject": COORDINATOR_SUBJECT,
+        "observer_public_key": artifacts.observer_public_key,
+        "expected_observer_id": artifacts.dispatch.pre_observation.observer_id,
+        "expected_observer_key_id": artifacts.dispatch.pre_observation.observer_key_id,
+        "expected_observer_boot_epoch": (
+            artifacts.dispatch.pre_observation.observer_boot_epoch
+        ),
+        "permit_public_key": artifacts.permit_public_key,
+        "expected_permit_key_id": artifacts.dispatch.permit.signing_key_id,
+        "expected_plc_id": artifacts.dispatch.permit.target_plc_id,
+        "expected_plc_key_id": artifacts.dispatch.permit.target_plc_key_id,
+        "expected_plc_boot_epoch": artifacts.dispatch.permit.target_plc_boot_epoch,
+    }
+    after_query_ttl = query.expires_at + timedelta(seconds=1)
+
+    assert not resolution.verify_complete(
+        artifacts.verifier,
+        evaluated_at=after_query_ttl,
+        **verification,
+    )
+    assert resolution.verify_historical_complete(
+        artifacts.verifier,
+        evaluated_at=after_query_ttl,
+        **verification,
+    )
+    assert not pending.verify_complete(
+        artifacts.verifier,
+        evaluated_at=after_query_ttl,
+        **verification,
+    )
+    assert pending.verify_historical_complete(
+        artifacts.verifier,
+        evaluated_at=after_query_ttl,
+        **verification,
+    )
 
 
 def test_retained_outcome_historical_verification_outlives_request_ttl(

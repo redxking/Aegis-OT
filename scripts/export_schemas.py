@@ -18,6 +18,7 @@ from aegis_ot.capability_models import (
     SignedObservationEnvelope,
 )
 from aegis_ot.coordination_models import (
+    CapabilityOutcomePending,
     CapabilityOutcomeResolution,
     CoordinationReceipt,
     DurableCommitAcceptance,
@@ -26,6 +27,7 @@ from aegis_ot.coordination_models import (
     SignedEffectOutcome,
     SignedEffectPrepareRequest,
     SignedEffectQueryRequest,
+    WorkloadAuthenticatedEffectReconciliation,
 )
 from aegis_ot.m4b_models import (
     IndependentConsequenceReport,
@@ -67,6 +69,9 @@ from aegis_ot.workload_identity import (
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
 MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
+    ROOT / "schemas" / "m4i-capability-outcome-pending.schema.json": (
+        CapabilityOutcomePending
+    ),
     ROOT / "schemas" / "m4i-capability-outcome-resolution.schema.json": (
         CapabilityOutcomeResolution
     ),
@@ -84,6 +89,9 @@ MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
     ),
     ROOT / "schemas" / "m4i-signed-effect-query-request.schema.json": (
         SignedEffectQueryRequest
+    ),
+    ROOT / "schemas" / "m4i-workload-effect-reconciliation.schema.json": (
+        WorkloadAuthenticatedEffectReconciliation
     ),
     ROOT / "schemas" / "m4g-capability-dispatch.schema.json": (
         SegmentedCapabilityDispatch

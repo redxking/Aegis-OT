@@ -1924,16 +1924,14 @@
     }
   },
   "additionalProperties": false,
-  "description": "Exact query-bound evidence for resolving a formerly unknown effect.",
+  "description": "Exact retained query evidence that leaves a committed effect unknown.",
   "properties": {
     "acceptance": {
       "$ref": "#/$defs/DurableCommitAcceptance"
     },
     "disposition": {
-      "enum": [
-        "applied",
-        "rejected"
-      ],
+      "const": "unknown_effect",
+      "default": "unknown_effect",
       "title": "Disposition",
       "type": "string"
     },
@@ -1944,7 +1942,6 @@
       "$ref": "#/$defs/SignedEffectOutcome"
     },
     "prior_state": {
-      "default": "unknown_effect",
       "enum": [
         "dispatch_armed",
         "commit_accepted",
@@ -1956,26 +1953,26 @@
     "query": {
       "$ref": "#/$defs/SignedEffectQueryRequest"
     },
-    "resolved_at": {
+    "retained_at": {
       "format": "date-time",
-      "title": "Resolved At",
+      "title": "Retained At",
       "type": "string"
     },
     "schema_version": {
-      "const": "m4i-capability-outcome-resolution-v1",
-      "default": "m4i-capability-outcome-resolution-v1",
+      "const": "m4i-capability-outcome-pending-v1",
+      "default": "m4i-capability-outcome-pending-v1",
       "title": "Schema Version",
       "type": "string"
     }
   },
   "required": [
     "effect",
-    "disposition",
+    "prior_state",
     "query",
     "acceptance",
     "outcome",
-    "resolved_at"
+    "retained_at"
   ],
-  "title": "CapabilityOutcomeResolution",
+  "title": "CapabilityOutcomePending",
   "type": "object"
 }

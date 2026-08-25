@@ -1,0 +1,360 @@
+{
+  "$defs": {
+    "ActionProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "delegation_chain": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Delegation Chain",
+          "type": "array"
+        },
+        "human_approval_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Approval Id"
+        },
+        "mission_id": {
+          "minLength": 1,
+          "title": "Mission Id",
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Nonce",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "observed_state_version": {
+          "minimum": 0,
+          "title": "Observed State Version",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "mission_id",
+        "resource",
+        "operation",
+        "observed_state_version",
+        "observed_at",
+        "nonce",
+        "confidence",
+        "risk_score",
+        "delegation_chain"
+      ],
+      "title": "ActionProposal",
+      "type": "object"
+    },
+    "CapabilityActionRequest": {
+      "additionalProperties": false,
+      "description": "An agent proposal plus a reference to observer-held signed state, never a state body.",
+      "properties": {
+        "correlation_id": {
+          "minLength": 1,
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "observation_challenge_nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Observation Challenge Nonce",
+          "type": "string"
+        },
+        "observation_envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Envelope Digest",
+          "type": "string"
+        },
+        "observation_id": {
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/ActionProposal"
+        },
+        "request_id": {
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "capability-action-request-v1",
+          "default": "capability-action-request-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correlation_id",
+        "proposal",
+        "observation_id",
+        "observation_envelope_digest",
+        "observation_challenge_nonce"
+      ],
+      "title": "CapabilityActionRequest",
+      "type": "object"
+    },
+    "Operation": {
+      "enum": [
+        "isolate_asset",
+        "restore_asset",
+        "shed_load",
+        "dispatch_battery"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "SignedWorkloadCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "credential": {
+          "$ref": "#/$defs/WorkloadCredential"
+        },
+        "signature": {
+          "maxLength": 88,
+          "minLength": 88,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential",
+        "signature"
+      ],
+      "title": "SignedWorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadCredential": {
+      "additionalProperties": false,
+      "description": "Closed claims signed by the configured research identity authority.",
+      "properties": {
+        "audiences": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Audiences",
+          "type": "array"
+        },
+        "authority_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Authority Key Id",
+          "type": "string"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "not_before": {
+          "format": "date-time",
+          "title": "Not Before",
+          "type": "string"
+        },
+        "public_key_b64": {
+          "maxLength": 44,
+          "minLength": 44,
+          "title": "Public Key B64",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/WorkloadRole"
+        },
+        "schema_version": {
+          "default": "m4g-workload-credential-v1",
+          "pattern": "^m4g-workload-credential-v1$",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Subject",
+          "type": "string"
+        },
+        "trust_domain": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Trust Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential_id",
+        "trust_domain",
+        "subject",
+        "role",
+        "key_id",
+        "public_key_b64",
+        "authority_key_id",
+        "audiences",
+        "issued_at",
+        "not_before",
+        "expires_at"
+      ],
+      "title": "WorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadRole": {
+      "enum": [
+        "agent",
+        "candidate",
+        "gateway",
+        "ot-adapter",
+        "observer",
+        "policy",
+        "plant",
+        "permit-issuer",
+        "simulation"
+      ],
+      "title": "WorkloadRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Agent proof requesting recovery of one exact retained capability action.",
+  "properties": {
+    "audience": {
+      "default": "aegis-ot:m4g:gateway",
+      "minLength": 1,
+      "title": "Audience",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "issued_at": {
+      "format": "date-time",
+      "title": "Issued At",
+      "type": "string"
+    },
+    "method": {
+      "const": "POST",
+      "default": "POST",
+      "title": "Method",
+      "type": "string"
+    },
+    "path": {
+      "const": "/v1/capability/effects/reconcile",
+      "default": "/v1/capability/effects/reconcile",
+      "title": "Path",
+      "type": "string"
+    },
+    "request": {
+      "$ref": "#/$defs/CapabilityActionRequest"
+    },
+    "request_nonce": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Request Nonce",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "m4i-workload-effect-reconciliation-v1",
+      "default": "m4i-workload-effect-reconciliation-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sender_credential": {
+      "$ref": "#/$defs/SignedWorkloadCredential"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request",
+    "request_sha256",
+    "sender_credential",
+    "request_nonce",
+    "issued_at",
+    "expires_at"
+  ],
+  "title": "WorkloadAuthenticatedEffectReconciliation",
+  "type": "object"
+}

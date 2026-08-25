@@ -34,6 +34,8 @@ from aegis_ot.coordination_journal import (
 from aegis_ot.coordination_models import (
     EFFECT_COORDINATOR_AUDIENCE,
     GATEWAY_COORDINATION_AUDIENCE,
+    CapabilityOutcomePending,
+    CapabilityOutcomeResolution,
     CoordinationReceipt,
     CoordinationState,
     DurableCommitAcceptance,
@@ -626,6 +628,115 @@ def test_lost_commit_response_duplicate_execute_uses_one_query_and_no_retry(
     ]
     assert harness.exchange.paths.count("/v1/effects/commit") == 1
     assert harness.journal.records()[0].state is CoordinationState.APPLIED
+    harness.journal.close()
+
+
+def test_reconciliation_evidence_queries_once_and_replays_byte_equivalently(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts, lose_commit_response=True)
+    with pytest.raises(ConsequentialTransportOutcomeUnknown):
+        _execute(harness, artifacts)
+    effect = harness.journal.records()[0].effect
+    harness.exchange.lose_commit_response = False
+
+    resolution = harness.port.reconcile_effect_evidence(effect)
+
+    assert isinstance(resolution, CapabilityOutcomeResolution)
+    assert resolution.prior_state is CoordinationState.DISPATCH_ARMED
+    assert resolution.disposition is EffectDisposition.APPLIED
+    assert resolution.outcome.acknowledgment == artifacts.acknowledgment
+    assert harness.exchange.paths.count("/v1/effects/commit") == 1
+    assert harness.exchange.paths.count("/v1/effects/query") == 1
+    calls_after_resolution = tuple(harness.exchange.paths)
+    journal_path = harness.journal.path
+    replay_time = harness.exchange.clock.advance(20)
+    harness.journal.close()
+    reopened = DurableGatewayCoordinationJournal(
+        journal_path,
+        owner_subject=GATEWAY_SUBJECT,
+        initialize=False,
+    )
+    restarted = _port_harness(
+        tmp_path,
+        artifacts,
+        journal=reopened,
+    )
+    restarted.exchange.clock.value = replay_time
+
+    replay = restarted.port.reconcile_effect_evidence(effect)
+
+    assert replay == resolution
+    assert replay.model_dump_json() == resolution.model_dump_json()
+    assert tuple(harness.exchange.paths) == calls_after_resolution
+    assert restarted.exchange.paths == []
+    restarted.journal.close()
+
+
+def test_reconciliation_evidence_returns_exact_signed_pending_outcome(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(
+        tmp_path,
+        artifacts,
+        commit_disposition=EffectDisposition.UNKNOWN_EFFECT,
+        lose_commit_response=True,
+    )
+    with pytest.raises(ConsequentialTransportOutcomeUnknown):
+        _execute(harness, artifacts)
+    effect = harness.journal.records()[0].effect
+    harness.exchange.lose_commit_response = False
+
+    pending = harness.port.reconcile_effect_evidence(effect)
+
+    assert isinstance(pending, CapabilityOutcomePending)
+    assert pending.prior_state is CoordinationState.DISPATCH_ARMED
+    assert pending.disposition is EffectDisposition.UNKNOWN_EFFECT
+    assert pending.outcome.request_kind == "query"
+    assert pending.outcome.acceptance == pending.acceptance
+    assert harness.exchange.paths.count("/v1/effects/commit") == 1
+    assert harness.exchange.paths.count("/v1/effects/query") == 1
+    harness.journal.close()
+
+
+def test_reconciliation_evidence_never_commits_prepared_effect(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts)
+    receipt = harness.port._prepare(artifacts.dispatch)
+
+    with pytest.raises(
+        CapabilityTransportRejected,
+        match="effect_was_not_committed",
+    ) as caught:
+        harness.port.reconcile_effect_evidence(receipt.effect)
+
+    assert caught.value.known_no_effect
+    assert harness.exchange.paths == ["/v1/effects/prepare"]
+    assert harness.journal.records()[0].state is CoordinationState.NOT_DISPATCHED
+    harness.journal.close()
+
+
+def test_reconciliation_evidence_rejects_commit_bound_terminal_without_query(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    harness = _port_harness(tmp_path, artifacts)
+    assert _execute(harness, artifacts) == artifacts.acknowledgment
+    effect = harness.journal.records()[0].effect
+    calls_before_reconciliation = tuple(harness.exchange.paths)
+
+    with pytest.raises(
+        CapabilityTransportRejected,
+        match="effect_not_query_resolved",
+    ) as caught:
+        harness.port.reconcile_effect_evidence(effect)
+
+    assert not caught.value.known_no_effect
+    assert tuple(harness.exchange.paths) == calls_before_reconciliation
     harness.journal.close()
 
 

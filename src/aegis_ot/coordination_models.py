@@ -15,14 +15,17 @@ from typing import Any, Literal
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .capability_models import PlcCommandAcknowledgment
+from .capability_models import CapabilityActionRequest, PlcCommandAcknowledgment
 from .crypto import sign_bytes, verify_bytes
 from .physical_models import (
     SHA256_PATTERN,
     CommandStatus,
     canonical_digest,
 )
-from .segmented_capability_models import SegmentedCapabilityDispatch
+from .segmented_capability_models import (
+    GATEWAY_CAPABILITY_AUDIENCE,
+    SegmentedCapabilityDispatch,
+)
 from .workload_identity import (
     SignedWorkloadCredential,
     WorkloadIdentityError,
@@ -306,6 +309,120 @@ class EffectIdentity(_ClosedModel):
         effect_material = {"schema_version": "m4i-effect-material-v1", **material}
         effect_id = f"sha256:{canonical_digest(effect_material)}"
         return cls(effect_id=effect_id, **material)
+
+
+class WorkloadAuthenticatedEffectReconciliation(_ClosedModel):
+    """Agent proof requesting recovery of one exact retained capability action."""
+
+    schema_version: Literal["m4i-workload-effect-reconciliation-v1"] = (
+        "m4i-workload-effect-reconciliation-v1"
+    )
+    method: Literal["POST"] = "POST"
+    path: Literal["/v1/capability/effects/reconcile"] = (
+        "/v1/capability/effects/reconcile"
+    )
+    audience: str = Field(default=GATEWAY_CAPABILITY_AUDIENCE, min_length=1)
+    request: CapabilityActionRequest
+    request_sha256: str = Field(pattern=SHA256_PATTERN)
+    sender_credential: SignedWorkloadCredential
+    request_nonce: str = Field(min_length=16, max_length=256)
+    issued_at: datetime
+    expires_at: datetime
+    signature: str = ""
+
+    @model_validator(mode="after")
+    def require_closed_request(self) -> WorkloadAuthenticatedEffectReconciliation:
+        _validate_request_window(
+            self.issued_at,
+            self.expires_at,
+            label="effect reconciliation request",
+        )
+        if self.request_sha256 != self.request.digest:
+            raise ValueError("effect reconciliation action hash is inconsistent")
+        if self.request_nonce == self.request.proposal.nonce:
+            raise ValueError("effect reconciliation nonce must be fresh")
+        credential = self.sender_credential.credential
+        if credential.role is not WorkloadRole.AGENT:
+            raise ValueError("effect reconciliation requires an agent workload credential")
+        if self.audience not in credential.audiences:
+            raise ValueError("effect reconciliation audience is not authorized")
+        if not _credential_claim_valid_at(self.sender_credential, self.issued_at):
+            raise ValueError("effect reconciliation credential is not valid at issuance")
+        return self
+
+    def signing_payload(self) -> bytes:
+        return _canonical_json(self.model_dump(mode="json", exclude={"signature"}))
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+    @property
+    def sender_subject(self) -> str:
+        return self.sender_credential.credential.subject
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        request: CapabilityActionRequest,
+        signer: WorkloadSigner,
+        request_nonce: str,
+        issued_at: datetime,
+        expires_at: datetime,
+        audience: str = GATEWAY_CAPABILITY_AUDIENCE,
+    ) -> WorkloadAuthenticatedEffectReconciliation:
+        reconciliation = cls(
+            request=request,
+            request_sha256=request.digest,
+            audience=audience,
+            sender_credential=signer.credential,
+            request_nonce=request_nonce,
+            issued_at=issued_at,
+            expires_at=expires_at,
+        )
+        signed = reconciliation.model_copy(
+            update={
+                "signature": sign_bytes(
+                    signer.private_key,
+                    reconciliation.signing_payload(),
+                )
+            }
+        )
+        _require_signer_match(signer, signed.signing_payload(), signed.signature)
+        return signed
+
+    def verify(self, public_key: Ed25519PublicKey | None = None) -> bool:
+        public_key = public_key or self.sender_credential.credential.public_key
+        return bool(self.signature) and verify_bytes(
+            public_key,
+            self.signing_payload(),
+            self.signature,
+        )
+
+    def verify_for_admission(
+        self,
+        verifier: WorkloadIdentityVerifier,
+        *,
+        expected_agent_subject: str,
+        evaluated_at: datetime,
+    ) -> bool:
+        public_key = _credential_public_key(
+            verifier,
+            self.sender_credential,
+            expected_role=WorkloadRole.AGENT,
+            expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
+            expected_subject=expected_agent_subject,
+            evaluated_at=evaluated_at,
+        )
+        return (
+            public_key is not None
+            and self.audience == GATEWAY_CAPABILITY_AUDIENCE
+            and self.sender_subject == expected_agent_subject
+            and self.request_sha256 == self.request.digest
+            and _valid_at(self.issued_at, self.expires_at, evaluated_at)
+            and self.verify(public_key)
+        )
 
 
 def _verify_inner_dispatch(
@@ -1416,7 +1533,11 @@ class CapabilityOutcomeResolution(_ClosedModel):
         "m4i-capability-outcome-resolution-v1"
     )
     effect: EffectIdentity
-    prior_state: Literal[CoordinationState.UNKNOWN_EFFECT] = CoordinationState.UNKNOWN_EFFECT
+    prior_state: Literal[
+        CoordinationState.DISPATCH_ARMED,
+        CoordinationState.COMMIT_ACCEPTED,
+        CoordinationState.UNKNOWN_EFFECT,
+    ] = CoordinationState.UNKNOWN_EFFECT
     disposition: Literal[EffectDisposition.APPLIED, EffectDisposition.REJECTED]
     query: SignedEffectQueryRequest
     acceptance: DurableCommitAcceptance
@@ -1469,6 +1590,175 @@ class CapabilityOutcomeResolution(_ClosedModel):
         return (
             self.resolved_at <= evaluated_at + maximum_future_skew
             and self.outcome.verify_for_request(
+                verifier,
+                request=self.query,
+                expected_gateway_subject=expected_gateway_subject,
+                expected_coordinator_subject=expected_coordinator_subject,
+                observer_public_key=observer_public_key,
+                expected_observer_id=expected_observer_id,
+                expected_observer_key_id=expected_observer_key_id,
+                expected_observer_boot_epoch=expected_observer_boot_epoch,
+                permit_public_key=permit_public_key,
+                expected_permit_key_id=expected_permit_key_id,
+                expected_plc_id=expected_plc_id,
+                expected_plc_key_id=expected_plc_key_id,
+                expected_plc_boot_epoch=expected_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+                maximum_future_skew=maximum_future_skew,
+            )
+        )
+
+    def verify_historical_complete(
+        self,
+        verifier: WorkloadIdentityVerifier,
+        *,
+        expected_gateway_subject: str,
+        expected_coordinator_subject: str,
+        observer_public_key: Ed25519PublicKey,
+        expected_observer_id: str,
+        expected_observer_key_id: str,
+        expected_observer_boot_epoch: str,
+        permit_public_key: Ed25519PublicKey,
+        expected_permit_key_id: str,
+        expected_plc_id: str,
+        expected_plc_key_id: str,
+        expected_plc_boot_epoch: str,
+        evaluated_at: datetime,
+        maximum_future_skew: timedelta = MAX_COORDINATION_FUTURE_SKEW,
+    ) -> bool:
+        """Verify retained resolution evidence at its historical trust instants."""
+
+        return (
+            self.resolved_at <= evaluated_at + maximum_future_skew
+            and self.outcome.verify_historical_for_request(
+                verifier,
+                request=self.query,
+                expected_gateway_subject=expected_gateway_subject,
+                expected_coordinator_subject=expected_coordinator_subject,
+                observer_public_key=observer_public_key,
+                expected_observer_id=expected_observer_id,
+                expected_observer_key_id=expected_observer_key_id,
+                expected_observer_boot_epoch=expected_observer_boot_epoch,
+                permit_public_key=permit_public_key,
+                expected_permit_key_id=expected_permit_key_id,
+                expected_plc_id=expected_plc_id,
+                expected_plc_key_id=expected_plc_key_id,
+                expected_plc_boot_epoch=expected_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+                maximum_future_skew=maximum_future_skew,
+            )
+        )
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+
+class CapabilityOutcomePending(_ClosedModel):
+    """Exact retained query evidence that leaves a committed effect unknown."""
+
+    schema_version: Literal["m4i-capability-outcome-pending-v1"] = (
+        "m4i-capability-outcome-pending-v1"
+    )
+    effect: EffectIdentity
+    prior_state: Literal[
+        CoordinationState.DISPATCH_ARMED,
+        CoordinationState.COMMIT_ACCEPTED,
+        CoordinationState.UNKNOWN_EFFECT,
+    ]
+    disposition: Literal[EffectDisposition.UNKNOWN_EFFECT] = (
+        EffectDisposition.UNKNOWN_EFFECT
+    )
+    query: SignedEffectQueryRequest
+    acceptance: DurableCommitAcceptance
+    outcome: SignedEffectOutcome
+    retained_at: datetime
+
+    @model_validator(mode="after")
+    def require_exact_pending(self) -> CapabilityOutcomePending:
+        if not _is_aware(self.retained_at):
+            raise ValueError("pending outcome retention time must be timezone-aware")
+        if (
+            self.outcome.request_kind != "query"
+            or self.query.effect != self.effect
+            or self.outcome.request_sha256 != self.query.digest
+            or self.outcome.effect != self.effect
+            or self.outcome.disposition is not EffectDisposition.UNKNOWN_EFFECT
+            or self.acceptance.effect != self.effect
+            or self.outcome.acceptance != self.acceptance
+            or self.outcome.signed_at > self.retained_at
+        ):
+            raise ValueError("pending outcome bindings are inconsistent")
+        return self
+
+    @property
+    def query_request_sha256(self) -> str:
+        return self.query.digest
+
+    @property
+    def receipt(self) -> CoordinationReceipt:
+        return self.acceptance.commit_request.receipt
+
+    def verify_complete(
+        self,
+        verifier: WorkloadIdentityVerifier,
+        *,
+        expected_gateway_subject: str,
+        expected_coordinator_subject: str,
+        observer_public_key: Ed25519PublicKey,
+        expected_observer_id: str,
+        expected_observer_key_id: str,
+        expected_observer_boot_epoch: str,
+        permit_public_key: Ed25519PublicKey,
+        expected_permit_key_id: str,
+        expected_plc_id: str,
+        expected_plc_key_id: str,
+        expected_plc_boot_epoch: str,
+        evaluated_at: datetime,
+        maximum_future_skew: timedelta = MAX_COORDINATION_FUTURE_SKEW,
+    ) -> bool:
+        return (
+            self.retained_at <= evaluated_at + maximum_future_skew
+            and self.outcome.verify_for_request(
+                verifier,
+                request=self.query,
+                expected_gateway_subject=expected_gateway_subject,
+                expected_coordinator_subject=expected_coordinator_subject,
+                observer_public_key=observer_public_key,
+                expected_observer_id=expected_observer_id,
+                expected_observer_key_id=expected_observer_key_id,
+                expected_observer_boot_epoch=expected_observer_boot_epoch,
+                permit_public_key=permit_public_key,
+                expected_permit_key_id=expected_permit_key_id,
+                expected_plc_id=expected_plc_id,
+                expected_plc_key_id=expected_plc_key_id,
+                expected_plc_boot_epoch=expected_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+                maximum_future_skew=maximum_future_skew,
+            )
+        )
+
+    def verify_historical_complete(
+        self,
+        verifier: WorkloadIdentityVerifier,
+        *,
+        expected_gateway_subject: str,
+        expected_coordinator_subject: str,
+        observer_public_key: Ed25519PublicKey,
+        expected_observer_id: str,
+        expected_observer_key_id: str,
+        expected_observer_boot_epoch: str,
+        permit_public_key: Ed25519PublicKey,
+        expected_permit_key_id: str,
+        expected_plc_id: str,
+        expected_plc_key_id: str,
+        expected_plc_boot_epoch: str,
+        evaluated_at: datetime,
+        maximum_future_skew: timedelta = MAX_COORDINATION_FUTURE_SKEW,
+    ) -> bool:
+        return (
+            self.retained_at <= evaluated_at + maximum_future_skew
+            and self.outcome.verify_historical_for_request(
                 verifier,
                 request=self.query,
                 expected_gateway_subject=expected_gateway_subject,
