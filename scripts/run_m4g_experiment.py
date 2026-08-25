@@ -845,6 +845,7 @@ def _probe_accepted(probe: dict[str, Any]) -> bool:
     replay = probe.get("exact_gateway_request_replay", {})
     unsafe = probe.get("unsafe", {})
     reachability = probe.get("agent_direct_reachability", {})
+    replay_reasons = replay.get("reasons", []) if isinstance(replay, dict) else []
     return (
         isinstance(nominal, dict)
         and nominal.get("status") == "completed"
@@ -852,7 +853,9 @@ def _probe_accepted(probe: dict[str, Any]) -> bool:
         and isinstance(replay, dict)
         and replay.get("status") == "not_dispatched"
         and replay.get("dispatch_attempts") == 0
-        and "replayed_nonce" in replay.get("reasons", [])
+        and isinstance(replay_reasons, list)
+        and set(replay_reasons)
+        == {"observation_sequence_regressed", "observation_challenge_replayed"}
         and isinstance(unsafe, dict)
         and unsafe.get("status") == "not_dispatched"
         and unsafe.get("dispatch_attempts") == 0

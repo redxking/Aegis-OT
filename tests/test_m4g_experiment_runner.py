@@ -171,7 +171,10 @@ def test_probe_acceptance_requires_capability_outcomes_and_no_bypass(
         "exact_gateway_request_replay": {
             "status": "not_dispatched",
             "dispatch_attempts": 0,
-            "reasons": ["replayed_nonce"],
+            "reasons": [
+                "observation_sequence_regressed",
+                "observation_challenge_replayed",
+            ],
         },
         "unsafe": {
             "status": "not_dispatched",
@@ -191,6 +194,9 @@ def test_probe_acceptance_requires_capability_outcomes_and_no_bypass(
     assert not runner._probe_accepted(accepted)
     accepted["agent_direct_reachability"]["ot-adapter"] = False
     accepted["unsafe"]["reasons"] = ["candidate_rejected_by_test_boundary"]
+    assert not runner._probe_accepted(accepted)
+    accepted["unsafe"]["reasons"] = ["critical_load_below_limit"]
+    accepted["exact_gateway_request_replay"]["reasons"] = ["replayed_nonce"]
     assert not runner._probe_accepted(accepted)
 
 
