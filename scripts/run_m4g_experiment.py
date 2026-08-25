@@ -854,8 +854,9 @@ def _probe_accepted(probe: dict[str, Any]) -> bool:
         and replay.get("dispatch_attempts") == 0
         and "replayed_nonce" in replay.get("reasons", [])
         and isinstance(unsafe, dict)
-        and unsafe.get("status") == "candidate_rejected"
+        and unsafe.get("status") == "not_dispatched"
         and unsafe.get("dispatch_attempts") == 0
+        and "critical_load_below_limit" in unsafe.get("reasons", [])
         and isinstance(reachability, dict)
         and bool(reachability)
         and not any(reachability.values())

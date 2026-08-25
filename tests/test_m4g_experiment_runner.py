@@ -173,7 +173,11 @@ def test_probe_acceptance_requires_capability_outcomes_and_no_bypass(
             "dispatch_attempts": 0,
             "reasons": ["replayed_nonce"],
         },
-        "unsafe": {"status": "candidate_rejected", "dispatch_attempts": 0},
+        "unsafe": {
+            "status": "not_dispatched",
+            "dispatch_attempts": 0,
+            "reasons": ["critical_load_below_limit"],
+        },
         "agent_direct_reachability": {
             "observer": False,
             "candidate": False,
@@ -184,6 +188,9 @@ def test_probe_acceptance_requires_capability_outcomes_and_no_bypass(
 
     assert runner._probe_accepted(accepted)
     accepted["agent_direct_reachability"]["ot-adapter"] = True
+    assert not runner._probe_accepted(accepted)
+    accepted["agent_direct_reachability"]["ot-adapter"] = False
+    accepted["unsafe"]["reasons"] = ["candidate_rejected_by_test_boundary"]
     assert not runner._probe_accepted(accepted)
 
 
