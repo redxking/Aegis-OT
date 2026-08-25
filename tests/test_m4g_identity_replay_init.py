@@ -10,8 +10,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 import aegis_ot.m4g_replay_init as replay_init
-from aegis_ot.capability_plc import OrderlyRestartReplayReservations
 from aegis_ot.segmented_capability_models import OT_CAPABILITY_AUDIENCE
+from aegis_ot.semantic_replay import OrderlyRestartReplayReservations
 from aegis_ot.workload_identity import workload_key_id
 from aegis_ot.workload_replay import DurableWorkloadReplayLedger
 
@@ -102,6 +102,10 @@ def test_initializer_creates_private_identity_bound_ledgers_without_root_private
         assert path.stat().st_uid == os.getuid()
         assert path.stat().st_gid == os.getgid()
     assert stat.S_IMODE(workload_path.parent.stat().st_mode) == 0o700
+
+
+def test_initializer_uses_lightweight_semantic_replay_module() -> None:
+    assert OrderlyRestartReplayReservations.__module__ == "aegis_ot.semantic_replay"
 
 
 @pytest.mark.parametrize("existing_ledger", ["workload", "semantic"])

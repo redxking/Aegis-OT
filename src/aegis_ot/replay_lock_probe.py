@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .capability_plc import OrderlyRestartReplayReservations
+from .semantic_replay import OrderlyRestartReplayReservations
 from .transport_replay import DurableTransportReplayLedger, TransportReplayLedgerError
 
 

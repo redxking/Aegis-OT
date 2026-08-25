@@ -10,8 +10,8 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from .capability_plc import OrderlyRestartReplayReservations
 from .segmented_capability_models import OT_CAPABILITY_AUDIENCE
+from .semantic_replay import OrderlyRestartReplayReservations
 from .workload_identity import workload_key_id
 from .workload_replay import DurableWorkloadReplayLedger
 

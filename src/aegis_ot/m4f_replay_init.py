@@ -8,7 +8,7 @@ import os
 import stat
 from pathlib import Path
 
-from .capability_plc import OrderlyRestartReplayReservations
+from .semantic_replay import OrderlyRestartReplayReservations
 from .transport_replay import DurableTransportReplayLedger
 
 
