@@ -9,7 +9,7 @@ from datetime import datetime
 from multiprocessing.connection import wait
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -57,6 +57,28 @@ PLC_CAPABILITIES: dict[str, frozenset[str]] = {
 
 class PlcServiceError(RuntimeError):
     """The virtual-PLC service rejected an exchange before returning a signed ACK."""
+
+
+class CapabilityPlcPlantPort(Protocol):
+    """Plant operations retained by the permit-aware virtual PLC."""
+
+    def read_state(self) -> PhysicalStateSnapshot: ...
+
+    def simulate_candidate(
+        self,
+        command: PhysicalControlCommand,
+    ) -> CandidateAssessment: ...
+
+    def apply_authorized_command(
+        self,
+        command: PhysicalControlCommand,
+        *,
+        expected_pre_state_version: int | None = None,
+        expected_pre_state_digest: str | None = None,
+        expected_pre_observation_digest: str | None = None,
+        expected_post_state_digest: str | None = None,
+        expected_post_topology_digest: str | None = None,
+    ) -> PhysicalStateSnapshot: ...
 
 
 @dataclass(frozen=True)
@@ -233,7 +255,7 @@ class CapabilityVirtualPlc:
 
     def __init__(
         self,
-        plant: PlcPlantClient,
+        plant: CapabilityPlcPlantPort,
         *,
         plc_id: str,
         boot_epoch: str,
