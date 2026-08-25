@@ -47,7 +47,9 @@ from .physical_models import (
     PhysicalStateSnapshot,
     proposal_digest,
 )
-from .semantic_replay import OrderlyRestartReplayReservations
+from .semantic_replay import (
+    OrderlyRestartReplayReservations as OrderlyRestartReplayReservations,
+)
 from .transport_replay import _LifetimeReplayWriterLock
 
 PLC_CAPABILITIES: dict[str, frozenset[str]] = {
