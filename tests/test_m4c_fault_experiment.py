@@ -68,6 +68,18 @@ def test_live_fault_campaign_fails_closed_without_retry() -> None:
     assert replay["replay_acknowledgment_valid"] is True
     assert replay["fresh_stack_state_unchanged"] is True
     assert replay["fresh_stack_isolated_resources"] == []
+    crash = report["replay_ledger_crash_checks"]
+    assert crash == {
+        "condition": "replay_ledger_abrupt_exit_consistency",
+        "before_replace_exit_code": 91,
+        "before_replace_old_ledger_preserved": True,
+        "before_replace_new_reservation_absent": True,
+        "before_replace_file_unchanged": True,
+        "after_replace_exit_code": 92,
+        "after_replace_old_reservation_preserved": True,
+        "after_replace_new_reservation_present": True,
+        "criteria_met": True,
+    }
 
 
 def test_fault_campaign_writer_is_exclusive(
@@ -75,7 +87,7 @@ def test_fault_campaign_writer_is_exclusive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
-        "schema_version": "m4c-fault-campaign-v4",
+        "schema_version": "m4c-fault-campaign-v5",
         "experiment_criteria_met": True,
     }
     monkeypatch.setattr(

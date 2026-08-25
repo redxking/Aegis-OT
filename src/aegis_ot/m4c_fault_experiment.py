@@ -9,6 +9,7 @@ Each controller condition starts a fresh process stack.
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
 import subprocess
 import sys
@@ -17,7 +18,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, NoReturn, cast
 
 from pydantic import JsonValue
 
@@ -37,6 +38,7 @@ from .capability_models import (
     SignedObservationEnvelope,
 )
 from .capability_observer import ObserverServiceError
+from .capability_plc import OrderlyRestartReplayReservations
 from .m4b_models import (
     IndependentConsequenceReport,
     IndependentEvaluationRequest,
@@ -587,6 +589,140 @@ def _run_full_stack_restart_replay() -> dict[str, JsonValue]:
             second.close()
 
 
+def _reserve_crash_probe(
+    ledger: OrderlyRestartReplayReservations,
+    suffix: str,
+) -> None:
+    ledger.reserve(
+        request_digest=sha256_bytes(f"request:{suffix}".encode()),
+        permit_id=f"permit-{suffix}",
+        permit_nonce=f"permit-nonce-{suffix}",
+        command_id=f"command-{suffix}",
+    )
+
+
+def _crash_replay_ledger_worker(
+    path: str,
+    phase: Literal["before_replace", "after_replace"],
+) -> None:
+    """Abruptly exit at one atomic-persistence boundary; called only by the campaign."""
+
+    ledger = OrderlyRestartReplayReservations(Path(path))
+    if phase == "before_replace":
+
+        def exit_before_replace(_: object, __: object) -> NoReturn:
+            os._exit(91)
+
+        os.replace = exit_before_replace  # type: ignore[assignment]
+    else:
+        original_fsync = os.fsync
+        fsync_calls = 0
+
+        def exit_after_replace(descriptor: int) -> None:
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == 2:
+                os._exit(92)
+            original_fsync(descriptor)
+
+        os.fsync = exit_after_replace  # type: ignore[assignment]
+    _reserve_crash_probe(ledger, "new")
+    os._exit(90)
+
+
+def _join_crash_worker(process: Any, expected_exit: int) -> None:
+    process.join(15)
+    if process.is_alive():
+        process.terminate()
+        process.join(2)
+        raise RuntimeError("replay-ledger crash worker did not terminate")
+    if process.exitcode != expected_exit:
+        raise RuntimeError(
+            f"replay-ledger crash worker exited {process.exitcode}, expected {expected_exit}"
+        )
+
+
+def _run_replay_ledger_crash_checks() -> dict[str, JsonValue]:
+    context = multiprocessing.get_context("spawn")
+    with tempfile.TemporaryDirectory(prefix="aegis-ot-m4c-ledger-crash-") as temporary:
+        root = Path(temporary)
+
+        before_directory = root / "before-replace"
+        before_directory.mkdir(mode=0o700)
+        before_path = before_directory / "ledger.json"
+        before_ledger = OrderlyRestartReplayReservations(before_path)
+        _reserve_crash_probe(before_ledger, "initial")
+        before_digest = sha256_bytes(before_path.read_bytes())
+        before_worker = context.Process(
+            target=_crash_replay_ledger_worker,
+            args=(str(before_path), "before_replace"),
+        )
+        before_worker.start()
+        _join_crash_worker(before_worker, 91)
+        before_reloaded = OrderlyRestartReplayReservations(before_path)
+        before_old_preserved = before_reloaded.replay_reason(
+            request_digest=sha256_bytes(b"request:initial"),
+            permit_id="permit-initial",
+            permit_nonce="permit-nonce-initial",
+            command_id="command-initial",
+        ) == "transaction_replayed"
+        before_new_absent = before_reloaded.replay_reason(
+            request_digest=sha256_bytes(b"request:new"),
+            permit_id="permit-new",
+            permit_nonce="permit-nonce-new",
+            command_id="command-new",
+        ) is None
+        before_file_unchanged = sha256_bytes(before_path.read_bytes()) == before_digest
+
+        after_directory = root / "after-replace"
+        after_directory.mkdir(mode=0o700)
+        after_path = after_directory / "ledger.json"
+        after_ledger = OrderlyRestartReplayReservations(after_path)
+        _reserve_crash_probe(after_ledger, "initial")
+        after_worker = context.Process(
+            target=_crash_replay_ledger_worker,
+            args=(str(after_path), "after_replace"),
+        )
+        after_worker.start()
+        _join_crash_worker(after_worker, 92)
+        after_reloaded = OrderlyRestartReplayReservations(after_path)
+        after_old_preserved = after_reloaded.replay_reason(
+            request_digest=sha256_bytes(b"request:initial"),
+            permit_id="permit-initial",
+            permit_nonce="permit-nonce-initial",
+            command_id="command-initial",
+        ) == "transaction_replayed"
+        after_new_present = after_reloaded.replay_reason(
+            request_digest=sha256_bytes(b"request:new"),
+            permit_id="permit-new",
+            permit_nonce="permit-nonce-new",
+            command_id="command-new",
+        ) == "transaction_replayed"
+
+        criteria_met = all(
+            (
+                before_old_preserved,
+                before_new_absent,
+                before_file_unchanged,
+                after_old_preserved,
+                after_new_present,
+            )
+        )
+        if not criteria_met:
+            raise RuntimeError("replay-ledger abrupt-exit consistency criteria were not met")
+        return {
+            "condition": "replay_ledger_abrupt_exit_consistency",
+            "before_replace_exit_code": before_worker.exitcode,
+            "before_replace_old_ledger_preserved": before_old_preserved,
+            "before_replace_new_reservation_absent": before_new_absent,
+            "before_replace_file_unchanged": before_file_unchanged,
+            "after_replace_exit_code": after_worker.exitcode,
+            "after_replace_old_reservation_preserved": after_old_preserved,
+            "after_replace_new_reservation_present": after_new_present,
+            "criteria_met": criteria_met,
+        }
+
+
 def _git_value(*arguments: str) -> str:
     completed = subprocess.run(  # noqa: S603 - fixed git executable/arguments
         ["/usr/bin/git", *arguments],
@@ -627,10 +763,13 @@ def run_fault_campaign(
     for index, condition in enumerate(CONDITION_ORDER):
         cases.append(_run_controller_condition(condition, index))
         if progress is not None:
-            progress(index + 1, len(CONDITION_ORDER) + 1)
+            progress(index + 1, len(CONDITION_ORDER) + 2)
     restart_replay = _run_full_stack_restart_replay()
     if progress is not None:
-        progress(len(CONDITION_ORDER) + 1, len(CONDITION_ORDER) + 1)
+        progress(len(CONDITION_ORDER) + 1, len(CONDITION_ORDER) + 2)
+    replay_crash = _run_replay_ledger_crash_checks()
+    if progress is not None:
+        progress(len(CONDITION_ORDER) + 2, len(CONDITION_ORDER) + 2)
     evaluator = _run_evaluator_adversarial_checks()
     git_end = _git_state()
     if git_start["commit"] != git_end["commit"]:
@@ -649,6 +788,7 @@ def run_fault_campaign(
         ],
         "evaluator": evaluator,
         "full_stack_restart_replay": restart_replay,
+        "replay_ledger_crash_checks": replay_crash,
     }
     missing_post = cases[0]["independent_missing_post_evaluation"]
     contradiction = cases[-1]["independent_contradiction_evaluation"]
@@ -666,7 +806,9 @@ def run_fault_campaign(
         and isinstance(contradiction, dict)
         and contradiction.get("status") == "contradict"
         and contradiction.get("report_valid") is True
-    ) and restart_replay["criteria_met"] is True and all(
+    ) and restart_replay["criteria_met"] is True and (
+        replay_crash["criteria_met"] is True
+    ) and all(
         (
             evaluator["signed_report_status"] == "input_rejected",
             evaluator["signed_report_valid"] is True,
@@ -675,7 +817,7 @@ def run_fault_campaign(
         )
     )
     return {
-        "schema_version": "m4c-fault-campaign-v4",
+        "schema_version": "m4c-fault-campaign-v5",
         "started_at_utc": started.isoformat(),
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "git": {
@@ -687,6 +829,7 @@ def run_fault_campaign(
         "controller_cases": cast(list[JsonValue], cases),
         "evaluator_adversarial_checks": evaluator,
         "full_stack_restart_replay": restart_replay,
+        "replay_ledger_crash_checks": replay_crash,
         "deterministic_projection_sha256": sha256_bytes(canonical_json_bytes(projection)),
         "experiment_criteria_met": criteria_met,
         "claim_boundary": (

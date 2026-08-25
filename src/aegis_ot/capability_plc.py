@@ -77,7 +77,9 @@ class PlcProcessInfo:
 
 
 class OrderlyRestartReplayReservations:
-    """Single-writer reservations retained across one orderly PLC-child replacement."""
+    """Single-writer replay reservations persisted by file-and-directory fsync."""
+
+    MAX_LEDGER_BYTES = 4 * 1024 * 1024
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -96,13 +98,35 @@ class OrderlyRestartReplayReservations:
     def _load(self) -> dict[str, set[str]]:
         if not self.path.exists():
             return self._empty()
-        parsed = json.loads(self.path.read_text(encoding="utf-8"))
+        if self.path.is_symlink() or not self.path.is_file():
+            raise ValueError("PLC replay ledger must be a regular non-symlink file")
+        if self.path.stat().st_size > self.MAX_LEDGER_BYTES:
+            raise ValueError("PLC replay ledger exceeds its size limit")
+
+        def closed_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            value: dict[str, Any] = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError("PLC replay ledger contains a duplicate key")
+                value[key] = item
+            return value
+
+        parsed = json.loads(
+            self.path.read_text(encoding="utf-8"),
+            object_pairs_hook=closed_object,
+        )
         if not isinstance(parsed, dict):
             raise ValueError("PLC replay ledger root must be an object")
         expected = self._empty()
+        if set(parsed) != set(expected):
+            raise ValueError("PLC replay ledger has unexpected or missing fields")
         for key in expected:
             values = parsed.get(key)
-            if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            if (
+                not isinstance(values, list)
+                or not all(isinstance(value, str) and value for value in values)
+                or values != sorted(set(values))
+            ):
                 raise ValueError("PLC replay ledger has an invalid reservation set")
             expected[key] = set(values)
         return expected
@@ -110,16 +134,35 @@ class OrderlyRestartReplayReservations:
     def _persist(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(f".{uuid4().hex}.tmp")
-        temporary.write_text(
-            json.dumps(
-                {key: sorted(values) for key, values in sorted(self._state.items())},
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
-            encoding="utf-8",
-        )
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, self.path)
+        material = json.dumps(
+            {key: sorted(values) for key, values in sorted(self._state.items())},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        replaced = False
+        try:
+            offset = 0
+            while offset < len(material):
+                offset += os.write(descriptor, material[offset:])
+            os.fsync(descriptor)
+            os.close(descriptor)
+            descriptor = -1
+            os.replace(temporary, self.path)
+            replaced = True
+            directory_descriptor = os.open(self.path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if not replaced:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
 
     def replay_reason(
         self,

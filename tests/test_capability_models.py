@@ -62,6 +62,58 @@ PLC_KEY_ID = "plc-key-1"
 PLC_BOOT_EPOCH = "plc-boot-epoch-0000001"
 
 
+def test_replay_ledger_rejects_noncanonical_and_unsafe_files(tmp_path: Path) -> None:
+    path = tmp_path / "replay.json"
+    valid = {
+        "command_ids": [],
+        "permit_ids": [],
+        "permit_nonces": [],
+        "request_digests": [],
+    }
+    hostile_values = (
+        {**valid, "unexpected": []},
+        {**valid, "permit_ids": ["duplicate", "duplicate"]},
+    )
+    for value in hostile_values:
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with pytest.raises(ValueError, match="unexpected|invalid reservation"):
+            OrderlyRestartReplayReservations(path)
+
+    path.write_text(
+        '{"command_ids":[],"permit_ids":[],"permit_ids":[],"permit_nonces":[],'
+        '"request_digests":[]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="duplicate key"):
+        OrderlyRestartReplayReservations(path)
+
+
+def test_replay_ledger_persists_canonical_mode_and_survives_reload(tmp_path: Path) -> None:
+    path = tmp_path / "replay.json"
+    ledger = OrderlyRestartReplayReservations(path)
+    ledger.reserve(
+        request_digest="1" * 64,
+        permit_id="permit-1",
+        permit_nonce="permit-nonce-1",
+        command_id="command-1",
+    )
+
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "command_ids": ["command-1"],
+        "permit_ids": ["permit-1"],
+        "permit_nonces": ["permit-nonce-1"],
+        "request_digests": ["1" * 64],
+    }
+    reloaded = OrderlyRestartReplayReservations(path)
+    assert reloaded.replay_reason(
+        request_digest="1" * 64,
+        permit_id="permit-1",
+        permit_nonce="permit-nonce-1",
+        command_id="command-1",
+    ) == "transaction_replayed"
+
+
 @dataclass(frozen=True)
 class CapabilityArtifacts:
     permit_private_key: Ed25519PrivateKey
