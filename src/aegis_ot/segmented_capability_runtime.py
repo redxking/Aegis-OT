@@ -57,12 +57,15 @@ from .coordination_journal import (
     DurableEffectCoordinationJournal,
     DurableGatewayCoordinationJournal,
     EffectCommitAttempt,
+    EffectPrepareAttempt,
     EffectQueryAttempt,
     IllegalCoordinationTransition,
 )
 from .coordination_models import (
     EFFECT_COORDINATOR_AUDIENCE,
     GATEWAY_COORDINATION_AUDIENCE,
+    CapabilityOutcomePending,
+    CapabilityOutcomeResolution,
     CoordinationReceipt,
     CoordinationState,
     DurableCommitAcceptance,
@@ -71,6 +74,7 @@ from .coordination_models import (
     SignedEffectOutcome,
     SignedEffectPrepareRequest,
     SignedEffectQueryRequest,
+    WorkloadAuthenticatedEffectReconciliation,
 )
 from .factory import LocalLab, build_local_lab
 from .models import Decision
@@ -116,6 +120,8 @@ from .segmented_capability_models import (
 )
 from .segmented_capability_transport import (
     CandidateHealthMetadata,
+    CapabilityTransportError,
+    CapabilityTransportRejected,
     CoordinatedWorkloadRemoteVirtualPlcPort,
     HttpExchange,
     ObserverHealthMetadata,
@@ -1173,6 +1179,11 @@ class CapabilityOtRuntime:
             raise CapabilityAdmissionRejected("effect_prepare_authentication_rejected")
         try:
             with self._coordination_lock:
+                pending = context.journal.pending()
+                if any(record.effect != request.effect for record in pending):
+                    raise CapabilityAdmissionRejected(
+                        "effect_reconciliation_required"
+                    )
                 receipt = context.journal.prepare_effect(
                     request,
                     lambda exact_request, retained_at: CoordinationReceipt.issue(
@@ -1895,6 +1906,172 @@ class CapabilityGatewayRuntime:
                 challenge_nonce=request.challenge_nonce,
             )
 
+    @staticmethod
+    def _record_binds_reconciliation_action(
+        record: CoordinationJournalRecord,
+        action: CapabilityActionRequest,
+    ) -> bool:
+        prepare_attempts = tuple(
+            attempt
+            for attempt in record.attempts
+            if isinstance(attempt, EffectPrepareAttempt)
+        )
+        return (
+            record.effect.request_sha256 == action.digest
+            and bool(prepare_attempts)
+            and all(
+                attempt.request.effect == record.effect
+                and attempt.request.dispatch.request == action
+                for attempt in prepare_attempts
+            )
+        )
+
+    def reconcile_effect(
+        self,
+        request: WorkloadAuthenticatedEffectReconciliation,
+    ) -> CapabilityOutcomeResolution | CapabilityOutcomePending:
+        """Resolve one retained action without re-entering the execution path."""
+
+        with self._transaction_lock:
+            if not self.coordination_required:
+                raise CapabilityAdmissionRejected("effect_coordination_is_disabled")
+            verifier = self.agent_workload_verifier
+            agent_subject = self.agent_workload_subject
+            if verifier is None or agent_subject is None:
+                raise CapabilityAdmissionRejected(
+                    "agent_reconciliation_identity_rejected"
+                )
+            evaluated_at = self.clock()
+            try:
+                verification = verifier.verify_credential_with_receipt(
+                    request.sender_credential,
+                    expected_role=WorkloadRole.AGENT,
+                    expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
+                    expected_subject=agent_subject,
+                    now=evaluated_at,
+                )
+            except WorkloadCredentialRejected as exc:
+                raise CapabilityAdmissionRejected(
+                    "agent_reconciliation_identity_rejected"
+                ) from exc
+            except WorkloadIdentityUnavailable as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "agent_reconciliation_trust_unavailable"
+                ) from exc
+            if not request.verify_for_admission(
+                verifier,
+                expected_agent_subject=agent_subject,
+                evaluated_at=evaluated_at,
+            ) or not request.verify(verification.public_key):
+                raise CapabilityAdmissionRejected(
+                    "agent_reconciliation_proof_rejected"
+                )
+
+            journal = self.coordination_journal
+            if journal is None:
+                raise CapabilityRuntimeUnavailable(
+                    "gateway_coordination_journal_unavailable"
+                )
+            action = request.request
+            try:
+                record = journal.find_action(
+                    action.digest,
+                    action.proposal.actor_id,
+                    action.proposal.nonce,
+                )
+            except CoordinationCollisionError as exc:
+                raise CapabilityAdmissionRejected(
+                    "agent_reconciliation_action_conflict"
+                ) from exc
+            except CoordinationJournalError as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "gateway_coordination_journal_unavailable"
+                ) from exc
+            if record is None:
+                raise CapabilityAdmissionRejected("coordinated_action_not_found")
+            if not self._record_binds_reconciliation_action(record, action):
+                raise CapabilityAdmissionRejected(
+                    "agent_reconciliation_action_conflict"
+                )
+
+            plc = getattr(self.controller, "plc", None)
+            if not isinstance(plc, CoordinatedWorkloadRemoteVirtualPlcPort):
+                raise CapabilityRuntimeUnavailable(
+                    "effect_reconciliation_unavailable"
+                )
+            state_before_request = record.state
+            try:
+                evidence = plc.reconcile_effect_evidence(record.effect)
+            except CapabilityTransportRejected as exc:
+                reason = {
+                    "coordination_effect_not_recorded": "coordinated_action_not_found",
+                    "effect_was_not_committed": "effect_was_not_committed",
+                    "effect_not_query_resolved": "effect_not_query_resolved",
+                }.get(exc.reason_code)
+                if reason is None:
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_reconciliation_unavailable"
+                    ) from exc
+                raise CapabilityAdmissionRejected(reason) from exc
+            except CapabilityTransportError as exc:
+                reason = str(exc)
+                if reason not in {
+                    "gateway_coordination_journal_unavailable",
+                    "effect_reconciliation_unavailable",
+                    "retained_effect_verification_failed",
+                }:
+                    reason = "effect_reconciliation_unavailable"
+                raise CapabilityRuntimeUnavailable(reason) from exc
+
+            try:
+                final_record = journal.get(record.effect)
+            except CoordinationJournalError as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "gateway_coordination_journal_unavailable"
+                ) from exc
+            if final_record is None:
+                raise CapabilityRuntimeUnavailable(
+                    "retained_effect_verification_failed"
+                )
+            if isinstance(evidence, CapabilityOutcomeResolution):
+                expected_state = CoordinationState(evidence.disposition.value)
+                final_state_valid = final_record.state is expected_state
+            else:
+                final_state_valid = (
+                    final_record.state is CoordinationState.UNKNOWN_EFFECT
+                )
+            if (
+                not final_state_valid
+                or final_record.latest_evidence_sha256 != evidence.outcome.digest
+            ):
+                raise CapabilityRuntimeUnavailable(
+                    "retained_effect_verification_failed"
+                )
+
+            self.authorization.gateway.evidence.append(
+                proposal_id=action.proposal.proposal_id,
+                decision_id=f"effect-reconciliation:{record.effect.effect_id}",
+                payload={
+                    "event_type": "capability_effect_reconciliation",
+                    "entrypoint": "agent-to-segmented-gateway",
+                    "proof_sha256": request.digest,
+                    "action_request_sha256": action.digest,
+                    "effect_sha256": record.effect.digest,
+                    "query_request_sha256": evidence.query.digest,
+                    "outcome_sha256": evidence.outcome.digest,
+                    "reconciliation_evidence_sha256": evidence.digest,
+                    "journal_evidence_sha256": final_record.latest_evidence_sha256,
+                    "prior_state": evidence.prior_state.value,
+                    "state_before_request": state_before_request.value,
+                    "final_state": final_record.state.value,
+                    "disposition": evidence.disposition.value,
+                    "commit_retry_count": 0,
+                    "post_observation_status": "not_attempted",
+                    **verification.evidence_fields(),
+                },
+            )
+            return evidence
+
     def execute(
         self,
         request: CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction,
@@ -1964,6 +2141,16 @@ class CapabilityGatewayRuntime:
                 if retained is not None:
                     raise CapabilityAdmissionRejected(
                         "agent_action_already_coordinated"
+                    )
+                try:
+                    pending = journal.pending()
+                except CoordinationJournalError as exc:
+                    raise CapabilityRuntimeUnavailable(
+                        "gateway_coordination_journal_unavailable"
+                    ) from exc
+                if pending:
+                    raise CapabilityAdmissionRejected(
+                        "effect_reconciliation_required"
                     )
             result = self.controller.execute(action)
             if not isinstance(result, SegmentedCapabilityClosedLoopResult):
@@ -2846,7 +3033,8 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
         try:
             return instance.prepare_effect(parsed)
         except CapabilityAdmissionRejected as exc:
-            return _failure_response(403, str(exc), status="rejected")
+            status_code = 409 if str(exc) == "effect_reconciliation_required" else 403
+            return _failure_response(status_code, str(exc), status="rejected")
         except Exception:
             return _failure_response(503, "effect_prepare_unavailable", status="error")
 
@@ -2936,9 +3124,66 @@ def create_gateway_app(
         try:
             return instance.execute(parsed)
         except CapabilityAdmissionRejected as exc:
-            return _failure_response(403, str(exc), status="rejected")
+            status_code = (
+                409
+                if str(exc)
+                in {
+                    "agent_action_already_coordinated",
+                    "agent_action_coordination_conflict",
+                    "effect_reconciliation_required",
+                }
+                else 403
+            )
+            return _failure_response(status_code, str(exc), status="rejected")
         except Exception:
             return _failure_response(503, "gateway_runtime_unavailable", status="error")
+
+    @app.post(
+        "/v1/capability/effects/reconcile",
+        response_model=CapabilityOutcomeResolution | CapabilityOutcomePending,
+    )
+    async def reconcile_effect(
+        request: Request,
+    ) -> CapabilityOutcomeResolution | CapabilityOutcomePending | JSONResponse:
+        try:
+            parsed = await parse_strict_json_request(
+                request,
+                WorkloadAuthenticatedEffectReconciliation,
+            )
+        except StrictJsonRequestError as exc:
+            return _wire_rejection(exc)
+        try:
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "gateway_runtime_unavailable", status="error")
+        try:
+            result = instance.reconcile_effect(parsed)
+        except CapabilityAdmissionRejected as exc:
+            reason = str(exc)
+            status_code = {
+                "effect_coordination_is_disabled": 409,
+                "agent_reconciliation_identity_rejected": 403,
+                "agent_reconciliation_proof_rejected": 403,
+                "agent_reconciliation_action_conflict": 409,
+                "coordinated_action_not_found": 404,
+                "effect_was_not_committed": 409,
+                "effect_not_query_resolved": 409,
+            }.get(reason, 403)
+            return _failure_response(status_code, reason, status="rejected")
+        except CapabilityRuntimeUnavailable as exc:
+            return _failure_response(503, str(exc), status="error")
+        except Exception:
+            return _failure_response(
+                503,
+                "effect_reconciliation_unavailable",
+                status="error",
+            )
+        if isinstance(result, CapabilityOutcomePending):
+            return JSONResponse(
+                status_code=202,
+                content=result.model_dump(mode="json"),
+            )
+        return result
 
     return app
 
