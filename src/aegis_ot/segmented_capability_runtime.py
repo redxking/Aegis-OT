@@ -55,12 +55,14 @@ from .coordination_journal import (
     CoordinationJournalError,
     CoordinationJournalRecord,
     DurableEffectCoordinationJournal,
+    DurableGatewayCoordinationJournal,
     EffectCommitAttempt,
     EffectQueryAttempt,
     IllegalCoordinationTransition,
 )
 from .coordination_models import (
     EFFECT_COORDINATOR_AUDIENCE,
+    GATEWAY_COORDINATION_AUDIENCE,
     CoordinationReceipt,
     CoordinationState,
     DurableCommitAcceptance,
@@ -112,6 +114,7 @@ from .segmented_capability_models import (
 )
 from .segmented_capability_transport import (
     CandidateHealthMetadata,
+    CoordinatedWorkloadRemoteVirtualPlcPort,
     HttpExchange,
     ObserverHealthMetadata,
     OtHealthMetadata,
@@ -1763,12 +1766,27 @@ class CapabilityGatewayRuntime:
         gateway_key_id: str,
         agent_workload_verifier: WorkloadIdentityVerifier | None = None,
         agent_workload_subject: str | None = None,
+        coordination_required: bool = False,
+        coordination_journal: DurableGatewayCoordinationJournal | None = None,
         clock: Clock = utc_now,
     ) -> None:
         if (agent_workload_verifier is None) != (agent_workload_subject is None):
             raise ValueError(
                 "agent workload verifier and stable subject must be configured together"
             )
+        plc = getattr(controller, "plc", None)
+        if coordination_required:
+            if coordination_journal is None:
+                raise ValueError("required effect coordination needs a gateway journal")
+            if not isinstance(plc, CoordinatedWorkloadRemoteVirtualPlcPort):
+                raise ValueError("required effect coordination needs a coordinated OT port")
+            if plc.coordination_journal is not coordination_journal:
+                raise ValueError("gateway runtime and OT port must share one journal")
+        elif coordination_journal is not None or isinstance(
+            plc,
+            CoordinatedWorkloadRemoteVirtualPlcPort,
+        ):
+            raise ValueError("disabled effect coordination cannot retain coordination state")
         self.authorization = authorization
         self.controller = controller
         self.observer = observer
@@ -1776,6 +1794,8 @@ class CapabilityGatewayRuntime:
         self.gateway_key_id = gateway_key_id
         self.agent_workload_verifier = agent_workload_verifier
         self.agent_workload_subject = agent_workload_subject
+        self.coordination_required = coordination_required
+        self.coordination_journal = coordination_journal
         self.clock = clock
         # Agent-facing pre-capture and action entry points share this lock.  A
         # capture flood therefore cannot evict the active predecessor after an
@@ -1838,6 +1858,30 @@ class CapabilityGatewayRuntime:
                 raise CapabilityAdmissionRejected("workload_identity_is_disabled")
             action = request
         with self._transaction_lock:
+            if self.coordination_required:
+                journal = self.coordination_journal
+                if journal is None:
+                    raise CapabilityRuntimeUnavailable(
+                        "required gateway coordination journal is unavailable"
+                    )
+                try:
+                    retained = journal.find_action(
+                        action.digest,
+                        action.proposal.actor_id,
+                        action.proposal.nonce,
+                    )
+                except CoordinationCollisionError as exc:
+                    raise CapabilityAdmissionRejected(
+                        "agent_action_coordination_conflict"
+                    ) from exc
+                except CoordinationJournalError as exc:
+                    raise CapabilityRuntimeUnavailable(
+                        "gateway coordination journal is unavailable"
+                    ) from exc
+                if retained is not None:
+                    raise CapabilityAdmissionRejected(
+                        "agent_action_already_coordinated"
+                    )
             result = self.controller.execute(action)
             if not isinstance(result, SegmentedCapabilityClosedLoopResult):
                 raise RuntimeError("segmented controller returned an invalid terminal model")
@@ -1850,13 +1894,41 @@ class CapabilityGatewayRuntime:
             # must not hide a missing, corrupt, rolled-back, or revoked
             # consequence-path credential.
             plc.preflight_identity()
+        coordination_records = 0
+        coordination_pending = 0
+        if self.coordination_required:
+            journal = self.coordination_journal
+            if journal is None:
+                raise CapabilityRuntimeUnavailable(
+                    "required gateway coordination journal is unavailable"
+                )
+            try:
+                records = journal.records()
+            except CoordinationJournalError as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "gateway coordination journal is unavailable"
+                ) from exc
+            coordination_records = len(records)
+            coordination_pending = sum(
+                not record.state.terminal for record in records
+            )
         return {
             "schema_version": "m4g-gateway-health-v1",
             "status": "ready",
             "role": "segmented-gateway",
             "pid": os.getpid(),
             "gateway_key_id": self.gateway_key_id,
-            "coordination_backend": "segmented-compose-http-v1",
+            "effect_coordination_mode": (
+                "required" if self.coordination_required else "disabled"
+            ),
+            "coordination_backend": (
+                "durable-prepare-commit-query-http-v1"
+                if self.coordination_required
+                else "segmented-compose-http-v1"
+            ),
+            "coordination_journal_records": coordination_records,
+            "coordination_pending_effects": coordination_pending,
+            "coordination_startup_recovery": "not-attempted",
             "plant_boot_epoch": self.discovery.plant.boot_epoch,
             "observer_boot_epoch": self.discovery.observer.boot_epoch,
             "candidate_boot_epoch": self.discovery.candidate.boot_epoch,
@@ -2259,22 +2331,36 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
 
 
 def _build_gateway_runtime() -> CapabilityGatewayRuntime:
+    coordination_required = effect_coordination_enabled()
+    identity_required = workload_identity_enabled()
+    if coordination_required and not identity_required:
+        raise CapabilityRuntimeUnavailable(
+            "required effect coordination needs workload identity"
+        )
     workload_verifier: WorkloadIdentityVerifier | None = None
     gateway_workload_identity: LocalWorkloadIdentity | None = None
     ot_workload_identity: WorkloadCredentialBinding | None = None
-    if workload_identity_enabled():
+    if identity_required:
         workload_verifier = verifier_from_environment()
         gateway_workload_identity = local_identity_from_environment(
             workload_verifier,
             "GATEWAY",
             role=WorkloadRole.GATEWAY,
-            audience=OT_CAPABILITY_AUDIENCE,
+            audience=(
+                EFFECT_COORDINATOR_AUDIENCE
+                if coordination_required
+                else OT_CAPABILITY_AUDIENCE
+            ),
         )
         ot_workload_identity = credential_binding_from_environment(
             workload_verifier,
             "OT",
             role=WorkloadRole.OT_ADAPTER,
-            audience=GATEWAY_CAPABILITY_AUDIENCE,
+            audience=(
+                GATEWAY_COORDINATION_AUDIENCE
+                if coordination_required
+                else GATEWAY_CAPABILITY_AUDIENCE
+            ),
         )
         gateway_key_id = gateway_workload_identity.resolve().key_id
     else:
@@ -2390,9 +2476,30 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         plant=discovery.plant,
         exchange=exchange,
     )
-    if gateway_workload_identity is not None:
+    coordination_journal: DurableGatewayCoordinationJournal | None = None
+    if coordination_required:
+        assert gateway_workload_identity is not None
         assert ot_workload_identity is not None
-        plc_port: RemoteVirtualPlcPort = WorkloadRemoteVirtualPlcPort(
+        coordination_journal = DurableGatewayCoordinationJournal(
+            Path(_expected_environment("AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE")),
+            owner_subject=gateway_workload_identity.binding.expected_subject,
+        )
+        try:
+            plc_port: RemoteVirtualPlcPort = CoordinatedWorkloadRemoteVirtualPlcPort(
+                ot_url,
+                ot=discovery.ot,
+                observer=discovery.observer,
+                gateway_identity=gateway_workload_identity,
+                ot_identity=ot_workload_identity,
+                coordination_journal=coordination_journal,
+                exchange=exchange,
+            )
+        except Exception:
+            coordination_journal.close()
+            raise
+    elif gateway_workload_identity is not None:
+        assert ot_workload_identity is not None
+        plc_port = WorkloadRemoteVirtualPlcPort(
             ot_url,
             ot=discovery.ot,
             gateway_identity=gateway_workload_identity,
@@ -2430,19 +2537,26 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         plc_public_key=discovery.ot.public_key,
         evidence=authorization.gateway.evidence,
     )
-    return CapabilityGatewayRuntime(
-        authorization=authorization,
-        controller=controller,
-        observer=observer_port,
-        discovery=discovery,
-        gateway_key_id=gateway_key_id,
-        agent_workload_verifier=workload_verifier,
-        agent_workload_subject=(
-            _expected_environment("AEGIS_AGENT_WORKLOAD_SUBJECT")
-            if workload_verifier is not None
-            else None
-        ),
-    )
+    try:
+        return CapabilityGatewayRuntime(
+            authorization=authorization,
+            controller=controller,
+            observer=observer_port,
+            discovery=discovery,
+            gateway_key_id=gateway_key_id,
+            agent_workload_verifier=workload_verifier,
+            agent_workload_subject=(
+                _expected_environment("AEGIS_AGENT_WORKLOAD_SUBJECT")
+                if workload_verifier is not None
+                else None
+            ),
+            coordination_required=coordination_required,
+            coordination_journal=coordination_journal,
+        )
+    except Exception:
+        if coordination_journal is not None:
+            coordination_journal.close()
+        raise
 
 
 def create_plant_app(
