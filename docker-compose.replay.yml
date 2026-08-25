@@ -1,0 +1,43 @@
+services:
+  replay-init:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+    command: ["python", "-m", "aegis_ot.m4f_replay_init"]
+    user: "0:0"
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN"]
+    environment:
+      AEGIS_GATEWAY_KEY_ID: m4e-gateway-key-v1
+      AEGIS_GATEWAY_PUBLIC_KEY_FILE: /run/secrets/gateway_public
+      AEGIS_TRANSPORT_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/transport-replay.json
+      AEGIS_TRANSPORT_PROBE_DIRECTORY: /probe
+    secrets: [gateway_public]
+    volumes:
+      - transport_replay:/var/lib/aegis-ot
+      - transport_probe:/probe
+    network_mode: none
+
+  ot-adapter:
+    environment:
+      AEGIS_TRANSPORT_REPLAY_MODE: durable
+      AEGIS_TRANSPORT_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/transport-replay.json
+    volumes:
+      - transport_replay:/var/lib/aegis-ot
+    depends_on:
+      replay-init:
+        condition: service_completed_successfully
+
+  transport-probe:
+    command: ["python", "-m", "aegis_ot.m4f_transport_probe"]
+    environment:
+      AEGIS_TRANSPORT_PROBE_FILE: /probe/exact-signed-request.json
+      AEGIS_TRANSPORT_PROBE_MODE: full
+    volumes:
+      - transport_probe:/probe
+
+volumes:
+  transport_replay: {}
+  transport_probe: {}

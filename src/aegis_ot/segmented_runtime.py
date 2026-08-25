@@ -7,11 +7,13 @@ do not claim workload-credential, OpenPLC, HELICS, or production-OT fidelity.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
@@ -35,6 +37,7 @@ from .models import (
     SystemState,
 )
 from .policy import ContextualPolicy, PolicyResult
+from .transport_replay import DurableTransportReplayLedger, TransportReplayLedgerError
 
 
 class ServiceExchangeError(RuntimeError):
@@ -146,7 +149,7 @@ class SignedSegmentedExecutionRequest(BaseModel):
     request: SegmentedExecutionRequest
     audience: str = "aegis-ot:ot-adapter"
     gateway_key_id: str = Field(min_length=1)
-    transport_nonce: str = Field(min_length=16)
+    transport_nonce: str = Field(min_length=16, max_length=256)
     issued_at: datetime
     expires_at: datetime
     signature: str = ""
@@ -254,6 +257,12 @@ _observation_cache_lock = Lock()
 _MAX_CACHED_OBSERVATIONS = 128
 _ot_transport_nonces: set[str] = set()
 _ot_transport_nonce_lock = Lock()
+_durable_transport_replay: DurableTransportReplayLedger | None = None
+_durable_transport_replay_config: tuple[str, str, str, str] | None = None
+_durable_transport_replay_lock = Lock()
+_ot_boot_epoch = str(uuid4())
+_MAX_SIGNED_REQUEST_TTL = timedelta(seconds=60)
+_OT_AUDIENCE = "aegis-ot:ot-adapter"
 
 
 def _gateway() -> LocalLab:
@@ -286,6 +295,75 @@ def _resolve_observation(proposal: ActionProposal) -> SystemState | None:
 
 def _authenticated_mode() -> bool:
     return os.getenv("AEGIS_AUTHENTICATED_MODE", "false").lower() == "true"
+
+
+def _transport_replay_mode() -> Literal["memory", "durable"]:
+    mode = os.getenv("AEGIS_TRANSPORT_REPLAY_MODE", "memory")
+    if mode == "memory":
+        return "memory"
+    if mode == "durable":
+        return "durable"
+    raise TransportReplayLedgerError("transport replay mode is unsupported")
+
+
+def _gateway_public_key_sha256(path: str) -> str:
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as exc:
+        raise TransportReplayLedgerError(
+            "gateway public key cannot be read for replay identity"
+        ) from exc
+    if len(raw) != 32:
+        raise TransportReplayLedgerError(
+            "gateway public key must contain exactly 32 raw bytes"
+        )
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _durable_replay_ledger() -> DurableTransportReplayLedger:
+    if not _authenticated_mode():
+        raise TransportReplayLedgerError(
+            "durable transport replay requires authenticated transport"
+        )
+    ledger_file = os.getenv("AEGIS_TRANSPORT_REPLAY_LEDGER_FILE")
+    public_key_file = os.getenv("AEGIS_GATEWAY_PUBLIC_KEY_FILE")
+    gateway_key_id = os.getenv("AEGIS_GATEWAY_KEY_ID")
+    if not ledger_file or not public_key_file or not gateway_key_id:
+        raise TransportReplayLedgerError("durable transport replay is not fully configured")
+    public_key_sha256 = _gateway_public_key_sha256(public_key_file)
+    config = (ledger_file, _OT_AUDIENCE, gateway_key_id, public_key_sha256)
+    global _durable_transport_replay  # noqa: PLW0603 - process-local singleton
+    global _durable_transport_replay_config  # noqa: PLW0603 - cache identity
+    with _durable_transport_replay_lock:
+        if (
+            _durable_transport_replay is None
+            or _durable_transport_replay_config != config
+        ):
+            _durable_transport_replay = DurableTransportReplayLedger(
+                Path(ledger_file),
+                audience=_OT_AUDIENCE,
+                gateway_key_id=gateway_key_id,
+                gateway_public_key_sha256=public_key_sha256,
+            )
+            _durable_transport_replay_config = config
+        return _durable_transport_replay
+
+
+def _transport_nonce_seen(nonce: str) -> bool:
+    if _transport_replay_mode() == "durable":
+        return _durable_replay_ledger().contains(nonce)
+    with _ot_transport_nonce_lock:
+        return nonce in _ot_transport_nonces
+
+
+def _reserve_transport_nonce(nonce: str, signed_request_sha256: str) -> bool:
+    if _transport_replay_mode() == "durable":
+        return _durable_replay_ledger().reserve(nonce, signed_request_sha256)
+    with _ot_transport_nonce_lock:
+        if nonce in _ot_transport_nonces:
+            return False
+        _ot_transport_nonces.add(nonce)
+        return True
 
 
 @simulation_app.get("/health")
@@ -321,8 +399,29 @@ def observed_state() -> SystemState:
 
 
 @ot_adapter_app.get("/health")
-def ot_health() -> dict[str, str]:
-    return {"status": "ok", "role": "ot-adapter"}
+def ot_health() -> dict[str, str | int]:
+    try:
+        replay_mode = _transport_replay_mode()
+        if replay_mode == "durable":
+            ledger = _durable_replay_ledger()
+            reservations, ledger_sha256 = ledger.status()
+        else:
+            reservations = len(_ot_transport_nonces)
+            ledger_sha256 = "not-durable"
+    except TransportReplayLedgerError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="transport replay ledger unavailable",
+        ) from exc
+    return {
+        "status": "ok",
+        "role": "ot-adapter",
+        "replay_mode": replay_mode,
+        "replay_reservations": reservations,
+        "replay_ledger_sha256": ledger_sha256,
+        "boot_epoch": _ot_boot_epoch,
+        "pid": os.getpid(),
+    }
 
 
 @ot_adapter_app.post("/internal/execute")
@@ -330,24 +429,35 @@ def ot_execute(
     request: SegmentedExecutionRequest | SignedSegmentedExecutionRequest,
 ) -> ExecutionResult | SignedSegmentedExecutionResponse:
     signed_request: SignedSegmentedExecutionRequest | None = None
+    signed_request_sha256 = ""
     if isinstance(request, SignedSegmentedExecutionRequest):
         signed_request = request
         if not _authenticated_mode():
             raise HTTPException(status_code=403, detail="authenticated transport is disabled")
         expected_key_id = os.environ["AEGIS_GATEWAY_KEY_ID"]
         gateway_public = _load_public_key(os.environ["AEGIS_GATEWAY_PUBLIC_KEY_FILE"])
-        now = datetime.now(UTC)
         if (
             request.gateway_key_id != expected_key_id
-            or request.audience != "aegis-ot:ot-adapter"
-            or not request.issued_at <= now < request.expires_at
+            or request.audience != _OT_AUDIENCE
             or not request.verify(gateway_public)
         ):
             raise HTTPException(status_code=403, detail="gateway signature rejected")
-        with _ot_transport_nonce_lock:
-            if request.transport_nonce in _ot_transport_nonces:
-                raise HTTPException(status_code=409, detail="transport request replayed")
-            _ot_transport_nonces.add(request.transport_nonce)
+        signed_request_sha256 = _sha256(request)
+        try:
+            replayed = _transport_nonce_seen(request.transport_nonce)
+        except TransportReplayLedgerError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="transport replay ledger unavailable",
+            ) from exc
+        if replayed:
+            raise HTTPException(status_code=409, detail="transport request replayed")
+        now = datetime.now(UTC)
+        if (
+            request.expires_at - request.issued_at > _MAX_SIGNED_REQUEST_TTL
+            or not request.issued_at <= now < request.expires_at
+        ):
+            raise HTTPException(status_code=403, detail="gateway signature rejected")
         execution_request = request.request
     else:
         if _authenticated_mode():
@@ -358,6 +468,19 @@ def ot_execute(
         or execution_request.decision.proposal_id != execution_request.proposal.proposal_id
     ):
         raise HTTPException(status_code=403, detail="gateway permit required")
+    if signed_request is not None:
+        try:
+            reserved = _reserve_transport_nonce(
+                signed_request.transport_nonce,
+                signed_request_sha256,
+            )
+        except TransportReplayLedgerError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="transport replay ledger unavailable",
+            ) from exc
+        if not reserved:
+            raise HTTPException(status_code=409, detail="transport request replayed")
     try:
         payload = request_json(
             "POST",
@@ -365,6 +488,11 @@ def ot_execute(
             execution_request.model_dump(mode="json"),
         )
         execution = ExecutionResult.model_validate(payload)
+        if (
+            execution.proposal_id != execution_request.proposal.proposal_id
+            or execution.decision_id != execution_request.decision.decision_id
+        ):
+            raise ValueError("simulation result is not bound to the authorized request")
     except (ServiceExchangeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="simulation execution unavailable") from exc
     if signed_request is None:
@@ -436,6 +564,11 @@ def gateway_action(proposal: ActionProposal) -> SegmentedActionResult:
             ):
                 raise ValueError("OT response signature or request binding failed")
             execution = response.execution
+        if (
+            execution.proposal_id != proposal.proposal_id
+            or execution.decision_id != decision.decision_id
+        ):
+            raise ValueError("OT execution result is not bound to the gateway decision")
     except (ServiceExchangeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="OT execution outcome unavailable") from exc
     return SegmentedActionResult(
