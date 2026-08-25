@@ -20,7 +20,7 @@ import shutil
 import stat
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -1058,6 +1058,10 @@ def _runtime_acceptance(inventory: dict[str, dict[str, Any]]) -> dict[str, bool]
     }
 
 
+def _failed_acceptance_checks(acceptance: Mapping[str, object]) -> list[str]:
+    return sorted(name for name, accepted in acceptance.items() if accepted is not True)
+
+
 def _campaign(
     project_name: str,
     commit: str,
@@ -1325,9 +1329,11 @@ def _campaign(
                 ],
             }
             m4g._assert_checkout(commit)
-            if evidence["accepted"] is not True:
+            failed_acceptance = _failed_acceptance_checks(acceptance)
+            if failed_acceptance:
                 raise m4d.ExperimentError(
-                    "M4g SPIRE/mTLS acceptance criteria were not all satisfied"
+                    "M4g SPIRE/mTLS acceptance criteria were not all satisfied: "
+                    + ", ".join(failed_acceptance)
                 )
     finally:
         if project_created:

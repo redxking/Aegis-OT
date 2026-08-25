@@ -402,6 +402,18 @@ def test_post_deletion_acceptance_requires_no_ot_dispatch_and_no_plant_effect(
     )["no_ot_consequence_dispatch_observed"]
 
 
+def test_failed_acceptance_checks_are_sorted_and_require_literal_true(
+    runner: Any,
+) -> None:
+    assert runner._failed_acceptance_checks(
+        {
+            "passed": True,
+            "failed_z": False,
+            "failed_a": 1,
+        }
+    ) == ["failed_a", "failed_z"]
+
+
 def test_retention_is_atomic_hashed_private_and_credential_free(
     runner: Any,
     tmp_path: Path,
