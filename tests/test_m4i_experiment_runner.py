@@ -259,6 +259,44 @@ def test_acceptance_requires_live_ot_recovery_alignment(runner: Any) -> None:
     )
 
 
+def test_nominal_action_uses_one_exact_prepare_and_submit(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    action = {"proposal": {"proposal_id": "m4i-nominal"}}
+    action_digest = runner._sha256(runner._canonical_bytes(action))
+    calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def exchange(
+        prefix: tuple[str, ...],
+        *,
+        mode: str,
+        material: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        assert prefix == ("docker", "compose")
+        calls.append((mode, material))
+        if mode == "prepare_action":
+            return {
+                "action_sha256": action_digest,
+                "wire_request": {"signed": "exact"},
+            }
+        return {
+            "http_status": 200,
+            "action_sha256": action_digest,
+            "response": {"request": action},
+        }
+
+    monkeypatch.setattr(runner, "_run_agent_exchange", exchange)
+
+    result = runner._run_nominal_action(("docker", "compose"))
+
+    assert result == {"request": action}
+    assert calls == [
+        ("prepare_action", None),
+        ("submit_action", {"wire_request": {"signed": "exact"}}),
+    ]
+
+
 def test_scoped_relay_is_closed_and_records_commit_before_one_forward(
     runner: Any,
 ) -> None:

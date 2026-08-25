@@ -1454,17 +1454,26 @@ def _failed_acceptance_names(acceptance: dict[str, bool]) -> tuple[str, ...]:
     )
 
 
-def _run_agent_probe(prefix: tuple[str, ...]) -> dict[str, Any]:
-    completed = m4d._run(
-        *prefix,
-        "--profile",
-        "experiment",
-        "run",
-        "--rm",
-        "--no-deps",
-        "agent-probe",
+def _run_nominal_action(prefix: tuple[str, ...]) -> dict[str, Any]:
+    prepared = _run_agent_exchange(prefix, mode="prepare_action")
+    prepared_digest = prepared.get("action_sha256")
+    wire_request = prepared.get("wire_request")
+    if not isinstance(prepared_digest, str) or not isinstance(wire_request, dict):
+        raise m4d.ExperimentError("nominal M4i prepared action was malformed")
+    submitted = _run_agent_exchange(
+        prefix,
+        mode="submit_action",
+        material={"wire_request": wire_request},
     )
-    return _json_object(completed.stdout, label="primary M4i agent probe")
+    if (
+        submitted.get("http_status") != 200
+        or submitted.get("action_sha256") != prepared_digest
+    ):
+        raise m4d.ExperimentError("nominal M4i action exchange was not exact")
+    result = _mapping(submitted.get("response"))
+    if _action_sha256(result) != prepared_digest:
+        raise m4d.ExperimentError("nominal M4i result did not bind its prepared action")
+    return result
 
 
 def _container_identity(
@@ -1865,8 +1874,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             initialization = m4g._last_json_log(prefix, "coordination-init")
             storage_initial = _state_snapshots(prefix)
 
-            primary_probe = _run_agent_probe(prefix)
-            nominal_result = _mapping(primary_probe.get("nominal"))
+            nominal_result = _run_nominal_action(prefix)
             nominal_action_sha256 = _action_sha256(nominal_result)
             nominal_snapshots = _state_snapshots(prefix)
             nominal = {
