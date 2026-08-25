@@ -44,6 +44,8 @@ from aegis_ot.coordination_models import (
     SignedEffectPrepareRequest,
     SignedEffectQueryRequest,
 )
+from aegis_ot.physical_models import proposal_digest
+from aegis_ot.segmented_capability_models import SegmentedCapabilityDispatch
 
 _ARTIFACT_FACTORY = cast(
     Callable[[Path], M4iArtifacts],
@@ -193,6 +195,65 @@ def _prepare_gateway(
     )
     journal.begin_commit(commit, recorded_at=NOW + timedelta(seconds=1))
     return prepare, receipt, commit
+
+
+def _same_action_different_effect(
+    artifacts: M4iArtifacts,
+) -> SignedEffectPrepareRequest:
+    raw_dispatch = artifacts.dispatch.model_dump(mode="python")
+    raw_dispatch["permit"]["target_plc_id"] = "virtual-plc:m4i-conflicting-target"
+    raw_dispatch["permit"]["signature"] = ""
+    raw_dispatch["permit"]["base_permit"]["audience"] = "virtual-plc:m4i-conflicting-target"
+    raw_dispatch["permit"]["base_permit"]["signature"] = ""
+    dispatch = SegmentedCapabilityDispatch.model_validate(raw_dispatch)
+    return SignedEffectPrepareRequest.issue(
+        dispatch=dispatch,
+        signer=artifacts.gateway_signer,
+        request_nonce="prepare-conflicting-effect-nonce-0001",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(seconds=30),
+    )
+
+
+def _changed_request_same_actor_nonce(
+    artifacts: M4iArtifacts,
+) -> SignedEffectPrepareRequest:
+    raw_dispatch = artifacts.dispatch.model_dump(mode="python")
+    raw_dispatch["request"]["request_id"] = "m4i-request-changed-replay-material"
+    changed_request = artifacts.dispatch.request.__class__.model_validate(raw_dispatch["request"])
+    raw_dispatch["permit"]["request_digest"] = changed_request.digest
+    raw_dispatch["permit"]["signature"] = ""
+    dispatch = SegmentedCapabilityDispatch.model_validate(raw_dispatch)
+    return SignedEffectPrepareRequest.issue(
+        dispatch=dispatch,
+        signer=artifacts.gateway_signer,
+        request_nonce="prepare-changed-request-nonce-0001",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(seconds=30),
+    )
+
+
+def _request_with_actor_id(
+    artifacts: M4iArtifacts,
+    actor_id: str,
+) -> SignedEffectPrepareRequest:
+    raw_dispatch = artifacts.dispatch.model_dump(mode="python")
+    raw_dispatch["request"]["proposal"]["actor_id"] = actor_id
+    changed_request = artifacts.dispatch.request.__class__.model_validate(raw_dispatch["request"])
+    raw_dispatch["permit"]["request_digest"] = changed_request.digest
+    raw_dispatch["permit"]["signature"] = ""
+    raw_dispatch["permit"]["base_permit"]["proposal_digest"] = proposal_digest(
+        changed_request.proposal
+    )
+    raw_dispatch["permit"]["base_permit"]["signature"] = ""
+    dispatch = SegmentedCapabilityDispatch.model_validate(raw_dispatch)
+    return SignedEffectPrepareRequest.issue(
+        dispatch=dispatch,
+        signer=artifacts.gateway_signer,
+        request_nonce="prepare-unbounded-actor-id-nonce-0001",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(seconds=30),
+    )
 
 
 def test_executor_prepare_retains_exact_artifacts_and_is_idempotent(
@@ -458,6 +519,150 @@ def test_prepared_effect_query_closes_not_dispatched_without_acceptance(
     with DurableEffectCoordinationJournal(path, owner_subject="ot-coordinator") as reloaded:
         assert reloaded.answer_query(query, issue_not_dispatched) == outcome
         assert issued == 1
+
+
+def test_action_lookup_is_exact_and_stable_across_reopen(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    path = _secure_path(tmp_path)
+    prepare = _prepare(artifacts)
+    action = prepare.dispatch.request
+    with DurableGatewayCoordinationJournal(
+        path,
+        owner_subject="gateway",
+        initialize=True,
+    ) as journal:
+        retained = journal.begin(prepare, recorded_at=NOW)
+        assert (
+            journal.find_action(
+                action.digest,
+                action.proposal.actor_id,
+                action.proposal.nonce,
+            )
+            == retained
+        )
+        assert (
+            journal.find_action(
+                "f" * 64,
+                "agent:unrecorded",
+                "unrecorded-proposal-nonce-0001",
+            )
+            is None
+        )
+
+    with DurableGatewayCoordinationJournal(path, owner_subject="gateway") as reloaded:
+        assert (
+            reloaded.find_action(
+                action.digest,
+                action.proposal.actor_id,
+                action.proposal.nonce,
+            )
+            == retained
+        )
+
+
+def test_action_index_rejects_unbounded_actor_identity(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    path = _secure_path(tmp_path)
+    prepare = _request_with_actor_id(artifacts, "a" * 257)
+    with DurableGatewayCoordinationJournal(
+        path,
+        owner_subject="gateway",
+        initialize=True,
+    ) as journal:
+        with pytest.raises(
+            CoordinationJournalError,
+            match="action actor ID is invalid",
+        ):
+            journal.begin(prepare, recorded_at=NOW)
+        assert journal.records() == ()
+
+
+def test_same_action_request_cannot_map_to_a_different_effect(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    path = _secure_path(tmp_path)
+    original = _prepare(artifacts)
+    conflicting = _same_action_different_effect(artifacts)
+    assert conflicting.dispatch.request == original.dispatch.request
+    assert conflicting.effect != original.effect
+
+    with DurableGatewayCoordinationJournal(
+        path,
+        owner_subject="gateway",
+        initialize=True,
+    ) as journal:
+        retained = journal.begin(original, recorded_at=NOW)
+        with pytest.raises(
+            CoordinationCollisionError,
+            match="action request digest maps to multiple effects",
+        ):
+            journal.begin(conflicting, recorded_at=NOW)
+        assert journal.records() == (retained,)
+
+
+def test_same_actor_nonce_cannot_map_to_a_changed_action_request(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    path = _secure_path(tmp_path)
+    original = _prepare(artifacts)
+    conflicting = _changed_request_same_actor_nonce(artifacts)
+    original_action = original.dispatch.request
+    conflicting_action = conflicting.dispatch.request
+    assert conflicting_action.digest != original_action.digest
+    assert conflicting_action.proposal.actor_id == original_action.proposal.actor_id
+    assert conflicting_action.proposal.nonce == original_action.proposal.nonce
+
+    with DurableGatewayCoordinationJournal(
+        path,
+        owner_subject="gateway",
+        initialize=True,
+    ) as journal:
+        retained = journal.begin(original, recorded_at=NOW)
+        with pytest.raises(
+            CoordinationCollisionError,
+            match="agent replay key maps to multiple actions or effects",
+        ):
+            journal.begin(conflicting, recorded_at=NOW)
+        assert journal.records() == (retained,)
+
+
+def test_action_replay_conflict_fails_closed_on_load(
+    tmp_path: Path,
+    artifacts: M4iArtifacts,
+) -> None:
+    original_path = _secure_path(tmp_path, "original.json")
+    conflicting_path = _secure_path(tmp_path, "conflicting.json")
+    original = _prepare(artifacts)
+    conflicting = _same_action_different_effect(artifacts)
+    for path, prepare in (
+        (original_path, original),
+        (conflicting_path, conflicting),
+    ):
+        with DurableGatewayCoordinationJournal(
+            path,
+            owner_subject="gateway",
+            initialize=True,
+        ) as journal:
+            journal.begin(prepare, recorded_at=NOW)
+
+    document = json.loads(original_path.read_bytes())
+    conflicting_document = json.loads(conflicting_path.read_bytes())
+    document["entries"] = sorted(
+        [*document["entries"], *conflicting_document["entries"]],
+        key=lambda entry: entry["effect"]["effect_id"],
+    )
+    original_path.write_bytes(journal_module._DurableCoordinationJournal._canonical_bytes(document))
+    with pytest.raises(
+        CoordinationCollisionError,
+        match="action request digest maps to multiple effects",
+    ):
+        DurableGatewayCoordinationJournal(original_path, owner_subject="gateway")
 
 
 def test_gateway_reconciliation_attempts_enumerate_without_unknown_self_transition(

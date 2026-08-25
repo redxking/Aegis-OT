@@ -805,6 +805,7 @@ class _DurableCoordinationJournal:
                     )
                 records[effect_id] = record
                 prior_effect_id = effect_id
+            self._action_indexes(records)
         except CoordinationJournalError:
             raise
         except (TypeError, ValueError) as exc:
@@ -890,6 +891,67 @@ class _DurableCoordinationJournal:
         self._validate_role_history(validated)
         return validated
 
+    @classmethod
+    def _action_material(
+        cls,
+        record: CoordinationJournalRecord,
+    ) -> tuple[str, str, str]:
+        """Return the stable agent replay material retained by prepare attempts."""
+
+        material: tuple[str, str, str] | None = None
+        for attempt in record.attempts:
+            if not isinstance(attempt, EffectPrepareAttempt):
+                continue
+            action = attempt.request.dispatch.request
+            candidate = (
+                action.digest,
+                cls._identity("action actor ID", action.proposal.actor_id),
+                cls._identity("action proposal nonce", action.proposal.nonce),
+            )
+            if material is None:
+                material = candidate
+            elif material != candidate:
+                raise CoordinationCollisionError(
+                    "coordination effect retains conflicting agent action material"
+                )
+        if material is None or material[0] != record.effect.request_sha256:
+            raise CoordinationCollisionError(
+                "coordination effect lacks its exact agent action request"
+            )
+        return material
+
+    @classmethod
+    def _action_indexes(
+        cls,
+        records: dict[str, CoordinationJournalRecord],
+    ) -> tuple[
+        dict[str, CoordinationJournalRecord],
+        dict[tuple[str, str], CoordinationJournalRecord],
+    ]:
+        """Validate and index the two bounded action replay namespaces."""
+
+        by_request: dict[str, CoordinationJournalRecord] = {}
+        by_actor_nonce: dict[tuple[str, str], CoordinationJournalRecord] = {}
+        for effect_id in sorted(records):
+            record = records[effect_id]
+            request_sha256, actor_id, proposal_nonce = cls._action_material(record)
+            retained = by_request.get(request_sha256)
+            if retained is not None and retained.effect != record.effect:
+                raise CoordinationCollisionError(
+                    "coordination action request digest maps to multiple effects"
+                )
+            replay_key = (actor_id, proposal_nonce)
+            retained = by_actor_nonce.get(replay_key)
+            if retained is not None and (
+                retained.effect != record.effect or retained.effect.request_sha256 != request_sha256
+            ):
+                raise CoordinationCollisionError(
+                    "coordination agent replay key maps to multiple actions or effects"
+                )
+            by_request[request_sha256] = record
+            by_actor_nonce[replay_key] = record
+        return by_request, by_actor_nonce
+
     def _validate_role_history(self, record: CoordinationJournalRecord) -> None:
         if self.JOURNAL_ROLE != "effect_coordinator":
             return
@@ -917,6 +979,35 @@ class _DurableCoordinationJournal:
             effect_id = self._identity("effect ID", effect)
             return self._records.get(effect_id)
 
+    def find_action(
+        self,
+        request_sha256: str,
+        actor_id: str,
+        proposal_nonce: str,
+    ) -> CoordinationJournalRecord | None:
+        """Find one exact retained action, rejecting either replay-key collision."""
+
+        if (
+            not isinstance(request_sha256, str)
+            or len(request_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in request_sha256)
+        ):
+            raise CoordinationJournalError("coordination journal action request digest is invalid")
+        checked_actor_id = self._identity("action actor ID", actor_id)
+        checked_proposal_nonce = self._identity("action proposal nonce", proposal_nonce)
+        with self._mutex:
+            self._assert_writer()
+            by_request, by_actor_nonce = self._action_indexes(self._records)
+            request_record = by_request.get(request_sha256)
+            replay_record = by_actor_nonce.get((checked_actor_id, checked_proposal_nonce))
+            if request_record is None and replay_record is None:
+                return None
+            if request_record is None or replay_record is None or request_record != replay_record:
+                raise CoordinationCollisionError(
+                    "coordination action lookup collides with retained replay material"
+                )
+            return request_record
+
     def records(self) -> tuple[CoordinationJournalRecord, ...]:
         with self._mutex:
             self._assert_writer()
@@ -938,6 +1029,7 @@ class _DurableCoordinationJournal:
         record = self._validated_record(record)
         candidate = dict(self._records)
         candidate[record.effect.effect_id] = record
+        self._action_indexes(candidate)
         self._persist(candidate)
         self._records = candidate
         return record
