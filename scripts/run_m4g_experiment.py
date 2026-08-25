@@ -594,7 +594,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from uuid import uuid4
-from aegis_ot.capability_models import CapabilityActionRequest, ObservationCaptureRequest
+from aegis_ot.capability_models import CapabilityActionRequest
 from aegis_ot.models import ActionProposal, DecisionOutcome, Operation
 from aegis_ot.physical_control import physical_state_to_gateway_state
 from aegis_ot.segmented_capability_models import (
@@ -603,7 +603,10 @@ from aegis_ot.segmented_capability_models import (
     WorkloadSignedCapabilityDispatch,
     WorkloadSignedCapabilityResponse,
 )
-from aegis_ot.segmented_capability_runtime import _build_gateway_runtime
+from aegis_ot.segmented_capability_runtime import (
+    ObservationCaptureRequest,
+    _build_gateway_runtime,
+)
 from aegis_ot.workload_identity import WorkloadRole
 from aegis_ot.workload_runtime import local_identity_from_environment, verifier_from_environment
 runtime = _build_gateway_runtime()
@@ -669,6 +672,15 @@ candidate_matches = (
 )
 if not assessment.safe or not candidate_matches:
     raise RuntimeError('fresh rotation fixture candidate was not safe and bound')
+verifier = verifier_from_environment()
+local = local_identity_from_environment(
+    verifier,
+    'GATEWAY',
+    role=WorkloadRole.GATEWAY,
+    audience=OT_CAPABILITY_AUDIENCE,
+)
+plc = controller.plc
+target = plc.ot_identity.resolve(now=datetime.now(UTC))
 permit = controller.permit_issuer.issue(
     request=action,
     pre_observation=observed,
@@ -682,13 +694,6 @@ dispatch = SegmentedCapabilityDispatch(
     decision=decision,
     assessment=assessment,
     permit=permit,
-)
-verifier = verifier_from_environment()
-local = local_identity_from_environment(
-    verifier,
-    'GATEWAY',
-    role=WorkloadRole.GATEWAY,
-    audience=OT_CAPABILITY_AUDIENCE,
 )
 issued_at = datetime.now(UTC)
 signed = WorkloadSignedCapabilityDispatch.issue(
@@ -705,6 +710,11 @@ request = Request(
     headers={'Accept':'application/json','Content-Type':'application/json'},
     method='POST',
 )
+permit_remaining_ms_at_post = int(
+    (permit.base_permit.expires_at - datetime.now(UTC)).total_seconds() * 1000
+)
+if permit_remaining_ms_at_post <= 0:
+    raise RuntimeError('fresh rotation fixture permit expired before direct dispatch')
 try:
     with urlopen(request, timeout=10) as response:
         status = response.status
@@ -716,10 +726,13 @@ if len(material) > 1048576:
     raise RuntimeError('direct OT response exceeded evidence limit')
 response_value = json.loads(material)
 response_verified = False
+ack_status = None
+ack_dispatch_phase = None
+ack_reason = None
+post_observation_verified = False
+post_observation_digest = None
 if status == 200:
     verified = WorkloadSignedCapabilityResponse.model_validate(response_value)
-    plc = controller.plc
-    target = plc.ot_identity.resolve(now=datetime.now(UTC))
     response_verified = (
         verified.sender_credential == target.credential
         and verified.verify_for_request(
@@ -732,6 +745,40 @@ if status == 200:
     )
     if not response_verified:
         raise RuntimeError('fresh rotation fixture response did not verify')
+    acknowledgment = verified.response.acknowledgment
+    ack_status = acknowledgment.status.value
+    ack_dispatch_phase = acknowledgment.dispatch_phase.value
+    ack_reason = acknowledgment.reason
+    if (
+        ack_status != 'applied'
+        or ack_dispatch_phase != 'committed'
+        or ack_reason != 'command_applied_and_plc_read_back'
+    ):
+        raise RuntimeError('fresh rotation fixture was not committed by the PLC')
+    post_challenge_nonce = secrets.token_urlsafe(24)
+    post_observation = controller.observer.capture_post(
+        correlation_id=action.correlation_id,
+        challenge_nonce=post_challenge_nonce,
+        previous_envelope_digest=observed.envelope_digest,
+        permit_id=permit.base_permit.permit_id,
+        command_digest=permit.base_permit.command_digest,
+        plc_acknowledgment_digest=acknowledgment.digest,
+    )
+    post_reasons = controller.observation_verifier.verify_post(
+        post_observation,
+        request=action,
+        permit=permit,
+        acknowledgment=acknowledgment,
+        challenge_nonce=post_challenge_nonce,
+        evaluated_at=controller.clock(),
+    )
+    if post_reasons:
+        raise RuntimeError(
+            'fresh rotation fixture post observation was rejected: '
+            + ','.join(post_reasons)
+        )
+    post_observation_verified = True
+    post_observation_digest = post_observation.envelope_digest
 print(json.dumps({
     'fresh_transaction_prepared': True,
     'direct_dispatch_attempted': True,
@@ -740,6 +787,12 @@ print(json.dumps({
     'fresh_transaction_dispatch_digest': dispatch.digest,
     'http_status': status,
     'response_verified': response_verified,
+    'ack_status': ack_status,
+    'ack_dispatch_phase': ack_dispatch_phase,
+    'ack_reason': ack_reason,
+    'post_observation_verified': post_observation_verified,
+    'post_observation_digest': post_observation_digest,
+    'permit_remaining_ms_at_post': permit_remaining_ms_at_post,
     'transport_nonce': signed.transport_nonce,
     'signed_request_sha256': signed.digest,
     'gateway_key_id': local.signer.credential.credential.key_id,
@@ -970,14 +1023,26 @@ def _cross_leaf_accepted(
         and before.get("fresh_transaction_prepared") is True
         and before.get("direct_dispatch_attempted") is True
         and before.get("response_verified") is True
+        and before.get("ack_status") == "applied"
+        and before.get("ack_dispatch_phase") == "committed"
+        and before.get("ack_reason") == "command_applied_and_plc_read_back"
+        and before.get("post_observation_verified") is True
+        and isinstance(before.get("post_observation_digest"), str)
         and after.get("http_status") == 409
         and after.get("fresh_transaction_prepared") is True
         and after.get("direct_dispatch_attempted") is True
         and after.get("response_verified") is False
+        and after.get("post_observation_verified") is False
         and before.get("transport_nonce") == after.get("transport_nonce")
         and before.get("gateway_key_id") != after.get("gateway_key_id")
         and before.get("gateway_credential_id") != after.get("gateway_credential_id")
         and before.get("signed_request_sha256") != after.get("signed_request_sha256")
+        and before.get("fresh_transaction_request_digest")
+        != after.get("fresh_transaction_request_digest")
+        and before.get("fresh_transaction_permit_id")
+        != after.get("fresh_transaction_permit_id")
+        and before.get("fresh_transaction_dispatch_digest")
+        != after.get("fresh_transaction_dispatch_digest")
         and isinstance(response, dict)
         and response.get("reason") == "transport_request_replayed"
     )

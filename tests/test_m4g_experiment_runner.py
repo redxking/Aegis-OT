@@ -52,6 +52,12 @@ def test_rotation_fixture_prepares_without_predispatching_transaction(
     assert "runtime.controller.execute(action)" not in runner._ROTATION_FIXTURE_CODE
     assert "controller.permit_issuer.issue(" in runner._ROTATION_FIXTURE_CODE
     assert "response_verified" in runner._ROTATION_FIXTURE_CODE
+    assert "post_observation_verified" in runner._ROTATION_FIXTURE_CODE
+    assert (
+        "from aegis_ot.capability_models import CapabilityActionRequest"
+        in runner._ROTATION_FIXTURE_CODE
+    )
+    assert "ObservationCaptureRequest," in runner._ROTATION_FIXTURE_CODE
 
 
 def test_ephemeral_key_provisioning_is_raw_private_and_derives_workload_ids(
@@ -182,6 +188,14 @@ def test_cross_leaf_acceptance_requires_same_nonce_new_proof_and_replay_reason(
         "fresh_transaction_prepared": True,
         "direct_dispatch_attempted": True,
         "response_verified": True,
+        "ack_status": "applied",
+        "ack_dispatch_phase": "committed",
+        "ack_reason": "command_applied_and_plc_read_back",
+        "post_observation_verified": True,
+        "post_observation_digest": "c" * 64,
+        "fresh_transaction_request_digest": "d" * 64,
+        "fresh_transaction_permit_id": "old-permit",
+        "fresh_transaction_dispatch_digest": "e" * 64,
         "transport_nonce": runner.FIXED_ROTATION_NONCE,
         "gateway_key_id": "old-key",
         "gateway_credential_id": "old-credential",
@@ -192,6 +206,10 @@ def test_cross_leaf_acceptance_requires_same_nonce_new_proof_and_replay_reason(
         "fresh_transaction_prepared": True,
         "direct_dispatch_attempted": True,
         "response_verified": False,
+        "post_observation_verified": False,
+        "fresh_transaction_request_digest": "f" * 64,
+        "fresh_transaction_permit_id": "new-permit",
+        "fresh_transaction_dispatch_digest": "1" * 64,
         "transport_nonce": runner.FIXED_ROTATION_NONCE,
         "gateway_key_id": "new-key",
         "gateway_credential_id": "new-credential",
@@ -200,6 +218,9 @@ def test_cross_leaf_acceptance_requires_same_nonce_new_proof_and_replay_reason(
     }
 
     assert runner._cross_leaf_accepted(before, after)
+    after["fresh_transaction_permit_id"] = before["fresh_transaction_permit_id"]
+    assert not runner._cross_leaf_accepted(before, after)
+    after["fresh_transaction_permit_id"] = "new-permit"
     after["response"] = {"status": "rejected", "reason": "identity_rejected"}
     assert not runner._cross_leaf_accepted(before, after)
 
