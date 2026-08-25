@@ -166,6 +166,11 @@ def test_workload_replay_initializer_replaces_static_transport_initialization() 
     assert replay["environment"]["AEGIS_WORKLOAD_REPLAY_LEDGER_FILE"] == (
         "/var/lib/aegis-ot/workload-replay.json"
     )
+    assert replay["environment"]["AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE"] == (
+        "/run/secrets/workload_authority_public"
+    )
+    assert _secret_names(replay) == {"workload_authority_public"}
+    assert "workload_authority_private" not in _secret_names(replay)
     assert ot["environment"]["AEGIS_WORKLOAD_REPLAY_LEDGER_FILE"] == (
         "/var/lib/aegis-ot/workload-replay.json"
     )
@@ -208,6 +213,7 @@ def _compose_environment(tmp_path: Path) -> dict[str, str]:
         "PLANT_PRIVATE",
         "PLANT_PUBLIC",
         "WORKLOAD_AUTHORITY_PRIVATE",
+        "WORKLOAD_AUTHORITY_PUBLIC",
         "AGENT_PRIVATE",
         "AGENT_PUBLIC",
     ):

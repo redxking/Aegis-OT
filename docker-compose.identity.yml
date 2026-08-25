@@ -102,7 +102,10 @@ services:
     command: [python, -m, aegis_ot.m4g_replay_init]
     environment:
       <<: [*m4g-workload-common, *m4g-workload-subjects]
+      AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/secrets/workload_authority_public
       AEGIS_WORKLOAD_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/workload-replay.json
+    secrets:
+      - workload_authority_public
     volumes:
       - workload_identity:/run/aegis-identity:ro
       - workload_replay:/var/lib/aegis-ot
@@ -132,6 +135,8 @@ services:
 secrets:
   workload_authority_private:
     file: ${AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE:?set by the M4g identity runner}
+  workload_authority_public:
+    file: ${AEGIS_WORKLOAD_AUTHORITY_PUBLIC_KEY_FILE:?set by the M4g identity runner}
   agent_private:
     file: ${AEGIS_AGENT_PRIVATE_KEY_FILE:?set by the M4g identity runner}
   agent_public:

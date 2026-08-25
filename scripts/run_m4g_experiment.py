@@ -246,6 +246,9 @@ def _campaign_environment(
     environment["AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE"] = str(
         paths["workload_authority_private"]
     )
+    environment["AEGIS_WORKLOAD_AUTHORITY_PUBLIC_KEY_FILE"] = str(
+        paths["workload_authority_public"]
+    )
     return environment
 
 
