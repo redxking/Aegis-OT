@@ -150,8 +150,28 @@ The default OPA and Python base images are pinned to verified multi-platform dig
 docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8080/health
-curl http://127.0.0.1:8181/health
+curl http://127.0.0.1:8081/health
 ```
+
+Port 8080 remains the read-only public evidence demo. Port 8081 is the bounded
+M4d segmented-gateway research surface. OPA, the observer, OT adapter, and
+synthetic simulation have no host-published ports.
+
+Run the agent-network experiment from a clean checkout with a unique project
+name and a new output path:
+
+```bash
+.venv/bin/python scripts/run_m4d_experiment.py \
+  --output results/m4d-segmented-local.json \
+  --project-name aegis-ot-m4d-local
+```
+
+The runner refuses a dirty checkout or an existing output path. It force-
+recreates the experiment services, verifies direct agent bypass denial, runs
+unsafe, nominal, replay, OPA-loss, observer-loss, and OT-adapter-loss cases, and
+retains the exact commit, resolved Compose digest, image IDs, network membership,
+raw outcomes, and a timing/UUID-independent semantic outcome hash. This is
+single-host Docker evidence, not multi-host or production-OT validation.
 
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
 
@@ -179,7 +199,7 @@ deliberate local experimentation, bind it to loopback, and never expose it as a
 public service:
 
 ```bash
-.venv/bin/uvicorn aegis_ot.api:control_app --host 127.0.0.1 --port 8081
+.venv/bin/uvicorn aegis_ot.api:control_app --host 127.0.0.1 --port 8085
 ```
 
 When started with that command, the loopback-bound application provides

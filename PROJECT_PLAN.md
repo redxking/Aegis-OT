@@ -7,10 +7,10 @@ The original package is unavailable. This repository is a clean reconstruction b
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.7, revision log, experiment and formal manifests, and reproducible outcome hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | Isolated candidate suite: 478 tests pass with 92.05 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
+| WP1 Executable assurance kernel | Initial implementation complete | Exact M4d commit suite: 528 tests pass; strict typing, linting, schema-drift, public-demo-drift, and Compose checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate and M4b capability-separated loop each have accepted 30-session retained runs and same-code local reproductions; M4b adds root-signed evidence and a separate-process topology-consequence evaluator, but not independent sensing, an independent AC solver, HELICS/OpenPLC, segmentation, hardware, or external validation |
+| WP4 Power-system and OT integration | In progress | M3/M4b retain the bounded pandapower/virtual-device and capability evidence; M4d adds reproduced single-host Docker network placement, bypass denial, service-backed OPA, and service-loss behavior, but not SPIFFE, signed interservice permits, HELICS/OpenPLC, hardware, multi-host isolation, or external validation |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
 | WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
 | WP7 Scale and economics | Planned | No measurements |
@@ -28,10 +28,13 @@ The original package is unavailable. This repository is a clean reconstruction b
 6. M4b: immutable root-signed evidence, capability probes, restart/replay
    evaluation, and a separate-process topology-consequence check for the M4a
    loop under the same-host deterministic-local boundary.
-7. M4: SPIFFE/SPIRE identity, OPA service, network isolation, and six-node deployment.
-8. M5: operate-through-compromise and degraded-mode evaluation.
-9. M6: logical fleet scaling and economic sensitivity model.
-10. M7-M8: independent review, replication package, publication, and release.
+7. M4c: same-host fault, contradiction, restart, ledger-crash, and stale-permit
+   campaign for the capability loop.
+8. M4d: bounded single-host Docker network segmentation and service-loss campaign.
+9. M4: SPIFFE/SPIRE identity, signed interservice authorization, and six-node deployment.
+10. M5: operate-through-compromise and degraded-mode evaluation.
+11. M6: logical fleet scaling and economic sensitivity model.
+12. M7-M8: independent review, replication package, publication, and release.
 
 ## Immediate acceptance gates
 
@@ -306,6 +309,66 @@ Evidence boundary and remaining critical tests:
   test. Process crash during command dispatch, hostile coordinator/host,
   segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
   retained experimental evidence.
+
+## Active M4d segmented-container increment
+
+Implemented and locally reproduced from clean detached checkout
+`61fac4159163e7a92886263a4327dd1ef1a328ac`:
+
+- Explicit `agent`, `trust`, `control_dmz`, and `simulation` Docker networks.
+  The segmented gateway bridges the required planes; OPA is attached only to
+  `trust`; the observer and OT adapter bridge `control_dmz` and `simulation`;
+  the authoritative synthetic simulation is attached only to `simulation`.
+- The existing read-only public demo remains the `gateway` service on loopback
+  port 8080. The new assured-path experiment is a separate
+  `segmented-gateway` service on loopback port 8081.
+- The agent-only probe could reach the segmented gateway but could not resolve
+  or connect directly to the observer, OT adapter, or simulation. Docker network
+  inspection independently retained the actual container membership observed
+  during each run.
+- A contextual local policy check now requires agreement from the pinned OPA
+  service before permit. Loss of OPA produced `policy_service_unavailable`, a
+  deny decision, no OT dispatch, and no state-version change.
+- A modeled-unsafe isolation was denied without dispatch. A safe isolation was
+  permitted and executed exactly once, advancing the synthetic state from
+  version 1 to version 2 and isolating only `feeder-1`. Exact proposal replay
+  was denied without a second dispatch or state effect.
+- Observer loss made the gateway observation route return HTTP 503 and recovered
+  without a state change. OT-adapter loss made the action route return HTTP 503;
+  after the adapter restarted, the observer confirmed that the authoritative
+  state version had not changed.
+- Two separately generated read-only evidence files bind the clean commit,
+  resolved Compose SHA-256
+  `7642a65edae03e46062ca53dbc681ae73e81c7f019ec706bce07afa535900d3a`,
+  Docker host and image metadata, actual network membership, probe output, and
+  all nine acceptance criteria. Both are accepted and share semantic outcome
+  SHA-256
+  `3d12b32085b6447320046884b085ab36039c404bb11db20afc3e81248e972aba`.
+- The exact commit passed 528 tests; ruff, strict mypy across 46 source files,
+  schema drift, public-demo drift, and Compose resolution checks were clean.
+
+Evidence boundary and next hypothesis-critical gate:
+
+- M4d establishes only the tested Docker network membership and observed
+  in-container reachability on one local macOS/Docker Desktop host. Docker
+  internal networks are not evidence of separate hosts, administrative domains,
+  VM firewall enforcement, hostile-container resistance, or physical OT zones.
+- The segmented path uses the v0.1 synthetic supervisory state and command
+  adapter. It does not use the M3 pandapower/PyModbus path or the M4a/M4b signed
+  observation, signed permit, signed PLC acknowledgment, and raw evidence
+  package across containers.
+- Actor identity remains an allowlisted identifier in the proposal body.
+  Interservice HTTP is unsigned and unencrypted inside the local Docker
+  networks. M4d therefore does not establish workload identity, peer
+  authentication, message-origin integrity, or protection from a compromised
+  trusted service.
+- The retained files are local summaries with Git integrity after commit, not
+  externally anchored signed packages, independent replication, external
+  validation, operational effectiveness, production readiness, or WP4 exit.
+- The next gate is to carry the M4 capability contracts across the network with
+  cryptographically verified workload/service identity and signed permit and
+  acknowledgment validation, then repeat bypass, service-loss, replay, stale-
+  state, and hostile-peer tests before moving to the six-node deployment.
 
 ## Read-only public demonstration increment
 

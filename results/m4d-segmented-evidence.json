@@ -1,0 +1,240 @@
+{
+  "acceptance": {
+    "agent_direct_observer_unreachable": true,
+    "agent_direct_ot_adapter_unreachable": true,
+    "agent_direct_simulation_unreachable": true,
+    "exact_replay_denied_without_dispatch": true,
+    "observer_loss_failed_closed_and_recovered": true,
+    "ot_adapter_loss_preserved_state": true,
+    "policy_loss_denied_without_effect": true,
+    "safe_action_executed_once": true,
+    "unsafe_action_denied_without_dispatch": true
+  },
+  "accepted": true,
+  "analyst": "Angelis Pseftis",
+  "clean_checkout": true,
+  "evidence_boundary": [
+    "Docker network membership and in-container reachability on one local host",
+    "Synthetic supervisory state and command adapter, not pandapower, HELICS, or OpenPLC",
+    "Body-level allowlisted actor identity, not SPIFFE or transport workload identity",
+    "Unsigned HTTP between trusted services; no hostile-container or hostile-host claim",
+    "Local execution by Angelis Pseftis, not independent or external validation"
+  ],
+  "generated_at": "2026-08-25T14:18:11.292912+00:00",
+  "git_commit": "61fac4159163e7a92886263a4327dd1ef1a328ac",
+  "host": {
+    "docker": {
+      "Client": {
+        "ApiVersion": "1.55",
+        "Arch": "arm64",
+        "BuildTime": "Wed Aug  5 18:27:50 2026",
+        "Context": "desktop-linux",
+        "DefaultAPIVersion": "1.55",
+        "GitCommit": "a7dcaa6",
+        "GoVersion": "go1.26.5",
+        "Os": "darwin",
+        "Version": "29.7.2"
+      },
+      "Server": {
+        "ApiVersion": "1.55",
+        "Arch": "arm64",
+        "BuildTime": "2026-08-05T18:28:35.000000000+00:00",
+        "Components": [
+          {
+            "Details": {
+              "ApiVersion": "1.55",
+              "Arch": "arm64",
+              "BuildTime": "Wed Aug  5 18:28:35 2026",
+              "Experimental": "false",
+              "GitCommit": "6a43e3d",
+              "GoVersion": "go1.26.5",
+              "KernelVersion": "7.0.12-linuxkit",
+              "MinAPIVersion": "1.40",
+              "Module": "github.com/moby/moby/v2",
+              "ModuleVersion": "v2.0.0+unknown",
+              "Os": "linux"
+            },
+            "Name": "Engine",
+            "Version": "29.7.2"
+          },
+          {
+            "Details": {
+              "GitCommit": "e53c7c1516c3b2bff98eb76f1f4117477e6f4e66"
+            },
+            "Name": "containerd",
+            "Version": "v2.2.5"
+          },
+          {
+            "Details": {
+              "GitCommit": "v1.3.6-0-g491b69ba"
+            },
+            "Name": "runc",
+            "Version": "1.3.6"
+          },
+          {
+            "Details": {
+              "GitCommit": "de40ad0"
+            },
+            "Name": "docker-init",
+            "Version": "0.19.0"
+          }
+        ],
+        "GitCommit": "6a43e3d",
+        "GoVersion": "go1.26.5",
+        "KernelVersion": "7.0.12-linuxkit",
+        "MinAPIVersion": "1.40",
+        "Os": "linux",
+        "Platform": {
+          "Name": "Docker Desktop 4.87.0 (236836)"
+        },
+        "Version": "29.7.2"
+      }
+    },
+    "machine": "arm64",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "images": [
+    {
+      "ContainerName": "aegis-ot-m4d-clean-opa-1",
+      "Created": "2026-08-17T12:59:25.488711271Z",
+      "ID": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "LastTagTime": "2026-08-24T14:44:50.847063844Z",
+      "Platform": "linux/arm64",
+      "Repository": "openpolicyagent/opa",
+      "Size": 26229794,
+      "Tag": ""
+    },
+    {
+      "ContainerName": "aegis-ot-m4d-clean-simulation-1",
+      "Created": "2026-08-25T14:10:29.31806747Z",
+      "ID": "sha256:93189bfd86e5034a3d61e25c56587da66eacc862f54b79385068d667d8911577",
+      "LastTagTime": "2026-08-25T14:18:05.517946667Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4d-clean-simulation",
+      "Size": 64098010,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4d-clean-ot-adapter-1",
+      "Created": "2026-08-25T14:10:29.31806747Z",
+      "ID": "sha256:25c440a46e13d5774244715bf519d323e22d67dbb4d5ab76578f030b7f98564a",
+      "LastTagTime": "2026-08-25T14:18:05.524197958Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4d-clean-ot-adapter",
+      "Size": 64098010,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4d-clean-segmented-gateway-1",
+      "Created": "2026-08-25T14:10:29.31806747Z",
+      "ID": "sha256:11028a4e8ff94456a289720a8b2347d9a4dc5ee944b04f9e5718b70982e11040",
+      "LastTagTime": "2026-08-25T14:18:05.525412625Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4d-clean-segmented-gateway",
+      "Size": 64098017,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4d-clean-observer-1",
+      "Created": "2026-08-25T14:10:29.31806747Z",
+      "ID": "sha256:c98846d0f0d78d2d53e4e100168a288b08d932b752d93b631aaf91778cb853c1",
+      "LastTagTime": "2026-08-25T14:18:05.521894208Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4d-clean-observer",
+      "Size": 64098008,
+      "Tag": "latest"
+    }
+  ],
+  "network_inventory": {
+    "agent": [
+      "aegis-ot-m4d-clean-segmented-gateway-1"
+    ],
+    "control_dmz": [
+      "aegis-ot-m4d-clean-observer-1",
+      "aegis-ot-m4d-clean-ot-adapter-1",
+      "aegis-ot-m4d-clean-segmented-gateway-1"
+    ],
+    "simulation": [
+      "aegis-ot-m4d-clean-observer-1",
+      "aegis-ot-m4d-clean-ot-adapter-1",
+      "aegis-ot-m4d-clean-simulation-1"
+    ],
+    "trust": [
+      "aegis-ot-m4d-clean-opa-1",
+      "aegis-ot-m4d-clean-segmented-gateway-1"
+    ]
+  },
+  "probe": {
+    "accepted": true,
+    "agent_hostname": "99456094ecd0",
+    "agent_network_direct_reachability": {
+      "observer": false,
+      "ot-adapter": false,
+      "simulation": false
+    },
+    "final_isolated_assets": [
+      "feeder-1"
+    ],
+    "final_state_version": 2,
+    "initial_state_version": 1,
+    "replay": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "replayed_nonce"
+      ]
+    },
+    "safe": {
+      "decision": "permit",
+      "executed": true,
+      "resulting_state_version": 2
+    },
+    "schema_version": "m4d-segmented-probe-v1",
+    "unsafe": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "critical_load_below_limit"
+      ]
+    }
+  },
+  "project_name": "aegis-ot-m4d-clean",
+  "resolved_compose_sha256": "7642a65edae03e46062ca53dbc681ae73e81c7f019ec706bce07afa535900d3a",
+  "schema_version": "m4d-segmented-experiment-v1",
+  "semantic_outcome_sha256": "3d12b32085b6447320046884b085ab36039c404bb11db20afc3e81248e972aba",
+  "service_faults": {
+    "observer_service_loss": {
+      "http_status": 503,
+      "recovered": true,
+      "response": {
+        "detail": "trusted observation unavailable"
+      }
+    },
+    "ot_adapter_service_loss": {
+      "http_status": 503,
+      "response": {
+        "detail": "OT execution outcome unavailable"
+      },
+      "state_version_after": 2,
+      "state_version_before": 2
+    },
+    "policy_service_loss": {
+      "decision": {
+        "decided_at": "2026-08-25T14:18:08.944297Z",
+        "decision_id": "c45c9dc8-580b-4a28-8952-e9ccd3bdbb7b",
+        "evidence_record_hash": "d046a2e32be75e87775a8c4784f20e83e030da21f0dabd6110c5d27fada333e8",
+        "outcome": "deny",
+        "policy_version": "contextual-v1+opa-aegis-v1",
+        "proposal_id": "m4d-fault-policy-loss-c8c19dee-0f95-42e4-bbdb-def2bdb4432c",
+        "reasons": [
+          "policy_service_unavailable"
+        ],
+        "safety_version": "surrogate-safety-v1",
+        "state_version": 2
+      },
+      "http_status": 200,
+      "state_version_after": 2,
+      "state_version_before": 2
+    }
+  }
+}
