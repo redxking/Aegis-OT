@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Protocol
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from pydantic import ValidationError
 
 from .capability_models import (
     CapabilityActionRequest,
@@ -590,6 +591,17 @@ class CapabilityClosedLoopController:
             evaluated_at=self.clock(),
         )
         if post_reasons:
+            # model_copy can produce an object whose fields no longer satisfy its
+            # self-digest/signature invariants. Never let an untrusted malformed
+            # post-observation make terminal result construction raise. Retain it
+            # only when the closed model can be revalidated; otherwise retain the
+            # last known-valid pre-observation and fail closed as UNKNOWN_EFFECT.
+            try:
+                retained_last_observation = SignedObservationEnvelope.model_validate(
+                    post.model_dump(mode="json")
+                )
+            except ValidationError:
+                retained_last_observation = observed
             return self._record(
                 status=CapabilityClosedLoopStatus.UNKNOWN_EFFECT,
                 reasons=("post_observation_invalid", *post_reasons),
@@ -601,7 +613,7 @@ class CapabilityClosedLoopController:
                 assessment=assessment,
                 permit=permit,
                 acknowledgment=acknowledgment,
-                last_observation=post,
+                last_observation=retained_last_observation,
             )
         post_matches = (
             post.snapshot.state_digest == acknowledgment.post_state_digest

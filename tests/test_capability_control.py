@@ -62,7 +62,14 @@ PLC_KEY_ID = "plc-key-controller-test"
 PLC_BOOT = "plc-boot-epoch-0000001"
 PERMIT_KEY_ID = "permit-key-controller-test"
 
-PostMode = Literal["valid", "missing", "lost", "invalid_challenge", "contradiction"]
+PostMode = Literal[
+    "valid",
+    "missing",
+    "lost",
+    "invalid_challenge",
+    "tampered_digest",
+    "contradiction",
+]
 PlcMode = Literal[
     "applied",
     "invalid_ack",
@@ -279,7 +286,7 @@ class FakeObserver:
             if self.post_mode == "contradiction"
             else self.base.observed_post_state
         )
-        return SignedObservationEnvelope.issue(
+        issued = SignedObservationEnvelope.issue(
             snapshot=snapshot,
             correlation_id=correlation_id,
             phase=ObservationPhase.POST_DISPATCH,
@@ -294,6 +301,11 @@ class FakeObserver:
             plc_acknowledgment_digest=plc_acknowledgment_digest,
             private_key=self.base.observer_private,
         )
+        if self.post_mode == "tampered_digest":
+            return issued.model_copy(
+                update={"challenge_nonce": f"{issued.challenge_nonce}-tampered"}
+            )
+        return issued
 
 
 class FakeSimulator:
@@ -617,6 +629,22 @@ def test_invalid_signed_post_observation_is_unknown_not_divergence(
     assert result.dispatch_attempts == 1
     assert result.automatic_retry_count == 0
     assert harness.plc.calls == harness.observer.post_calls == 1
+
+
+def test_structurally_tampered_post_observation_returns_unknown_instead_of_raising(
+    base_case: BaseCase,
+) -> None:
+    harness = _harness(base_case, post_mode="tampered_digest")
+
+    result = harness.controller.execute(harness.request)
+
+    assert result.status is CapabilityClosedLoopStatus.UNKNOWN_EFFECT
+    assert "post_observation_invalid" in result.reasons
+    assert result.post_observation is None
+    assert result.last_observation == harness.observer.pre_observation
+    assert result.last_observation.verify(base_case.observer_public)
+    assert result.dispatch_attempts == 1
+    assert result.automatic_retry_count == 0
 
 
 def test_validly_signed_post_contradiction_is_explicit_observation_divergence(

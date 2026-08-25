@@ -20,6 +20,7 @@ from .m3_experiment import (
     write_m3_experiment,
 )
 from .m4b_package import verify_m4b_package, write_m4b_experiment
+from .m4c_fault_experiment import write_fault_campaign
 from .models import ActionProposal, Operation
 
 app = typer.Typer(no_args_is_help=True)
@@ -211,6 +212,29 @@ def verify_capability_evidence(
         or (check_checkout and report["checkout_matches"] is not True)
     )
     if failed:
+        raise typer.Exit(code=1)
+
+
+@app.command("capability-fault-experiment")
+def capability_fault_experiment(
+    output_path: Path = Path("results/m4c-fault-campaign.json"),
+    require_clean_checkout: bool = typer.Option(
+        True,
+        "--require-clean/--allow-dirty",
+    ),
+) -> None:
+    """Run and retain bounded live-process fault and evaluator-adversarial checks."""
+
+    def progress(completed: int, total: int) -> None:
+        typer.echo(f"M4c controller fault cases complete: {completed}/{total}")
+
+    report = write_fault_campaign(
+        output_path,
+        progress=progress,
+        require_clean_checkout=require_clean_checkout,
+    )
+    typer.echo(json.dumps(report, indent=2))
+    if report["experiment_criteria_met"] is not True:
         raise typer.Exit(code=1)
 
 

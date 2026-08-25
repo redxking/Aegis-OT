@@ -1,0 +1,406 @@
+"""Retained same-host fault campaign for the capability-separated control loop.
+
+The campaign deliberately injects failures at the coordinator's existing typed
+ports.  It does not add fault-control operations to the plant, observer, or PLC
+services and therefore does not widen their production-shaped capabilities.
+Each controller condition starts a fresh process stack.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import cast
+
+from pydantic import JsonValue
+
+from aegis_ot_independent.canonical import strict_json_loads
+from aegis_ot_independent.evaluator import verify_report
+
+from .capability_control import ObservationPort, VirtualPlcPort
+from .capability_factory import CapabilitySeparatedLab, start_capability_separated_lab
+from .capability_ipc import IpcOutcomeUnknownError
+from .capability_models import (
+    CapabilityActionRequest,
+    CapabilityClosedLoopStatus,
+    CapabilityExecutionPermit,
+    PlcCommandAcknowledgment,
+    SignedObservationEnvelope,
+)
+from .capability_observer import ObserverServiceError
+from .m4b_models import canonical_json_bytes, sha256_bytes
+from .models import ActionProposal, Decision, Operation
+from .physical_models import CandidateAssessment
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURE_PATH = ROOT / "fixtures/m4b/cigre-mv-topology-v1.json"
+REFERENCE_TIME = datetime(2026, 8, 25, 18, 0, tzinfo=UTC)
+CONDITION_ORDER = (
+    "nominal_control",
+    "plc_response_lost_after_commit",
+    "post_observation_unavailable_after_commit",
+    "post_observation_tampered_after_signing",
+)
+
+
+class _CommitThenLosePlcResponse:
+    def __init__(self, delegate: VirtualPlcPort) -> None:
+        self.delegate = delegate
+        self.acknowledgment: PlcCommandAcknowledgment | None = None
+
+    def execute(
+        self,
+        *,
+        request: CapabilityActionRequest,
+        permit: CapabilityExecutionPermit,
+        pre_observation: SignedObservationEnvelope,
+        decision: Decision,
+        assessment: CandidateAssessment,
+    ) -> PlcCommandAcknowledgment:
+        self.acknowledgment = self.delegate.execute(
+            request=request,
+            permit=permit,
+            pre_observation=pre_observation,
+            decision=decision,
+            assessment=assessment,
+        )
+        raise IpcOutcomeUnknownError("injected response loss after PLC commit")
+
+
+class _PostObservationUnavailable:
+    def __init__(self, delegate: ObservationPort) -> None:
+        self.delegate = delegate
+
+    def resolve(self, *, observation_id: str, envelope_digest: str) -> SignedObservationEnvelope:
+        return self.delegate.resolve(
+            observation_id=observation_id,
+            envelope_digest=envelope_digest,
+        )
+
+    def capture_post(self, **_: str) -> SignedObservationEnvelope:
+        raise ObserverServiceError("injected post-observation unavailability")
+
+
+class _TamperPostObservationAfterSigning:
+    def __init__(self, delegate: ObservationPort) -> None:
+        self.delegate = delegate
+        self.original: SignedObservationEnvelope | None = None
+        self.tampered: SignedObservationEnvelope | None = None
+
+    def resolve(self, *, observation_id: str, envelope_digest: str) -> SignedObservationEnvelope:
+        return self.delegate.resolve(
+            observation_id=observation_id,
+            envelope_digest=envelope_digest,
+        )
+
+    def capture_post(self, **arguments: str) -> SignedObservationEnvelope:
+        self.original = self.delegate.capture_post(**arguments)
+        self.tampered = self.original.model_copy(
+            update={"challenge_nonce": f"{self.original.challenge_nonce}-tampered"}
+        )
+        return self.tampered
+
+
+def _proposal(
+    lab: CapabilitySeparatedLab,
+    observation: SignedObservationEnvelope,
+    condition: str,
+) -> ActionProposal:
+    return ActionProposal(
+        proposal_id=f"m4c-{condition}",
+        actor_id="agent:operator-1",
+        mission_id="microgrid-containment",
+        resource="feeder-1",
+        operation=Operation.ISOLATE_ASSET,
+        parameters={"critical_load_impact_pct": 5.0},
+        observed_state_version=observation.snapshot.state_version,
+        observed_at=observation.snapshot.observed_at,
+        submitted_at=observation.snapshot.observed_at,
+        nonce=f"m4c-{condition}-nonce-0001",
+        confidence=0.95,
+        risk_score=40.0,
+        delegation_chain=(
+            lab.authorization.root_grant.grant_id,
+            lab.authorization.leaf_grant.grant_id,
+        ),
+    )
+
+
+def _expected_status(condition: str) -> CapabilityClosedLoopStatus:
+    if condition == "nominal_control":
+        return CapabilityClosedLoopStatus.COMPLETED
+    return CapabilityClosedLoopStatus.UNKNOWN_EFFECT
+
+
+def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue]:
+    reference_time = REFERENCE_TIME + timedelta(minutes=index)
+    with start_capability_separated_lab(reference_time) as lab:
+        lost_plc: _CommitThenLosePlcResponse | None = None
+        tampered_observer: _TamperPostObservationAfterSigning | None = None
+        if condition == "plc_response_lost_after_commit":
+            lost_plc = _CommitThenLosePlcResponse(lab.controller.plc)
+            lab.controller.plc = lost_plc
+        elif condition == "post_observation_unavailable_after_commit":
+            lab.controller.observer = _PostObservationUnavailable(lab.controller.observer)
+        elif condition == "post_observation_tampered_after_signing":
+            tampered_observer = _TamperPostObservationAfterSigning(lab.controller.observer)
+            lab.controller.observer = tampered_observer
+        elif condition != "nominal_control":
+            raise ValueError(f"unsupported M4c controller condition: {condition}")
+
+        observation = lab.capture_observation(
+            correlation_id=f"m4c:{condition}:pre",
+            challenge_nonce=f"m4c:{condition}:pre-challenge-0001",
+        )
+        proposal = _proposal(lab, observation, condition)
+        result = lab.controller.execute(lab.request_for(proposal, observation))
+        expected = _expected_status(condition)
+        if result.status is not expected:
+            raise RuntimeError(
+                f"{condition} expected {expected.value}, observed {result.status.value}"
+            )
+        if result.dispatch_attempts != 1 or result.automatic_retry_count != 0:
+            raise RuntimeError(f"{condition} violated the one-dispatch/no-retry contract")
+
+        audit = lab.capture_observation(
+            correlation_id=f"m4c:{condition}:audit",
+            challenge_nonce=f"m4c:{condition}:audit-challenge-0001",
+        )
+        audit_valid = audit.verify(lab.processes.observer_info.public_key)
+        effect_observed = audit.snapshot.isolated_resources == ("feeder-1",)
+        if not audit_valid or not effect_observed:
+            raise RuntimeError(f"{condition} did not retain a valid observed committed effect")
+        if not lab.authorization.gateway.evidence.verify():
+            raise RuntimeError(f"{condition} evidence chain is invalid")
+
+        hidden_acknowledgment_valid = False
+        if lost_plc is not None and lost_plc.acknowledgment is not None:
+            hidden_acknowledgment_valid = bool(
+                result.permit is not None
+                and result.pre_observation is not None
+                and result.decision is not None
+                and lost_plc.acknowledgment.verify_for_transaction(
+                    lab.processes.plc_info.public_key,
+                    request=result.request,
+                    permit=result.permit,
+                    pre_observation=result.pre_observation,
+                    expected_plc_id=lab.processes.plc_info.plc_id,
+                    expected_plc_key_id=lab.processes.plc_info.key_id,
+                    expected_plc_boot_epoch=lab.processes.plc_info.boot_epoch,
+                )
+            )
+        original_tampered_observation_valid = bool(
+            tampered_observer is not None
+            and tampered_observer.original is not None
+            and tampered_observer.original.verify(lab.processes.observer_info.public_key)
+        )
+        tampered_observation_rejected = bool(
+            condition == "post_observation_tampered_after_signing"
+            and tampered_observer is not None
+            and tampered_observer.tampered is not None
+            and not tampered_observer.tampered.verify(
+                lab.processes.observer_info.public_key
+            )
+            and result.last_observation is not None
+            and result.last_observation.verify(lab.processes.observer_info.public_key)
+        )
+        return {
+            "condition": condition,
+            "expected_status": expected.value,
+            "actual_status": result.status.value,
+            "reasons": list(result.reasons),
+            "dispatch_attempts": result.dispatch_attempts,
+            "automatic_retry_count": result.automatic_retry_count,
+            "acknowledgment_retained_by_controller": result.acknowledgment is not None,
+            "post_observation_retained_by_controller": result.post_observation is not None,
+            "effect_observed_by_followup_signed_capture": effect_observed,
+            "followup_observation_signature_valid": audit_valid,
+            "followup_state_version": audit.snapshot.state_version,
+            "followup_isolated_resources": list(audit.snapshot.isolated_resources),
+            "hidden_lost_response_acknowledgment_valid": hidden_acknowledgment_valid,
+            "original_pre_tamper_observation_valid": original_tampered_observation_valid,
+            "tampered_observation_rejected": tampered_observation_rejected,
+            "evidence_chain_valid": True,
+        }
+
+
+def _run_evaluator_adversarial_checks() -> dict[str, JsonValue]:
+    malformed = b'{"schema_version":"one","schema_version":"two"}'
+    with tempfile.TemporaryDirectory(prefix="aegis-ot-m4c-evaluator-") as temporary:
+        directory = Path(temporary)
+        request_path = directory / "malformed-request.json"
+        fixture_path = directory / "fixture.json"
+        report_path = directory / "report.json"
+        request_path.write_bytes(malformed)
+        fixture_path.write_bytes(FIXTURE_PATH.read_bytes())
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(ROOT / "src")
+        completed = subprocess.run(  # noqa: S603 - fixed interpreter/module, test-owned paths
+            [
+                sys.executable,
+                "-m",
+                "aegis_ot_independent",
+                "--request",
+                str(request_path),
+                "--fixture",
+                str(fixture_path),
+                "--output",
+                str(report_path),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if completed.returncode != 2 or not report_path.is_file():
+            raise RuntimeError(
+                "malformed evaluator input did not produce a retained input-rejected report"
+            )
+        report = strict_json_loads(report_path.read_bytes())
+    if not isinstance(report, dict) or report.get("status") != "input_rejected":
+        raise RuntimeError("malformed evaluator input did not fail closed")
+    authentic_report_valid = verify_report(report)
+    tampered = dict(report)
+    tampered["reasons"] = ["tampered-after-signing"]
+    tampered_report_valid = verify_report(tampered)
+    if not authentic_report_valid or tampered_report_valid:
+        raise RuntimeError("independent report authenticity check did not fail closed")
+    return {
+        "malformed_request_sha256": sha256_bytes(malformed),
+        "evaluator_exit_code": 2,
+        "signed_report_status": "input_rejected",
+        "signed_report_valid": authentic_report_valid,
+        "tampered_report_valid": tampered_report_valid,
+        "evaluator_process_separate": report.get("pid") != os.getpid(),
+    }
+
+
+def _git_value(*arguments: str) -> str:
+    completed = subprocess.run(  # noqa: S603 - fixed git executable/arguments
+        ["/usr/bin/git", *arguments],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return completed.stdout.strip() if completed.returncode == 0 else "unknown"
+
+
+def _git_state() -> dict[str, JsonValue]:
+    commit = _git_value("rev-parse", "HEAD")
+    branch = _git_value("branch", "--show-current")
+    if branch == "" and len(commit) == 40:
+        branch = "DETACHED"
+    status = _git_value("status", "--porcelain")
+    return {
+        "branch": branch,
+        "commit": commit,
+        "working_tree_dirty": status not in {"", "unknown"},
+    }
+
+
+def run_fault_campaign(
+    *,
+    progress: Callable[[int, int], None] | None = None,
+    require_clean_checkout: bool = True,
+) -> dict[str, JsonValue]:
+    """Run the bounded campaign and return a reproducible report."""
+
+    started = datetime.now(UTC)
+    git_start = _git_state()
+    if require_clean_checkout and git_start["working_tree_dirty"] is not False:
+        raise RuntimeError("controlled M4c fault campaign requires a clean checkout")
+    cases: list[dict[str, JsonValue]] = []
+    for index, condition in enumerate(CONDITION_ORDER):
+        cases.append(_run_controller_condition(condition, index))
+        if progress is not None:
+            progress(index + 1, len(CONDITION_ORDER))
+    evaluator = _run_evaluator_adversarial_checks()
+    git_end = _git_state()
+    if git_start["commit"] != git_end["commit"]:
+        raise RuntimeError("checkout commit changed during M4c fault campaign")
+    if require_clean_checkout and git_end["working_tree_dirty"] is not False:
+        raise RuntimeError("checkout became dirty during M4c fault campaign")
+
+    projection: dict[str, JsonValue] = {
+        "controller_cases": [
+            {
+                key: value
+                for key, value in case.items()
+                if key not in {"followup_state_version"}
+            }
+            for case in cases
+        ],
+        "evaluator": evaluator,
+    }
+    criteria_met = all(
+        case["actual_status"] == case["expected_status"]
+        and case["dispatch_attempts"] == 1
+        and case["automatic_retry_count"] == 0
+        and case["effect_observed_by_followup_signed_capture"] is True
+        and case["evidence_chain_valid"] is True
+        for case in cases
+    ) and all(
+        (
+            evaluator["signed_report_status"] == "input_rejected",
+            evaluator["signed_report_valid"] is True,
+            evaluator["tampered_report_valid"] is False,
+            evaluator["evaluator_process_separate"] is True,
+        )
+    )
+    return {
+        "schema_version": "m4c-fault-campaign-v1",
+        "started_at_utc": started.isoformat(),
+        "completed_at_utc": datetime.now(UTC).isoformat(),
+        "git": {
+            "branch": git_start["branch"],
+            "commit": git_start["commit"],
+            "working_tree_dirty_at_start": git_start["working_tree_dirty"],
+            "working_tree_dirty_at_end": git_end["working_tree_dirty"],
+        },
+        "controller_cases": cast(list[JsonValue], cases),
+        "evaluator_adversarial_checks": evaluator,
+        "deterministic_projection_sha256": sha256_bytes(canonical_json_bytes(projection)),
+        "experiment_criteria_met": criteria_met,
+        "claim_boundary": (
+            "same-host injected-port fault evidence over the deterministic local process lab; "
+            "not fault-rate estimation, hostile-host isolation, segmented deployment, hardware, "
+            "field evidence, or independent validation"
+        ),
+    }
+
+
+def write_fault_campaign(
+    output_path: Path,
+    *,
+    progress: Callable[[int, int], None] | None = None,
+    require_clean_checkout: bool = True,
+) -> dict[str, JsonValue]:
+    """Run and exclusively retain one campaign report without overwriting evidence."""
+
+    if output_path.exists() or output_path.is_symlink():
+        raise FileExistsError(f"refusing to overwrite M4c evidence: {output_path}")
+    report = run_fault_campaign(
+        progress=progress,
+        require_clean_checkout=require_clean_checkout,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
+    try:
+        material = json.dumps(report, indent=2, sort_keys=True, allow_nan=False).encode() + b"\n"
+        offset = 0
+        while offset < len(material):
+            offset += os.write(descriptor, material[offset:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return report
