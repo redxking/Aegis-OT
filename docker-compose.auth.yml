@@ -1,0 +1,28 @@
+services:
+  segmented-gateway:
+    environment:
+      AEGIS_AUTHENTICATED_MODE: "true"
+      AEGIS_GATEWAY_KEY_ID: m4e-gateway-key-v1
+      AEGIS_GATEWAY_PRIVATE_KEY_FILE: /run/secrets/gateway_private
+      AEGIS_OT_KEY_ID: m4e-ot-key-v1
+      AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot_public
+    secrets: [gateway_private, ot_public]
+
+  ot-adapter:
+    environment:
+      AEGIS_AUTHENTICATED_MODE: "true"
+      AEGIS_GATEWAY_KEY_ID: m4e-gateway-key-v1
+      AEGIS_GATEWAY_PUBLIC_KEY_FILE: /run/secrets/gateway_public
+      AEGIS_OT_KEY_ID: m4e-ot-key-v1
+      AEGIS_OT_PRIVATE_KEY_FILE: /run/secrets/ot_private
+    secrets: [gateway_public, ot_private]
+
+secrets:
+  gateway_private:
+    file: ${AEGIS_GATEWAY_PRIVATE_KEY_FILE:?set by the M4e runner}
+  gateway_public:
+    file: ${AEGIS_GATEWAY_PUBLIC_KEY_FILE:?set by the M4e runner}
+  ot_private:
+    file: ${AEGIS_OT_PRIVATE_KEY_FILE:?set by the M4e runner}
+  ot_public:
+    file: ${AEGIS_OT_PUBLIC_KEY_FILE:?set by the M4e runner}

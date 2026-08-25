@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import pytest
 import yaml
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
 
 import aegis_ot.segmented_runtime as segmented
@@ -106,6 +108,88 @@ def test_ot_adapter_rejects_nonpermit_before_simulation(
     with pytest.raises(HTTPException) as exc:
         segmented.ot_execute(
             segmented.SegmentedExecutionRequest(proposal=proposal, decision=denied)
+        )
+    assert exc.value.status_code == 403
+
+
+def test_authenticated_ot_adapter_verifies_gateway_and_signs_bound_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway_private = Ed25519PrivateKey.generate()
+    ot_private = Ed25519PrivateKey.generate()
+    gateway_public_path = tmp_path / "gateway.public"
+    ot_private_path = tmp_path / "ot.private"
+    gateway_public_path.write_bytes(
+        gateway_private.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+    )
+    ot_private_path.write_bytes(
+        ot_private.private_bytes(
+            serialization.Encoding.Raw,
+            serialization.PrivateFormat.Raw,
+            serialization.NoEncryption(),
+        )
+    )
+    monkeypatch.setenv("AEGIS_AUTHENTICATED_MODE", "true")
+    monkeypatch.setenv("AEGIS_GATEWAY_KEY_ID", "gateway-test-key")
+    monkeypatch.setenv("AEGIS_GATEWAY_PUBLIC_KEY_FILE", str(gateway_public_path))
+    monkeypatch.setenv("AEGIS_OT_KEY_ID", "ot-test-key")
+    monkeypatch.setenv("AEGIS_OT_PRIVATE_KEY_FILE", str(ot_private_path))
+    segmented._ot_transport_nonces.clear()
+
+    plant = segmented.MutableSurrogatePlant()
+    state = plant.observe()
+    proposal = _proposal().model_copy(
+        update={"observed_at": state.observed_at, "observed_state_version": state.version}
+    )
+    execution_request = segmented.SegmentedExecutionRequest(
+        proposal=proposal,
+        decision=_permit(proposal),
+    )
+    now = datetime.now(UTC)
+    signed = segmented.SignedSegmentedExecutionRequest(
+        request=execution_request,
+        gateway_key_id="gateway-test-key",
+        transport_nonce=str(uuid4()),
+        issued_at=now,
+        expires_at=now + timedelta(seconds=5),
+    ).signed(gateway_private)
+
+    def simulation_exchange(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        del args, kwargs
+        return plant.execute(execution_request).model_dump(mode="json")
+
+    monkeypatch.setattr(segmented, "request_json", simulation_exchange)
+    response = segmented.ot_execute(signed)
+    assert isinstance(response, segmented.SignedSegmentedExecutionResponse)
+    assert response.verify(ot_private.public_key())
+    assert response.request_sha256 == segmented._sha256(signed)
+    assert response.execution.executed
+
+    with pytest.raises(HTTPException) as replayed:
+        segmented.ot_execute(signed)
+    assert replayed.value.status_code == 409
+
+    altered = signed.model_copy(update={"transport_nonce": str(uuid4())})
+    with pytest.raises(HTTPException) as tampered:
+        segmented.ot_execute(altered)
+    assert tampered.value.status_code == 403
+
+
+def test_authenticated_ot_adapter_rejects_unsigned_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AEGIS_AUTHENTICATED_MODE", "true")
+    proposal = _proposal()
+    with pytest.raises(HTTPException) as exc:
+        segmented.ot_execute(
+            segmented.SegmentedExecutionRequest(
+                proposal=proposal,
+                decision=_permit(proposal),
+            )
         )
     assert exc.value.status_code == 403
 

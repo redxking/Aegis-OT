@@ -11,7 +11,7 @@ import json
 import os
 import socket
 from collections import OrderedDict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -19,9 +19,11 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .crypto import sign_bytes, verify_bytes
 from .factory import LocalLab, build_local_lab
 from .lab import SimulatedCommandAdapter, nominal_state
 from .models import (
@@ -123,6 +125,90 @@ class SegmentedActionResult(BaseModel):
     execution: ExecutionResult | None = None
 
 
+def _canonical_bytes(value: BaseModel | dict[str, Any]) -> bytes:
+    material = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+    return json.dumps(
+        material,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+class SignedSegmentedExecutionRequest(BaseModel):
+    """Gateway-signed authorization carried across the M4e network boundary."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    schema_version: str = "m4e-signed-execution-request-v1"
+    request: SegmentedExecutionRequest
+    audience: str = "aegis-ot:ot-adapter"
+    gateway_key_id: str = Field(min_length=1)
+    transport_nonce: str = Field(min_length=16)
+    issued_at: datetime
+    expires_at: datetime
+    signature: str = ""
+
+    @model_validator(mode="after")
+    def require_window(self) -> SignedSegmentedExecutionRequest:
+        if self.issued_at.tzinfo is None or self.expires_at.tzinfo is None:
+            raise ValueError("signed request timestamps must be timezone-aware")
+        if self.expires_at <= self.issued_at:
+            raise ValueError("signed request expiry must follow issuance")
+        return self
+
+    def signing_payload(self) -> bytes:
+        return _canonical_bytes(self.model_dump(mode="json", exclude={"signature"}))
+
+    def signed(self, key: Ed25519PrivateKey) -> SignedSegmentedExecutionRequest:
+        return self.model_copy(update={"signature": sign_bytes(key, self.signing_payload())})
+
+    def verify(self, key: Ed25519PublicKey) -> bool:
+        return bool(self.signature) and verify_bytes(key, self.signing_payload(), self.signature)
+
+
+class SignedSegmentedExecutionResponse(BaseModel):
+    """OT-adapter-signed result bound to one signed gateway request."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    schema_version: str = "m4e-signed-execution-response-v1"
+    request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    execution: ExecutionResult
+    ot_key_id: str = Field(min_length=1)
+    signed_at: datetime
+    signature: str = ""
+
+    def signing_payload(self) -> bytes:
+        return _canonical_bytes(self.model_dump(mode="json", exclude={"signature"}))
+
+    def signed(self, key: Ed25519PrivateKey) -> SignedSegmentedExecutionResponse:
+        return self.model_copy(update={"signature": sign_bytes(key, self.signing_payload())})
+
+    def verify(self, key: Ed25519PublicKey) -> bool:
+        return bool(self.signature) and verify_bytes(key, self.signing_payload(), self.signature)
+
+
+def _sha256(value: BaseModel) -> str:
+    import hashlib
+
+    return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _load_private_key(path: str) -> Ed25519PrivateKey:
+    raw = open(path, "rb").read(33)  # noqa: PTH123
+    if len(raw) != 32:
+        raise RuntimeError("Ed25519 private key file must contain exactly 32 raw bytes")
+    return Ed25519PrivateKey.from_private_bytes(raw)
+
+
+def _load_public_key(path: str) -> Ed25519PublicKey:
+    raw = open(path, "rb").read(33)  # noqa: PTH123
+    if len(raw) != 32:
+        raise RuntimeError("Ed25519 public key file must contain exactly 32 raw bytes")
+    return Ed25519PublicKey.from_public_bytes(raw)
+
+
 class MutableSurrogatePlant:
     """One authoritative synthetic state owned only by the simulation service."""
 
@@ -162,6 +248,8 @@ _gateway_lock = Lock()
 _observation_cache: OrderedDict[tuple[int, str], SystemState] = OrderedDict()
 _observation_cache_lock = Lock()
 _MAX_CACHED_OBSERVATIONS = 128
+_ot_transport_nonces: set[str] = set()
+_ot_transport_nonce_lock = Lock()
 
 
 def _gateway() -> LocalLab:
@@ -190,6 +278,10 @@ def _resolve_observation(proposal: ActionProposal) -> SystemState | None:
     key = proposal.observed_state_version, proposal.observed_at.isoformat()
     with _observation_cache_lock:
         return _observation_cache.get(key)
+
+
+def _authenticated_mode() -> bool:
+    return os.getenv("AEGIS_AUTHENTICATED_MODE", "false").lower() == "true"
 
 
 @simulation_app.get("/health")
@@ -229,22 +321,57 @@ def ot_health() -> dict[str, str]:
     return {"status": "ok", "role": "ot-adapter"}
 
 
-@ot_adapter_app.post("/internal/execute", response_model=ExecutionResult)
-def ot_execute(request: SegmentedExecutionRequest) -> ExecutionResult:
+@ot_adapter_app.post("/internal/execute")
+def ot_execute(
+    request: SegmentedExecutionRequest | SignedSegmentedExecutionRequest,
+) -> ExecutionResult | SignedSegmentedExecutionResponse:
+    signed_request: SignedSegmentedExecutionRequest | None = None
+    if isinstance(request, SignedSegmentedExecutionRequest):
+        signed_request = request
+        if not _authenticated_mode():
+            raise HTTPException(status_code=403, detail="authenticated transport is disabled")
+        expected_key_id = os.environ["AEGIS_GATEWAY_KEY_ID"]
+        gateway_public = _load_public_key(os.environ["AEGIS_GATEWAY_PUBLIC_KEY_FILE"])
+        now = datetime.now(UTC)
+        if (
+            request.gateway_key_id != expected_key_id
+            or request.audience != "aegis-ot:ot-adapter"
+            or not request.issued_at <= now < request.expires_at
+            or not request.verify(gateway_public)
+        ):
+            raise HTTPException(status_code=403, detail="gateway signature rejected")
+        with _ot_transport_nonce_lock:
+            if request.transport_nonce in _ot_transport_nonces:
+                raise HTTPException(status_code=409, detail="transport request replayed")
+            _ot_transport_nonces.add(request.transport_nonce)
+        execution_request = request.request
+    else:
+        if _authenticated_mode():
+            raise HTTPException(status_code=403, detail="signed gateway request required")
+        execution_request = request
     if (
-        request.decision.outcome is not DecisionOutcome.PERMIT
-        or request.decision.proposal_id != request.proposal.proposal_id
+        execution_request.decision.outcome is not DecisionOutcome.PERMIT
+        or execution_request.decision.proposal_id != execution_request.proposal.proposal_id
     ):
         raise HTTPException(status_code=403, detail="gateway permit required")
     try:
         payload = request_json(
             "POST",
             f"{os.getenv('AEGIS_SIMULATION_URL', 'http://simulation:8084')}/internal/apply",
-            request.model_dump(mode="json"),
+            execution_request.model_dump(mode="json"),
         )
-        return ExecutionResult.model_validate(payload)
+        execution = ExecutionResult.model_validate(payload)
     except (ServiceExchangeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="simulation execution unavailable") from exc
+    if signed_request is None:
+        return execution
+    response = SignedSegmentedExecutionResponse(
+        request_sha256=_sha256(signed_request),
+        execution=execution,
+        ot_key_id=os.environ["AEGIS_OT_KEY_ID"],
+        signed_at=datetime.now(UTC),
+    )
+    return response.signed(_load_private_key(os.environ["AEGIS_OT_PRIVATE_KEY_FILE"]))
 
 
 @segmented_gateway_app.get("/health")
@@ -275,13 +402,36 @@ def gateway_action(proposal: ActionProposal) -> SegmentedActionResult:
     if decision.outcome is not DecisionOutcome.PERMIT:
         return SegmentedActionResult(proposal_id=proposal.proposal_id, decision=decision)
     request = SegmentedExecutionRequest(proposal=proposal, decision=decision)
+    outbound: BaseModel = request
+    signed_request: SignedSegmentedExecutionRequest | None = None
+    if _authenticated_mode():
+        now = datetime.now(UTC)
+        signed_request = SignedSegmentedExecutionRequest(
+            request=request,
+            gateway_key_id=os.environ["AEGIS_GATEWAY_KEY_ID"],
+            transport_nonce=str(uuid4()),
+            issued_at=now,
+            expires_at=now + timedelta(seconds=5),
+        ).signed(_load_private_key(os.environ["AEGIS_GATEWAY_PRIVATE_KEY_FILE"]))
+        outbound = signed_request
     try:
         payload = request_json(
             "POST",
             f"{os.getenv('AEGIS_OT_URL', 'http://ot-adapter:8083')}/internal/execute",
-            request.model_dump(mode="json"),
+            outbound.model_dump(mode="json"),
         )
-        execution = ExecutionResult.model_validate(payload)
+        if signed_request is None:
+            execution = ExecutionResult.model_validate(payload)
+        else:
+            response = SignedSegmentedExecutionResponse.model_validate(payload)
+            ot_public = _load_public_key(os.environ["AEGIS_OT_PUBLIC_KEY_FILE"])
+            if (
+                response.ot_key_id != os.environ["AEGIS_OT_KEY_ID"]
+                or response.request_sha256 != _sha256(signed_request)
+                or not response.verify(ot_public)
+            ):
+                raise ValueError("OT response signature or request binding failed")
+            execution = response.execution
     except (ServiceExchangeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="OT execution outcome unavailable") from exc
     return SegmentedActionResult(
