@@ -12,7 +12,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -240,6 +240,7 @@ def start_capability_process_stack(
     *,
     fixed_now: datetime | None = None,
     readiness_timeout_seconds: float = 20.0,
+    observer_post_snapshot_source: Literal["plant", "predecessor"] = "plant",
 ) -> tuple[CapabilityProcessStack, Ed25519PrivateKey, Ed25519PublicKey]:
     """Start plant, observer, and virtual-PLC children with dedicated pipe capabilities."""
 
@@ -326,6 +327,7 @@ def start_capability_process_stack(
             observer_plant_parent,
             asdict(plant_info),
             None,
+            observer_post_snapshot_source,
         ),
         name="aegis-ot-capability-observer",
     )
@@ -474,10 +476,15 @@ class CapabilitySeparatedLab:
 
 def start_capability_separated_lab(
     now: datetime | None = None,
+    *,
+    observer_post_snapshot_source: Literal["plant", "predecessor"] = "plant",
 ) -> CapabilitySeparatedLab:
     """Start the first WP4 process/capability slice for local PyCharm execution."""
 
-    stack, permit_private, permit_public = start_capability_process_stack(fixed_now=now)
+    stack, permit_private, permit_public = start_capability_process_stack(
+        fixed_now=now,
+        observer_post_snapshot_source=observer_post_snapshot_source,
+    )
     try:
         initial = stack.telemetry.capture_pre(
             correlation_id=str(uuid4()),

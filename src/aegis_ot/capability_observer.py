@@ -6,7 +6,7 @@ import os
 from collections import OrderedDict
 from dataclasses import dataclass
 from multiprocessing.connection import wait
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -26,7 +26,7 @@ from .capability_ipc import (
 from .capability_models import ObservationPhase, SignedObservationEnvelope
 from .capability_plant import ObserverPlantClient, PlantProcessInfo
 from .crypto import generate_keypair
-from .physical_models import PhysicalControlCommand
+from .physical_models import PhysicalControlCommand, PhysicalStateSnapshot
 
 OBSERVER_CAPABILITIES: dict[str, frozenset[str]] = {
     "admin": frozenset({"health", "probe_plant_apply", "shutdown"}),
@@ -62,6 +62,7 @@ def _observer_process_main(
     plant_connection: Any,
     plant_info_payload: dict[str, Any],
     retained_private_key_bytes: bytes | None,
+    post_snapshot_source: Literal["plant", "predecessor"] = "plant",
 ) -> None:
     boot_epoch = str(uuid4())
     observer_id = "signed-observer:deterministic-local"
@@ -80,6 +81,8 @@ def _observer_process_main(
     }
     plant_info = PlantProcessInfo(**plant_info_payload)
     plant = ObserverPlantClient(plant_connection, plant_info)
+    if post_snapshot_source not in {"plant", "predecessor"}:
+        raise ValueError("observer post snapshot source is invalid")
     if retained_private_key_bytes is None:
         private_key, public_key = generate_keypair()
     else:
@@ -99,9 +102,10 @@ def _observer_process_main(
         permit_id: str | None = None,
         command_digest: str | None = None,
         plc_acknowledgment_digest: str | None = None,
+        snapshot_override: PhysicalStateSnapshot | None = None,
     ) -> SignedObservationEnvelope:
         nonlocal observer_sequence, capture_count, previous_digest
-        snapshot = plant.capture_state()
+        snapshot = snapshot_override or plant.capture_state()
         observer_sequence += 1
         capture_count += 1
         envelope = SignedObservationEnvelope.issue(
@@ -244,6 +248,11 @@ def _observer_process_main(
                                 command_digest=str(request.payload["command_digest"]),
                                 plc_acknowledgment_digest=str(
                                     request.payload["plc_acknowledgment_digest"]
+                                ),
+                                snapshot_override=(
+                                    transaction_predecessor.snapshot
+                                    if post_snapshot_source == "predecessor"
+                                    else None
                                 ),
                             )
                             payload = {"observation": envelope.model_dump(mode="json")}

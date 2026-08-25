@@ -15,8 +15,9 @@ import sys
 import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import JsonValue
 
@@ -28,13 +29,21 @@ from .capability_factory import CapabilitySeparatedLab, start_capability_separat
 from .capability_ipc import IpcOutcomeUnknownError
 from .capability_models import (
     CapabilityActionRequest,
+    CapabilityClosedLoopResult,
     CapabilityClosedLoopStatus,
     CapabilityExecutionPermit,
     PlcCommandAcknowledgment,
     SignedObservationEnvelope,
 )
 from .capability_observer import ObserverServiceError
-from .m4b_models import canonical_json_bytes, sha256_bytes
+from .m4b_models import (
+    IndependentConsequenceReport,
+    IndependentEvaluationRequest,
+    IndependentEvaluationStatus,
+    canonical_json_bytes,
+    public_key_base64,
+    sha256_bytes,
+)
 from .models import ActionProposal, Decision, Operation
 from .physical_models import CandidateAssessment
 
@@ -46,6 +55,7 @@ CONDITION_ORDER = (
     "plc_response_lost_after_commit",
     "post_observation_unavailable_after_commit",
     "post_observation_tampered_after_signing",
+    "signed_post_observation_contradiction",
 )
 
 
@@ -135,12 +145,98 @@ def _proposal(
 def _expected_status(condition: str) -> CapabilityClosedLoopStatus:
     if condition == "nominal_control":
         return CapabilityClosedLoopStatus.COMPLETED
+    if condition == "signed_post_observation_contradiction":
+        return CapabilityClosedLoopStatus.OBSERVATION_DIVERGED
     return CapabilityClosedLoopStatus.UNKNOWN_EFFECT
+
+
+def _evaluate_signed_contradiction(
+    result: CapabilityClosedLoopResult,
+    condition: str,
+    observer_public_key_b64: str,
+) -> dict[str, JsonValue]:
+    if result.pre_observation is None or result.post_observation is None or result.command is None:
+        raise RuntimeError("signed contradiction lacks evaluator inputs")
+    request = IndependentEvaluationRequest(
+        request_id=f"m4c:{condition}:independent-evaluation",
+        session_index=4,
+        master_seed=20260825,
+        transaction_record_digest=sha256_bytes(canonical_json_bytes(result)),
+        fixture_id="pandapower-cigre-mv-all-neutral-topology-v1",
+        fixture_digest=(
+            "58ed983e507811935c448e6d468e952ff34620958eae893d16d454a89651709f"
+        ),
+        nonce=f"m4c:{condition}:independent-evaluation-nonce-0001",
+        pre_observation=result.pre_observation,
+        post_observation=result.post_observation,
+        command=result.command,
+        observer_key_id=result.pre_observation.observer_key_id,
+        observer_public_key_b64=observer_public_key_b64,
+        absolute_tolerance_mw=Decimal("0.000000001"),
+        absolute_tolerance_pct=Decimal("0.000000001"),
+    )
+    with tempfile.TemporaryDirectory(prefix="aegis-ot-m4c-contradiction-") as temporary:
+        directory = Path(temporary)
+        request_path = directory / "request.json"
+        fixture_path = directory / "fixture.json"
+        report_path = directory / "report.json"
+        request_path.write_bytes(canonical_json_bytes(request))
+        fixture_path.write_bytes(FIXTURE_PATH.read_bytes())
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(ROOT / "src")
+        completed = subprocess.run(  # noqa: S603 - fixed interpreter/module, test-owned paths
+            [
+                sys.executable,
+                "-m",
+                "aegis_ot_independent",
+                "--request",
+                str(request_path),
+                "--fixture",
+                str(fixture_path),
+                "--output",
+                str(report_path),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if completed.returncode != 1 or not report_path.is_file():
+            raise RuntimeError("signed contradiction did not produce evaluator contradiction")
+        report = IndependentConsequenceReport.model_validate(
+            strict_json_loads(report_path.read_bytes())
+        )
+    if (
+        report.status is not IndependentEvaluationStatus.CONTRADICT
+        or not report.verify_for_request(request)
+    ):
+        raise RuntimeError("signed evaluator contradiction failed authenticity or binding")
+    mismatches = [
+        item.metric.value
+        for item in report.metric_comparisons
+        if item.outcome == "mismatch"
+    ]
+    return {
+        "status": report.status.value,
+        "report_valid": True,
+        "evaluator_process_separate": report.pid != os.getpid(),
+        "metric_mismatches": cast(list[JsonValue], mismatches),
+    }
 
 
 def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue]:
     reference_time = REFERENCE_TIME + timedelta(minutes=index)
-    with start_capability_separated_lab(reference_time) as lab:
+    observer_source: Literal["plant", "predecessor"] = (
+        "predecessor"
+        if condition == "signed_post_observation_contradiction"
+        else "plant"
+    )
+    with start_capability_separated_lab(
+        reference_time,
+        observer_post_snapshot_source=observer_source,
+    ) as lab:
         lost_plc: _CommitThenLosePlcResponse | None = None
         tampered_observer: _TamperPostObservationAfterSigning | None = None
         if condition == "plc_response_lost_after_commit":
@@ -152,7 +248,8 @@ def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue
             tampered_observer = _TamperPostObservationAfterSigning(lab.controller.observer)
             lab.controller.observer = tampered_observer
         elif condition != "nominal_control":
-            raise ValueError(f"unsupported M4c controller condition: {condition}")
+            if condition != "signed_post_observation_contradiction":
+                raise ValueError(f"unsupported M4c controller condition: {condition}")
 
         observation = lab.capture_observation(
             correlation_id=f"m4c:{condition}:pre",
@@ -210,6 +307,13 @@ def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue
             and result.last_observation is not None
             and result.last_observation.verify(lab.processes.observer_info.public_key)
         )
+        contradiction_evaluation: dict[str, JsonValue] | None = None
+        if condition == "signed_post_observation_contradiction":
+            contradiction_evaluation = _evaluate_signed_contradiction(
+                result,
+                condition,
+                public_key_base64(lab.processes.observer_info.public_key),
+            )
         return {
             "condition": condition,
             "expected_status": expected.value,
@@ -226,6 +330,7 @@ def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue
             "hidden_lost_response_acknowledgment_valid": hidden_acknowledgment_valid,
             "original_pre_tamper_observation_valid": original_tampered_observation_valid,
             "tampered_observation_rejected": tampered_observation_rejected,
+            "independent_contradiction_evaluation": contradiction_evaluation,
             "evidence_chain_valid": True,
         }
 
@@ -358,7 +463,7 @@ def run_fault_campaign(
         )
     )
     return {
-        "schema_version": "m4c-fault-campaign-v1",
+        "schema_version": "m4c-fault-campaign-v2",
         "started_at_utc": started.isoformat(),
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "git": {

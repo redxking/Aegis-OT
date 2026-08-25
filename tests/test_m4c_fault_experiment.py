@@ -23,6 +23,17 @@ def test_live_fault_campaign_fails_closed_without_retry() -> None:
         assert cases[name]["dispatch_attempts"] == 1
         assert cases[name]["automatic_retry_count"] == 0
         assert cases[name]["effect_observed_by_followup_signed_capture"] is True
+    contradiction = cases["signed_post_observation_contradiction"]
+    assert contradiction["actual_status"] == "observation_diverged"
+    assert contradiction["reasons"] == ["signed_post_observation_contradiction"]
+    assert contradiction["dispatch_attempts"] == 1
+    assert contradiction["automatic_retry_count"] == 0
+    assert contradiction["effect_observed_by_followup_signed_capture"] is True
+    evaluation = contradiction["independent_contradiction_evaluation"]
+    assert evaluation["status"] == "contradict"
+    assert evaluation["report_valid"] is True
+    assert evaluation["evaluator_process_separate"] is True
+    assert "isolated_resources" in evaluation["metric_mismatches"]
     assert cases["plc_response_lost_after_commit"][
         "hidden_lost_response_acknowledgment_valid"
     ] is True
@@ -44,7 +55,7 @@ def test_fault_campaign_writer_is_exclusive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
-        "schema_version": "m4c-fault-campaign-v1",
+        "schema_version": "m4c-fault-campaign-v2",
         "experiment_criteria_met": True,
     }
     monkeypatch.setattr(
