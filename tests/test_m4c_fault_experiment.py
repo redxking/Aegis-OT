@@ -80,6 +80,25 @@ def test_live_fault_campaign_fails_closed_without_retry() -> None:
         "after_replace_new_reservation_present": True,
         "criteria_met": True,
     }
+    competing = report["competing_prepared_transactions"]
+    assert competing["criteria_met"] is True
+    assert competing["common_signed_pre_state"] is True
+    assert competing["first_status"] == "applied"
+    assert competing["first_phase"] == "committed"
+    assert competing["first_acknowledgment_valid"] is True
+    assert competing["second_status"] == "rejected"
+    assert competing["second_phase"] == "pre_dispatch"
+    assert competing["second_reason"] in {
+        "topology_digest_changed",
+        "precommit_state_version_changed",
+        "precommit_state_digest_changed",
+        "precommit_observation_changed",
+    }
+    assert competing["second_acknowledgment_valid"] is True
+    assert competing["second_state_effect_absent"] is True
+    assert competing["final_isolated_resources"] == ["feeder-1"]
+    assert competing["plc_execute_requests"] == 2
+    assert competing["replay_reservation_count"] == 1
 
 
 def test_fault_campaign_writer_is_exclusive(
@@ -87,7 +106,7 @@ def test_fault_campaign_writer_is_exclusive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
-        "schema_version": "m4c-fault-campaign-v5",
+        "schema_version": "m4c-fault-campaign-v6",
         "experiment_criteria_met": True,
     }
     monkeypatch.setattr(

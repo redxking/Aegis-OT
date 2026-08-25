@@ -47,7 +47,8 @@ from .m4b_models import (
     public_key_base64,
     sha256_bytes,
 )
-from .models import ActionProposal, Decision, Operation
+from .models import ActionProposal, Decision, DecisionOutcome, Operation
+from .physical_control import physical_state_to_gateway_state
 from .physical_models import CandidateAssessment, CommandStatus
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -723,6 +724,146 @@ def _run_replay_ledger_crash_checks() -> dict[str, JsonValue]:
         }
 
 
+def _run_competing_prepared_transactions() -> dict[str, JsonValue]:
+    with start_capability_separated_lab(
+        REFERENCE_TIME + timedelta(minutes=20)
+    ) as lab:
+        common_observation = lab.capture_observation(
+            correlation_id="m4c:competing:common",
+            challenge_nonce="m4c:competing:common-challenge-0001",
+        )
+        prepared: list[
+            tuple[
+                CapabilityActionRequest,
+                CapabilityExecutionPermit,
+                SignedObservationEnvelope,
+                Decision,
+                CandidateAssessment,
+            ]
+        ] = []
+        common_probe = _proposal(lab, common_observation, "competing_probe")
+        common_request = lab.request_for(common_probe, common_observation)
+        common_reasons = lab.controller.observation_verifier.verify_pre(
+            common_observation,
+            common_request,
+            evaluated_at=lab.controller.clock(),
+        )
+        if common_reasons:
+            raise RuntimeError(
+                f"competing common pre-observation failed: {common_reasons}"
+            )
+        for ordinal in (1, 2):
+            observation = common_observation
+            condition = f"competing_prepared_{ordinal}"
+            proposal = _proposal(lab, observation, condition)
+            request = lab.request_for(proposal, observation)
+            decision = lab.authorization.gateway.decide(
+                proposal,
+                physical_state_to_gateway_state(observation.snapshot),
+                lab.controller.clock(),
+            )
+            if decision.outcome is not DecisionOutcome.PERMIT:
+                raise RuntimeError(f"{condition} was not permitted")
+            command = lab.controller.translator.translate(proposal)
+            assessment = lab.processes.simulator.simulate_candidate(command)
+            if (
+                not assessment.safe
+                or assessment.pre_state.state_digest != observation.snapshot.state_digest
+            ):
+                raise RuntimeError(f"{condition} candidate did not bind the common pre-state")
+            permit = lab.controller.permit_issuer.issue(
+                request=request,
+                pre_observation=observation,
+                decision=decision,
+                command=command,
+                assessment=assessment,
+            )
+            prepared.append((request, permit, observation, decision, assessment))
+
+        first = lab.processes.plc_gateway.execute(
+            request=prepared[0][0],
+            permit=prepared[0][1],
+            pre_observation=prepared[0][2],
+            decision=prepared[0][3],
+            assessment=prepared[0][4],
+        )
+        second = lab.processes.plc_gateway.execute(
+            request=prepared[1][0],
+            permit=prepared[1][1],
+            pre_observation=prepared[1][2],
+            decision=prepared[1][3],
+            assessment=prepared[1][4],
+        )
+        after = lab.capture_observation(
+            correlation_id="m4c:competing:after",
+            challenge_nonce="m4c:competing:after-challenge-0001",
+        )
+        plc_health = lab.processes.plc_admin.health()
+        first_valid = first.verify_for_transaction(
+            lab.processes.plc_info.public_key,
+            request=prepared[0][0],
+            permit=prepared[0][1],
+            pre_observation=prepared[0][2],
+            expected_plc_id=lab.processes.plc_info.plc_id,
+            expected_plc_key_id=lab.processes.plc_info.key_id,
+            expected_plc_boot_epoch=lab.processes.plc_info.boot_epoch,
+        )
+        second_valid = second.verify_for_transaction(
+            lab.processes.plc_info.public_key,
+            request=prepared[1][0],
+            permit=prepared[1][1],
+            pre_observation=prepared[1][2],
+            expected_plc_id=lab.processes.plc_info.plc_id,
+            expected_plc_key_id=lab.processes.plc_info.key_id,
+            expected_plc_boot_epoch=lab.processes.plc_info.boot_epoch,
+        )
+        stale_reasons = {
+            "topology_digest_changed",
+            "precommit_state_version_changed",
+            "precommit_state_digest_changed",
+            "precommit_observation_changed",
+        }
+        state_unchanged_by_second = (
+            first.post_state_digest
+            == second.pre_state_digest
+            == after.snapshot.state_digest
+        )
+        criteria_met = all(
+            (
+                prepared[0][2].envelope_digest == prepared[1][2].envelope_digest,
+                first.status is CommandStatus.APPLIED,
+                first.dispatch_phase is DispatchPhase.COMMITTED,
+                first_valid,
+                second.status is CommandStatus.REJECTED,
+                second.dispatch_phase is DispatchPhase.PRE_DISPATCH,
+                second.reason in stale_reasons,
+                second_valid,
+                state_unchanged_by_second,
+                after.snapshot.isolated_resources == ("feeder-1",),
+                plc_health.get("execute_requests") == 2,
+                plc_health.get("replay_reservations") == 1,
+            )
+        )
+        if not criteria_met:
+            raise RuntimeError("competing prepared transaction criteria were not met")
+        return {
+            "condition": "competing_prepared_transactions",
+            "common_signed_pre_state": True,
+            "first_status": first.status.value,
+            "first_phase": first.dispatch_phase.value,
+            "first_acknowledgment_valid": first_valid,
+            "second_status": second.status.value,
+            "second_phase": second.dispatch_phase.value,
+            "second_reason": second.reason,
+            "second_acknowledgment_valid": second_valid,
+            "second_state_effect_absent": state_unchanged_by_second,
+            "final_isolated_resources": list(after.snapshot.isolated_resources),
+            "plc_execute_requests": plc_health.get("execute_requests"),
+            "replay_reservation_count": plc_health.get("replay_reservations"),
+            "criteria_met": criteria_met,
+        }
+
+
 def _git_value(*arguments: str) -> str:
     completed = subprocess.run(  # noqa: S603 - fixed git executable/arguments
         ["/usr/bin/git", *arguments],
@@ -763,13 +904,16 @@ def run_fault_campaign(
     for index, condition in enumerate(CONDITION_ORDER):
         cases.append(_run_controller_condition(condition, index))
         if progress is not None:
-            progress(index + 1, len(CONDITION_ORDER) + 2)
+            progress(index + 1, len(CONDITION_ORDER) + 3)
     restart_replay = _run_full_stack_restart_replay()
     if progress is not None:
-        progress(len(CONDITION_ORDER) + 1, len(CONDITION_ORDER) + 2)
+        progress(len(CONDITION_ORDER) + 1, len(CONDITION_ORDER) + 3)
     replay_crash = _run_replay_ledger_crash_checks()
     if progress is not None:
-        progress(len(CONDITION_ORDER) + 2, len(CONDITION_ORDER) + 2)
+        progress(len(CONDITION_ORDER) + 2, len(CONDITION_ORDER) + 3)
+    competing = _run_competing_prepared_transactions()
+    if progress is not None:
+        progress(len(CONDITION_ORDER) + 3, len(CONDITION_ORDER) + 3)
     evaluator = _run_evaluator_adversarial_checks()
     git_end = _git_state()
     if git_start["commit"] != git_end["commit"]:
@@ -789,6 +933,7 @@ def run_fault_campaign(
         "evaluator": evaluator,
         "full_stack_restart_replay": restart_replay,
         "replay_ledger_crash_checks": replay_crash,
+        "competing_prepared_transactions": competing,
     }
     missing_post = cases[0]["independent_missing_post_evaluation"]
     contradiction = cases[-1]["independent_contradiction_evaluation"]
@@ -808,7 +953,7 @@ def run_fault_campaign(
         and contradiction.get("report_valid") is True
     ) and restart_replay["criteria_met"] is True and (
         replay_crash["criteria_met"] is True
-    ) and all(
+    ) and competing["criteria_met"] is True and all(
         (
             evaluator["signed_report_status"] == "input_rejected",
             evaluator["signed_report_valid"] is True,
@@ -817,7 +962,7 @@ def run_fault_campaign(
         )
     )
     return {
-        "schema_version": "m4c-fault-campaign-v5",
+        "schema_version": "m4c-fault-campaign-v6",
         "started_at_utc": started.isoformat(),
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "git": {
@@ -830,6 +975,7 @@ def run_fault_campaign(
         "evaluator_adversarial_checks": evaluator,
         "full_stack_restart_replay": restart_replay,
         "replay_ledger_crash_checks": replay_crash,
+        "competing_prepared_transactions": competing,
         "deterministic_projection_sha256": sha256_bytes(canonical_json_bytes(projection)),
         "experiment_criteria_met": criteria_met,
         "claim_boundary": (
