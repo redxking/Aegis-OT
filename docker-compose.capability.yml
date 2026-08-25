@@ -16,6 +16,7 @@ services:
       - --port
       - "8081"
     environment:
+      AEGIS_EFFECT_COORDINATION_MODE: disabled
       AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_CANDIDATE_URL: http://candidate:8085
@@ -93,6 +94,7 @@ services:
       - --port
       - "8083"
     environment:
+      AEGIS_EFFECT_COORDINATION_MODE: disabled
       AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1

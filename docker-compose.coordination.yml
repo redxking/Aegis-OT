@@ -1,0 +1,53 @@
+services:
+  coordination-init:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m4i_coordination_init]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    restart: "no"
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 128m
+    environment:
+      AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/gateway-coordination/gateway-coordination.json
+      AEGIS_GATEWAY_WORKLOAD_SUBJECT: "${AEGIS_GATEWAY_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:gateway}"
+      AEGIS_GATEWAY_RUNTIME_UID: "65532"
+      AEGIS_GATEWAY_RUNTIME_GID: "65532"
+      AEGIS_OT_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/ot-coordination/ot-coordination.json
+      AEGIS_OT_WORKLOAD_SUBJECT: "${AEGIS_OT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:ot-adapter}"
+      AEGIS_OT_RUNTIME_UID: "65532"
+      AEGIS_OT_RUNTIME_GID: "65535"
+    volumes:
+      - gateway_coordination:/var/lib/aegis-ot/gateway-coordination
+      - ot_coordination:/var/lib/aegis-ot/ot-coordination
+
+  segmented-gateway:
+    environment:
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/gateway-coordination/gateway-coordination.json
+    volumes:
+      - gateway_coordination:/var/lib/aegis-ot/gateway-coordination
+    depends_on:
+      coordination-init:
+        condition: service_completed_successfully
+
+  ot-adapter:
+    environment:
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_OT_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/ot-coordination/ot-coordination.json
+    volumes:
+      - ot_coordination:/var/lib/aegis-ot/ot-coordination
+    depends_on:
+      coordination-init:
+        condition: service_completed_successfully
+
+volumes:
+  gateway_coordination: {}
+  ot_coordination: {}

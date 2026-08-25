@@ -39,6 +39,12 @@ from .workload_identity import (
 MAX_LIFETIME_SECONDS = 24 * 60 * 60
 DEFAULT_LIFETIME_SECONDS = 60 * 60
 
+# These M4i audiences are kept here as wire-level identity claims rather than
+# imported from the coordination protocol models.  Identity provisioning must
+# remain available even when a coordination runtime is not imported.
+EFFECT_COORDINATOR_AUDIENCE = "aegis-ot:m4i:effect-coordinator"
+GATEWAY_COORDINATION_AUDIENCE = "aegis-ot:m4i:gateway"
+
 AUTHORITY_PUBLIC_FILENAME = "authority.public"
 TRUST_BUNDLE_FILENAME = "trust-bundle.json"
 CREDENTIAL_FILENAMES = {
@@ -345,7 +351,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
                 Path(_required_environment("AEGIS_GATEWAY_PUBLIC_KEY_FILE"))
             ),
             _required_environment("AEGIS_GATEWAY_WORKLOAD_SUBJECT"),
-            (OT_CAPABILITY_AUDIENCE,),
+            (OT_CAPABILITY_AUDIENCE, EFFECT_COORDINATOR_AUDIENCE),
         ),
         (
             WorkloadRole.OT_ADAPTER,
@@ -353,7 +359,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
                 Path(_required_environment("AEGIS_OT_PUBLIC_KEY_FILE"))
             ),
             _required_environment("AEGIS_OT_WORKLOAD_SUBJECT"),
-            (GATEWAY_CAPABILITY_AUDIENCE,),
+            (GATEWAY_CAPABILITY_AUDIENCE, GATEWAY_COORDINATION_AUDIENCE),
         ),
     )
     _require_distinct_identity_keys(

@@ -395,3 +395,12 @@ def test_m4g_overlay_extends_the_authenticated_replay_stack() -> None:
         "-m",
         "aegis_ot.m4g_probe",
     ]
+
+
+def test_m4g_legacy_gateway_and_ot_explicitly_disable_effect_coordination() -> None:
+    assert _service("segmented-gateway")["environment"][
+        "AEGIS_EFFECT_COORDINATION_MODE"
+    ] == "disabled"
+    assert _service("ot-adapter")["environment"][
+        "AEGIS_EFFECT_COORDINATION_MODE"
+    ] == "disabled"
