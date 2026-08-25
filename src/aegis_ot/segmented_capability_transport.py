@@ -7,6 +7,7 @@ they are not TLS workload identity or hostile-host isolation evidence.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import secrets
@@ -34,6 +35,25 @@ from .capability_models import (
     SignedObservationEnvelope,
 )
 from .capability_plc import CapabilityPlcPlantPort
+from .coordination_journal import (
+    CoordinationAttemptStatus,
+    CoordinationJournalError,
+    CoordinationJournalRecord,
+    DurableGatewayCoordinationJournal,
+    EffectCommitAttempt,
+    EffectQueryAttempt,
+)
+from .coordination_models import (
+    EFFECT_COORDINATOR_AUDIENCE,
+    GATEWAY_COORDINATION_AUDIENCE,
+    CoordinationReceipt,
+    EffectDisposition,
+    EffectIdentity,
+    SignedEffectCommitRequest,
+    SignedEffectOutcome,
+    SignedEffectPrepareRequest,
+    SignedEffectQueryRequest,
+)
 from .crypto import decode_urlsafe_b64
 from .models import Decision
 from .pandapower_plant import PhysicalSimulationError
@@ -68,6 +88,7 @@ from .segmented_capability_models import (
     WorkloadSignedCapabilityResponse,
 )
 from .workload_identity import (
+    ResolvedWorkloadIdentity,
     WorkloadCredentialBinding,
     WorkloadCredentialRejected,
     WorkloadIdentityError,
@@ -1116,8 +1137,9 @@ class WorkloadRemoteVirtualPlcPort(RemoteVirtualPlcPort):
         nonce_factory: Callable[[], str] = lambda: secrets.token_urlsafe(24),
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
-        gateway = gateway_identity.resolve()
-        target = ot_identity.resolve()
+        evaluated_at = clock()
+        gateway = gateway_identity.resolve(now=evaluated_at)
+        target = ot_identity.resolve(now=evaluated_at)
         if gateway.credential.credential.role is not WorkloadRole.GATEWAY:
             raise ValueError("local workload identity is not a gateway")
         if target.credential.credential.role is not WorkloadRole.OT_ADAPTER:
@@ -1241,6 +1263,763 @@ class WorkloadRemoteVirtualPlcPort(RemoteVirtualPlcPort):
                 "OT workload response or transaction binding is invalid"
             )
         return verified.response.acknowledgment
+
+
+class CoordinatedWorkloadRemoteVirtualPlcPort(WorkloadRemoteVirtualPlcPort):
+    """Gateway-side durable prepare/commit/query transport for M4i effects.
+
+    A commit request is sent at most once.  Once an outbound commit intent is
+    durable, every later call reconciles by query and never repeats the commit.
+    The local journal is the ordering boundary: no request or signed response is
+    exposed until its exact artifact has been fsynced by the journal.
+
+    Observer, permit, and PLC stable IDs plus observer/permit public keys remain
+    explicit configured pins. Historical boot epochs come from the accepted
+    dispatch and the historical PLC key comes from its authority-validated
+    coordinator credential. Observer or permit signing-key rotation is outside
+    this adapter's recovery boundary.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        ot: OtHealthMetadata,
+        observer: ObserverHealthMetadata,
+        gateway_identity: LocalWorkloadIdentity,
+        ot_identity: WorkloadCredentialBinding,
+        coordination_journal: DurableGatewayCoordinationJournal,
+        exchange: HttpExchange = urllib_http_exchange,
+        clock: Clock = utc_now,
+        call_ttl: timedelta = DEFAULT_CALL_TTL,
+        nonce_factory: Callable[[], str] = lambda: secrets.token_urlsafe(24),
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        if gateway_identity.binding.expected_audience != EFFECT_COORDINATOR_AUDIENCE:
+            raise ValueError("gateway identity lacks the effect-coordinator audience")
+        if ot_identity.expected_audience != GATEWAY_COORDINATION_AUDIENCE:
+            raise ValueError("OT identity lacks the gateway-coordination audience")
+        if observer.boot_epoch != ot.observer_boot_epoch:
+            raise ValueError("observer discovery does not match the OT trust boundary")
+        if coordination_journal.owner_subject != gateway_identity.binding.expected_subject:
+            raise ValueError("gateway coordination journal owner subject is inconsistent")
+        super().__init__(
+            base_url,
+            ot=ot,
+            gateway_identity=gateway_identity,
+            ot_identity=ot_identity,
+            exchange=exchange,
+            clock=clock,
+            call_ttl=call_ttl,
+            nonce_factory=nonce_factory,
+            timeout_seconds=timeout_seconds,
+        )
+        self.observer = observer
+        self.coordination_journal = coordination_journal
+        self.workload_verifier = ot_identity.verifier
+        self.gateway_subject = gateway_identity.binding.expected_subject
+        self.coordinator_subject = ot_identity.expected_subject
+
+        # Both sides must be rooted in the verifier used for retained-response
+        # validation.  This catches accidentally split trust domains at startup.
+        initialized_at = self.clock()
+        gateway, _ = self._current_identities(
+            evaluated_at=initialized_at,
+            require_pinned_target=True,
+        )
+        try:
+            self.workload_verifier.verify_credential(
+                gateway.credential,
+                expected_role=WorkloadRole.GATEWAY,
+                expected_audience=EFFECT_COORDINATOR_AUDIENCE,
+                expected_subject=self.gateway_subject,
+                now=initialized_at,
+            )
+        except WorkloadIdentityError as exc:
+            raise ValueError(
+                "gateway and OT coordination identities do not share configured trust"
+            ) from exc
+
+    def _current_identities(
+        self,
+        *,
+        evaluated_at: datetime,
+        require_pinned_target: bool,
+    ) -> tuple[ResolvedWorkloadIdentity, ResolvedWorkloadIdentity]:
+        try:
+            gateway = self.gateway_identity.resolve(now=evaluated_at)
+            target = self.ot_identity.resolve(now=evaluated_at)
+        except WorkloadCredentialRejected as exc:
+            raise CapabilityTransportRejected(
+                "workload_identity_rejected_before_coordination",
+                status_code=403,
+                dispatch_attempts=0,
+            ) from exc
+        except WorkloadIdentityUnavailable as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "workload_identity_unavailable_before_coordination"
+            ) from exc
+        if (
+            gateway.subject != self.gateway_subject
+            or gateway.key_id != self.gateway_key_id
+            or gateway.public_key.public_bytes_raw()
+            != self.gateway_private_key.public_key().public_bytes_raw()
+            or target.subject != self.coordinator_subject
+        ):
+            raise CapabilityTransportRejected(
+                "workload_identity_changed_before_coordination",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+        if require_pinned_target and (
+            target.key_id != self.ot.key_id
+            or target.public_key.public_bytes_raw() != self.ot.public_key.public_bytes_raw()
+        ):
+            raise CapabilityTransportRejected(
+                "ot_identity_changed_before_new_commit",
+                status_code=409,
+                dispatch_attempts=0,
+            )
+        return gateway, target
+
+    def preflight_identity(self) -> None:
+        """Verify current trust and the pinned target before a new effect."""
+
+        self._current_identities(
+            evaluated_at=self.clock(),
+            require_pinned_target=True,
+        )
+
+    def _verify_prepare_request(
+        self,
+        request: SignedEffectPrepareRequest,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        return request.verify_complete_for_admission(
+            self.workload_verifier,
+            expected_gateway_subject=self.gateway_subject,
+            observer_public_key=self.observer.public_key,
+            expected_observer_id=self.observer.observer_id,
+            expected_observer_key_id=self.observer.key_id,
+            expected_observer_boot_epoch=self.observer.boot_epoch,
+            permit_public_key=self.ot.permit_public_key,
+            expected_permit_key_id=self.ot.permit_key_id,
+            expected_plc_id=self.ot.plc_id,
+            expected_plc_key_id=self.ot.key_id,
+            expected_plc_boot_epoch=self.ot.boot_epoch,
+            evaluated_at=evaluated_at,
+        )
+
+    def _verify_receipt(
+        self,
+        receipt: CoordinationReceipt,
+        *,
+        request: SignedEffectPrepareRequest,
+        current_target: ResolvedWorkloadIdentity,
+        evaluated_at: datetime,
+    ) -> bool:
+        return (
+            receipt.coordinator_credential == current_target.credential
+            and receipt.verify_for_request(
+                self.workload_verifier,
+                request=request,
+                expected_gateway_subject=self.gateway_subject,
+                expected_coordinator_subject=self.coordinator_subject,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    def _verify_outcome(
+        self,
+        outcome: SignedEffectOutcome,
+        *,
+        request: SignedEffectCommitRequest | SignedEffectQueryRequest,
+        current_target: ResolvedWorkloadIdentity,
+        evaluated_at: datetime,
+    ) -> bool:
+        (
+            observer_id,
+            observer_key_id,
+            observer_boot_epoch,
+            permit_key_id,
+            plc_id,
+            plc_key_id,
+            plc_boot_epoch,
+        ) = self._outcome_identity_bindings(outcome)
+        return (
+            outcome.coordinator_credential == current_target.credential
+            and outcome.verify_for_request(
+                self.workload_verifier,
+                request=request,
+                expected_gateway_subject=self.gateway_subject,
+                expected_coordinator_subject=self.coordinator_subject,
+                observer_public_key=self.observer.public_key,
+                expected_observer_id=observer_id,
+                expected_observer_key_id=observer_key_id,
+                expected_observer_boot_epoch=observer_boot_epoch,
+                permit_public_key=self.ot.permit_public_key,
+                expected_permit_key_id=permit_key_id,
+                expected_plc_id=plc_id,
+                expected_plc_key_id=plc_key_id,
+                expected_plc_boot_epoch=plc_boot_epoch,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    def _outcome_identity_bindings(
+        self,
+        outcome: SignedEffectOutcome,
+    ) -> tuple[str, str, str, str, str, str, str]:
+        """Combine configured identity pins with historical lifecycle values."""
+
+        acceptance = outcome.acceptance
+        if acceptance is None:
+            return (
+                self.observer.observer_id,
+                self.observer.key_id,
+                self.observer.boot_epoch,
+                self.ot.permit_key_id,
+                self.ot.plc_id,
+                self.ot.key_id,
+                self.ot.boot_epoch,
+            )
+        dispatch = acceptance.commit_request.receipt.prepare_request.dispatch
+        return (
+            self.observer.observer_id,
+            self.observer.key_id,
+            dispatch.pre_observation.observer_boot_epoch,
+            self.ot.permit_key_id,
+            self.ot.plc_id,
+            acceptance.coordinator_credential.credential.key_id,
+            dispatch.permit.target_plc_boot_epoch,
+        )
+
+    @staticmethod
+    def _retained_outcome_request(
+        record: CoordinationJournalRecord,
+        outcome: SignedEffectOutcome,
+    ) -> SignedEffectCommitRequest | SignedEffectQueryRequest | None:
+        for attempt in reversed(record.attempts):
+            if (
+                isinstance(attempt, (EffectCommitAttempt, EffectQueryAttempt))
+                and attempt.outcome == outcome
+            ):
+                return attempt.request
+        return None
+
+    def _verify_retained_terminal_outcome(
+        self,
+        record: CoordinationJournalRecord,
+        outcome: SignedEffectOutcome,
+    ) -> None:
+        request = self._retained_outcome_request(record, outcome)
+        if request is None:
+            raise ConsequentialTransportOutcomeUnknown(
+                "terminal coordination outcome lost its retained request"
+            )
+        evaluated_at = self.clock()
+        try:
+            self._current_identities(
+                evaluated_at=evaluated_at,
+                require_pinned_target=False,
+            )
+        except CapabilityTransportError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "terminal outcome cannot be exposed under current workload trust"
+            ) from exc
+        (
+            observer_id,
+            observer_key_id,
+            observer_boot_epoch,
+            permit_key_id,
+            plc_id,
+            plc_key_id,
+            plc_boot_epoch,
+        ) = self._outcome_identity_bindings(outcome)
+        if not outcome.verify_historical_for_request(
+            self.workload_verifier,
+            request=request,
+            expected_gateway_subject=self.gateway_subject,
+            expected_coordinator_subject=self.coordinator_subject,
+            observer_public_key=self.observer.public_key,
+            expected_observer_id=observer_id,
+            expected_observer_key_id=observer_key_id,
+            expected_observer_boot_epoch=observer_boot_epoch,
+            permit_public_key=self.ot.permit_public_key,
+            expected_permit_key_id=permit_key_id,
+            expected_plc_id=plc_id,
+            expected_plc_key_id=plc_key_id,
+            expected_plc_boot_epoch=plc_boot_epoch,
+            evaluated_at=evaluated_at,
+        ):
+            raise ConsequentialTransportOutcomeUnknown(
+                "retained terminal outcome failed current trust verification"
+            )
+
+    @staticmethod
+    def _response_evidence(response: HttpExchangeResponse) -> str:
+        return hashlib.sha256(response.body).hexdigest()
+
+    @staticmethod
+    def _failure_evidence(reason: str) -> str:
+        return hashlib.sha256(reason.encode("utf-8")).hexdigest()
+
+    def _close_before_commit(
+        self,
+        effect: EffectIdentity,
+        *,
+        reason: str,
+        evidence_sha256: str,
+        recorded_at: datetime,
+    ) -> None:
+        try:
+            self.coordination_journal.close_not_dispatched(
+                effect,
+                reason=reason,
+                evidence_sha256=evidence_sha256,
+                recorded_at=recorded_at,
+            )
+        except CoordinationJournalError as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "gateway could not durably close the uncommitted effect"
+            ) from exc
+
+    def _prepare(
+        self,
+        dispatch: SegmentedCapabilityDispatch,
+    ) -> CoordinationReceipt:
+        issued_at = self.clock()
+        self._current_identities(
+            evaluated_at=issued_at,
+            require_pinned_target=True,
+        )
+        request = SignedEffectPrepareRequest.issue(
+            dispatch=dispatch,
+            signer=self.gateway_identity.signer,
+            request_nonce=_nonce(self.nonce_factory),
+            issued_at=issued_at,
+            expires_at=issued_at + self.call_ttl,
+        )
+        if not self._verify_prepare_request(request, evaluated_at=issued_at):
+            raise CapabilityTransportRejected(
+                "coordination_inner_dispatch_not_trusted",
+                status_code=403,
+                dispatch_attempts=0,
+            )
+        try:
+            self.coordination_journal.begin(request, recorded_at=issued_at)
+        except CoordinationJournalError as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "gateway could not durably retain the prepare intent"
+            ) from exc
+
+        try:
+            response = self._raw(
+                "POST",
+                "/v1/effects/prepare",
+                request,
+                consequential=False,
+            )
+        except (CapabilityTransportError, OSError, TimeoutError) as exc:
+            retained_at = self.clock()
+            reason = "prepare_response_unavailable"
+            self._close_before_commit(
+                request.effect,
+                reason=reason,
+                evidence_sha256=self._failure_evidence(reason),
+                recorded_at=retained_at,
+            )
+            raise CapabilityPreDispatchUnavailable(
+                "prepare response was unavailable; no commit was sent"
+            ) from exc
+
+        retained_at = self.clock()
+        if not 200 <= response.status_code < 300:
+            reason = "prepare_rejected_before_commit"
+            try:
+                failure = _parse_model(response, TransportFailureBody)
+                reason = failure.reason
+            except CapabilityTransportProtocolError:
+                pass
+            self._close_before_commit(
+                request.effect,
+                reason=reason,
+                evidence_sha256=self._response_evidence(response),
+                recorded_at=retained_at,
+            )
+            if 400 <= response.status_code < 500:
+                raise CapabilityTransportRejected(
+                    reason,
+                    status_code=response.status_code,
+                    dispatch_attempts=0,
+                )
+            raise CapabilityPreDispatchUnavailable(
+                "prepare failed before commit; no effect was dispatched"
+            )
+        try:
+            receipt = _parse_model(response, CoordinationReceipt)
+            _, current_target = self._current_identities(
+                evaluated_at=retained_at,
+                require_pinned_target=True,
+            )
+            if not self._verify_receipt(
+                receipt,
+                request=request,
+                current_target=current_target,
+                evaluated_at=retained_at,
+            ):
+                raise CapabilityTransportProtocolError(
+                    "prepare receipt signature or binding is invalid"
+                )
+            self.coordination_journal.retain_preparation(
+                request,
+                receipt,
+                recorded_at=max(retained_at, receipt.prepared_at),
+            )
+        except (CapabilityTransportError, CoordinationJournalError) as exc:
+            reason = "prepare_response_invalid_or_not_durable"
+            self._close_before_commit(
+                request.effect,
+                reason=reason,
+                evidence_sha256=self._response_evidence(response),
+                recorded_at=max(retained_at, receipt.prepared_at)
+                if "receipt" in locals()
+                else retained_at,
+            )
+            raise CapabilityPreDispatchUnavailable(
+                "prepare response was not durably trusted; no commit was sent"
+            ) from exc
+        return receipt
+
+    def _mark_commit_ambiguous(
+        self,
+        request: SignedEffectCommitRequest,
+        *,
+        reason: str,
+        evidence_sha256: str,
+        recorded_at: datetime,
+    ) -> None:
+        try:
+            self.coordination_journal.mark_commit_unknown(
+                request,
+                reason=reason,
+                failure_evidence_sha256=evidence_sha256,
+                recorded_at=recorded_at,
+            )
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "commit outcome is unknown and its ambiguity could not be retained"
+            ) from exc
+
+    def _expose_outcome(
+        self,
+        outcome: SignedEffectOutcome,
+    ) -> PlcCommandAcknowledgment:
+        if outcome.disposition is EffectDisposition.APPLIED:
+            acknowledgment = outcome.acknowledgment
+            if acknowledgment is None:  # Closed model defense in depth.
+                raise ConsequentialTransportOutcomeUnknown(
+                    "applied effect outcome omitted its exact acknowledgment"
+                )
+            return acknowledgment
+        if outcome.disposition is EffectDisposition.REJECTED:
+            acknowledgment = outcome.acknowledgment
+            if acknowledgment is None:  # Closed model defense in depth.
+                raise ConsequentialTransportOutcomeUnknown(
+                    "rejected effect outcome omitted its exact acknowledgment"
+                )
+            return acknowledgment
+        if outcome.disposition is EffectDisposition.NOT_DISPATCHED:
+            raise CapabilityTransportRejected(
+                outcome.reason,
+                status_code=409,
+                dispatch_attempts=0,
+            )
+        raise ConsequentialTransportOutcomeUnknown(outcome.reason)
+
+    def _commit(self, receipt: CoordinationReceipt) -> PlcCommandAcknowledgment:
+        issued_at = self.clock()
+        self._current_identities(
+            evaluated_at=issued_at,
+            require_pinned_target=True,
+        )
+        request = SignedEffectCommitRequest.issue(
+            receipt=receipt,
+            signer=self.gateway_identity.signer,
+            request_nonce=_nonce(self.nonce_factory),
+            issued_at=issued_at,
+            expires_at=issued_at + self.call_ttl,
+        )
+        try:
+            self.coordination_journal.begin_commit(request, recorded_at=issued_at)
+        except CoordinationJournalError as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "gateway could not durably retain commit intent; commit was not sent"
+            ) from exc
+
+        try:
+            response = self._raw(
+                "POST",
+                "/v1/effects/commit",
+                request,
+                consequential=True,
+            )
+        except (ConsequentialTransportOutcomeUnknown, CapabilityTransportError) as exc:
+            reason = "commit_response_unavailable"
+            self._mark_commit_ambiguous(
+                request,
+                reason=reason,
+                evidence_sha256=self._failure_evidence(reason),
+                recorded_at=self.clock(),
+            )
+            raise ConsequentialTransportOutcomeUnknown(
+                "commit response was unavailable; reconcile by query"
+            ) from exc
+
+        evaluated_at = self.clock()
+        try:
+            outcome = _parse_model(response, SignedEffectOutcome)
+            _, current_target = self._current_identities(
+                evaluated_at=evaluated_at,
+                require_pinned_target=False,
+            )
+            if not self._verify_outcome(
+                outcome,
+                request=request,
+                current_target=current_target,
+                evaluated_at=evaluated_at,
+            ):
+                raise CapabilityTransportProtocolError(
+                    "commit outcome signature or binding is invalid"
+                )
+            self.coordination_journal.retain_commit_outcome(
+                request,
+                outcome,
+                recorded_at=max(evaluated_at, outcome.signed_at),
+            )
+        except (CapabilityTransportError, CoordinationJournalError) as exc:
+            reason = "commit_response_invalid_or_not_durable"
+            self._mark_commit_ambiguous(
+                request,
+                reason=reason,
+                evidence_sha256=self._response_evidence(response),
+                recorded_at=evaluated_at,
+            )
+            raise ConsequentialTransportOutcomeUnknown(
+                "commit response was not durably trusted; reconcile by query"
+            ) from exc
+        return self._expose_outcome(outcome)
+
+    def _latest_commit(
+        self,
+        record: CoordinationJournalRecord,
+    ) -> EffectCommitAttempt | None:
+        return next(
+            (
+                attempt
+                for attempt in reversed(record.attempts)
+                if isinstance(attempt, EffectCommitAttempt)
+            ),
+            None,
+        )
+
+    def _query(self, record: CoordinationJournalRecord) -> PlcCommandAcknowledgment:
+        commit_attempt = self._latest_commit(record)
+        if commit_attempt is None:
+            raise CapabilityPreDispatchUnavailable(
+                "coordination record has no retained commit intent to reconcile"
+            )
+        if commit_attempt.status is CoordinationAttemptStatus.REQUEST_RETAINED:
+            self._mark_commit_ambiguous(
+                commit_attempt.request,
+                reason="recovered_retained_commit_intent",
+                evidence_sha256=commit_attempt.request.digest,
+                recorded_at=self.clock(),
+            )
+
+        issued_at = self.clock()
+        try:
+            self._current_identities(
+                evaluated_at=issued_at,
+                require_pinned_target=False,
+            )
+        except CapabilityTransportError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "effect remains unknown because query identity preflight failed"
+            ) from exc
+        request = SignedEffectQueryRequest.issue(
+            effect=record.effect,
+            signer=self.gateway_identity.signer,
+            request_nonce=_nonce(self.nonce_factory),
+            issued_at=issued_at,
+            expires_at=issued_at + self.call_ttl,
+        )
+        try:
+            self.coordination_journal.begin_query(request, recorded_at=issued_at)
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "gateway could not durably retain reconciliation intent"
+            ) from exc
+
+        try:
+            response = self._raw(
+                "POST",
+                "/v1/effects/query",
+                request,
+                consequential=False,
+            )
+        except (CapabilityTransportError, OSError, TimeoutError) as exc:
+            reason = "query_response_unavailable"
+            try:
+                self.coordination_journal.fail_query(
+                    request,
+                    reason=reason,
+                    failure_evidence_sha256=self._failure_evidence(reason),
+                    recorded_at=self.clock(),
+                )
+            except CoordinationJournalError as journal_exc:
+                raise ConsequentialTransportOutcomeUnknown(
+                    "effect remains unknown and query failure was not durable"
+                ) from journal_exc
+            raise ConsequentialTransportOutcomeUnknown(
+                "effect remains unknown after one reconciliation query"
+            ) from exc
+
+        evaluated_at = self.clock()
+        try:
+            outcome = _parse_model(response, SignedEffectOutcome)
+            _, current_target = self._current_identities(
+                evaluated_at=evaluated_at,
+                require_pinned_target=False,
+            )
+            if not self._verify_outcome(
+                outcome,
+                request=request,
+                current_target=current_target,
+                evaluated_at=evaluated_at,
+            ):
+                raise CapabilityTransportProtocolError(
+                    "query outcome signature or binding is invalid"
+                )
+            self.coordination_journal.complete_query(
+                request,
+                outcome,
+                recorded_at=max(evaluated_at, outcome.signed_at),
+            )
+        except (CapabilityTransportError, CoordinationJournalError) as exc:
+            reason = "query_response_invalid_or_not_durable"
+            try:
+                self.coordination_journal.fail_query(
+                    request,
+                    reason=reason,
+                    failure_evidence_sha256=self._response_evidence(response),
+                    recorded_at=evaluated_at,
+                )
+            except CoordinationJournalError as journal_exc:
+                raise ConsequentialTransportOutcomeUnknown(
+                    "effect remains unknown and query failure was not durable"
+                ) from journal_exc
+            raise ConsequentialTransportOutcomeUnknown(
+                "query response was not durably trusted"
+            ) from exc
+        return self._expose_outcome(outcome)
+
+    def _resume(self, record: CoordinationJournalRecord) -> PlcCommandAcknowledgment:
+        if record.state.terminal:
+            outcome = record.terminal_outcome
+            if outcome is None:
+                raise CapabilityTransportRejected(
+                    "effect_is_durably_not_dispatched",
+                    status_code=409,
+                    dispatch_attempts=0,
+                )
+            self._verify_retained_terminal_outcome(record, outcome)
+            return self._expose_outcome(outcome)
+        commit_attempt = self._latest_commit(record)
+        if commit_attempt is not None:
+            return self._query(record)
+        receipt = record.latest_receipt
+        if receipt is not None:
+            return self._commit(receipt)
+        raise CapabilityPreDispatchUnavailable(
+            "prepare did not produce a durable receipt; no commit was sent"
+        )
+
+    def _reconcile(self, record: CoordinationJournalRecord) -> PlcCommandAcknowledgment:
+        """Recover retained state without ever initiating a new commit."""
+
+        if record.state.terminal:
+            return self._resume(record)
+        if self._latest_commit(record) is not None:
+            return self._query(record)
+        receipt = record.latest_receipt
+        evidence_sha256 = receipt.digest if receipt is not None else record.effect.digest
+        self._close_before_commit(
+            record.effect,
+            reason="recovered_before_commit_intent",
+            evidence_sha256=evidence_sha256,
+            recorded_at=self.clock(),
+        )
+        raise CapabilityTransportRejected(
+            "recovered_before_commit_intent",
+            status_code=409,
+            dispatch_attempts=0,
+        )
+
+    def execute(
+        self,
+        *,
+        request: CapabilityActionRequest,
+        permit: CapabilityExecutionPermit,
+        pre_observation: SignedObservationEnvelope,
+        decision: Decision,
+        assessment: CandidateAssessment,
+    ) -> PlcCommandAcknowledgment:
+        dispatch = SegmentedCapabilityDispatch(
+            request=request,
+            pre_observation=pre_observation,
+            decision=decision,
+            assessment=assessment,
+            permit=permit,
+        )
+        effect = EffectIdentity.from_dispatch(dispatch)
+        try:
+            existing = self.coordination_journal.get(effect)
+        except CoordinationJournalError as exc:
+            raise CapabilityPreDispatchUnavailable(
+                "gateway coordination journal is unavailable"
+            ) from exc
+        if existing is not None:
+            return self._resume(existing)
+        receipt = self._prepare(dispatch)
+        return self._commit(receipt)
+
+    def reconcile_effect(self, effect: EffectIdentity | str) -> PlcCommandAcknowledgment:
+        """Issue exactly one query for one durably pending effect."""
+
+        try:
+            record = self.coordination_journal.get(effect)
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "gateway coordination journal is unavailable"
+            ) from exc
+        if record is None:
+            raise CapabilityPreDispatchUnavailable("coordination effect is not recorded")
+        return self._reconcile(record)
+
+    def reconcile_pending_once(self) -> PlcCommandAcknowledgment | None:
+        """Reconcile at most one pending entry and never loop or retry."""
+
+        try:
+            pending = self.coordination_journal.pending()
+        except CoordinationJournalError as exc:
+            raise ConsequentialTransportOutcomeUnknown(
+                "gateway coordination journal is unavailable"
+            ) from exc
+        if not pending:
+            return None
+        return self._reconcile(pending[0])
 
 
 def _is_sha256(value: Any) -> bool:

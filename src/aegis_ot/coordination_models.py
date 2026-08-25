@@ -1282,6 +1282,132 @@ class SignedEffectOutcome(_ClosedModel):
             and self.verify(coordinator_public_key)
         )
 
+    def verify_historical_for_request(
+        self,
+        verifier: WorkloadIdentityVerifier,
+        *,
+        request: SignedEffectCommitRequest | SignedEffectQueryRequest,
+        expected_gateway_subject: str,
+        expected_coordinator_subject: str,
+        observer_public_key: Ed25519PublicKey,
+        expected_observer_id: str,
+        expected_observer_key_id: str,
+        expected_observer_boot_epoch: str,
+        permit_public_key: Ed25519PublicKey,
+        expected_permit_key_id: str,
+        expected_plc_id: str,
+        expected_plc_key_id: str,
+        expected_plc_boot_epoch: str,
+        evaluated_at: datetime,
+        expected_audience: str = GATEWAY_COORDINATION_AUDIENCE,
+        maximum_future_skew: timedelta = MAX_COORDINATION_FUTURE_SKEW,
+    ) -> bool:
+        """Revalidate a retained outcome without reviving its request TTL.
+
+        A commit request credential is checked at durable commit acceptance;
+        a query request credential and the outcome credential are checked when
+        the coordinator signed the outcome. Verification still consumes the
+        current signed trust bundle and its temporally effective revocations.
+        Later leaf expiry, rotation, or revocation does not erase an already
+        retained terminal fact.
+        """
+
+        if maximum_future_skew < timedelta(0) or not _is_aware(evaluated_at):
+            return False
+        expected_kind = "commit" if isinstance(request, SignedEffectCommitRequest) else "query"
+        request_authenticated_at = self.signed_at
+        if isinstance(request, SignedEffectCommitRequest) and self.acceptance is not None:
+            request_authenticated_at = self.acceptance.accepted_at
+        gateway_public_key = _historical_credential_public_key(
+            verifier,
+            request.sender_credential,
+            expected_role=WorkloadRole.GATEWAY,
+            expected_audience=EFFECT_COORDINATOR_AUDIENCE,
+            expected_subject=expected_gateway_subject,
+            authenticated_at=request_authenticated_at,
+            evaluated_at=evaluated_at,
+            maximum_future_skew=maximum_future_skew,
+        )
+        coordinator_public_key = _historical_credential_public_key(
+            verifier,
+            self.coordinator_credential,
+            expected_role=WorkloadRole.OT_ADAPTER,
+            expected_audience=expected_audience,
+            expected_subject=expected_coordinator_subject,
+            authenticated_at=self.signed_at,
+            evaluated_at=evaluated_at,
+            maximum_future_skew=maximum_future_skew,
+        )
+        acceptance_valid = (
+            self.disposition is EffectDisposition.NOT_DISPATCHED and self.acceptance is None
+        )
+        if self.acceptance is not None:
+            acceptance_valid = self.acceptance.verify_for_commit(
+                verifier,
+                request=self.acceptance.commit_request,
+                expected_gateway_subject=expected_gateway_subject,
+                expected_coordinator_subject=expected_coordinator_subject,
+                observer_public_key=observer_public_key,
+                expected_observer_id=expected_observer_id,
+                expected_observer_key_id=expected_observer_key_id,
+                expected_observer_boot_epoch=expected_observer_boot_epoch,
+                permit_public_key=permit_public_key,
+                expected_permit_key_id=expected_permit_key_id,
+                expected_plc_id=expected_plc_id,
+                expected_plc_key_id=expected_plc_key_id,
+                expected_plc_boot_epoch=expected_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+                maximum_future_skew=maximum_future_skew,
+            )
+        acknowledgment_valid = self.acknowledgment is None
+        if self.acknowledgment is not None and self.acceptance is not None:
+            dispatch = self.acceptance.commit_request.receipt.prepare_request.dispatch
+            expected_status = {
+                EffectDisposition.APPLIED: CommandStatus.APPLIED,
+                EffectDisposition.REJECTED: CommandStatus.REJECTED,
+                EffectDisposition.UNKNOWN_EFFECT: CommandStatus.UNKNOWN_EFFECT,
+            }.get(self.disposition)
+            acknowledgment_valid = (
+                expected_status is not None
+                and self.acknowledgment.status is expected_status
+                and self.acceptance.accepted_at
+                <= self.acknowledgment.acknowledged_at
+                <= self.signed_at
+                and self.acknowledgment.verify_for_transaction(
+                    self.acceptance.coordinator_credential.credential.public_key,
+                    request=dispatch.request,
+                    permit=dispatch.permit,
+                    pre_observation=dispatch.pre_observation,
+                    expected_plc_id=dispatch.permit.target_plc_id,
+                    expected_plc_key_id=dispatch.permit.target_plc_key_id,
+                    expected_plc_boot_epoch=dispatch.permit.target_plc_boot_epoch,
+                )
+            )
+        if self.disposition in {EffectDisposition.APPLIED, EffectDisposition.REJECTED}:
+            acknowledgment_valid = self.acknowledgment is not None and acknowledgment_valid
+        return (
+            gateway_public_key is not None
+            and coordinator_public_key is not None
+            and self.request_kind == expected_kind
+            and self.request_sha256 == request.digest
+            and self.effect == request.effect
+            and self.effect_sha256 == request.effect.digest
+            and request.audience == EFFECT_COORDINATOR_AUDIENCE
+            and request.sender_subject == expected_gateway_subject
+            and request.issued_at <= self.signed_at < request.expires_at
+            and request.verify(gateway_public_key)
+            and (
+                not isinstance(request, SignedEffectCommitRequest)
+                or (self.acceptance is not None and self.acceptance.commit_request == request)
+            )
+            and acceptance_valid
+            and acknowledgment_valid
+            and self.audience == expected_audience
+            and self.coordinator_subject == expected_coordinator_subject
+            and self.signed_at <= evaluated_at + maximum_future_skew
+            and self.verify(coordinator_public_key)
+        )
+
 
 class CapabilityOutcomeResolution(_ClosedModel):
     """Exact query-bound evidence for resolving a formerly unknown effect."""

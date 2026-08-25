@@ -380,6 +380,32 @@ def _outcome_verifies(
     )
 
 
+def _historical_outcome_verifies(
+    artifacts: M4iArtifacts,
+    outcome: SignedEffectOutcome,
+    request: SignedEffectCommitRequest | SignedEffectQueryRequest,
+    *,
+    evaluated_at: datetime,
+) -> bool:
+    dispatch = artifacts.dispatch
+    return outcome.verify_historical_for_request(
+        artifacts.verifier,
+        request=request,
+        expected_gateway_subject=GATEWAY_SUBJECT,
+        expected_coordinator_subject=COORDINATOR_SUBJECT,
+        observer_public_key=artifacts.observer_public_key,
+        expected_observer_id=dispatch.pre_observation.observer_id,
+        expected_observer_key_id=dispatch.pre_observation.observer_key_id,
+        expected_observer_boot_epoch=dispatch.pre_observation.observer_boot_epoch,
+        permit_public_key=artifacts.permit_public_key,
+        expected_permit_key_id=dispatch.permit.signing_key_id,
+        expected_plc_id=dispatch.permit.target_plc_id,
+        expected_plc_key_id=dispatch.permit.target_plc_key_id,
+        expected_plc_boot_epoch=dispatch.permit.target_plc_boot_epoch,
+        evaluated_at=evaluated_at,
+    )
+
+
 def _acceptance_verifies(
     artifacts: M4iArtifacts,
     acceptance: DurableCommitAcceptance,
@@ -705,6 +731,154 @@ def test_outcome_future_bound_and_exact_query_resolution(
         CapabilityOutcomeResolution.model_validate(
             {**resolution.model_dump(mode="python"), "query": different_query}
         )
+
+
+def test_retained_outcome_historical_verification_outlives_request_ttl(
+    artifacts: M4iArtifacts,
+) -> None:
+    receipt = _receipt(artifacts, _prepare(artifacts))
+    commit = _commit(artifacts, receipt)
+    acceptance = _acceptance(artifacts, commit)
+    outcome = SignedEffectOutcome.issue(
+        request=commit,
+        disposition=EffectDisposition.APPLIED,
+        reason="durable_terminal_record",
+        signer=artifacts.coordinator_signer,
+        signed_at=NOW + timedelta(seconds=4),
+        acceptance=acceptance,
+        acknowledgment=artifacts.acknowledgment,
+    )
+    evaluated_at = commit.expires_at + timedelta(seconds=1)
+
+    assert not _outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
+    assert _historical_outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
+
+    authority_public = artifacts.authority.public_key()
+    revoked_bundle = WorkloadTrustBundle(
+        bundle_id="trust-bundle-m4i-revoked-0002",
+        sequence=2,
+        trust_domain=TRUST_DOMAIN,
+        authority_key_id=workload_key_id(authority_public),
+        authority_public_key_b64=public_key_base64(authority_public),
+        issued_at=NOW - timedelta(minutes=5),
+        expires_at=NOW + timedelta(hours=1),
+        revocations=(
+            WorkloadRevocation(
+                credential_id=(artifacts.coordinator_signer.credential.credential.credential_id),
+                revoked_at=outcome.signed_at,
+                reason="coordinator compromised before retained outcome signing",
+            ),
+        ),
+    ).signed(artifacts.authority)
+    artifacts.trust_bundle_path.write_bytes(canonical_json_file_bytes(revoked_bundle))
+
+    assert not _historical_outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
+
+
+def test_commit_outcome_uses_durable_acceptance_as_gateway_authentication_time(
+    artifacts: M4iArtifacts,
+) -> None:
+    gateway_private = Ed25519PrivateKey.generate()
+    gateway_signer = WorkloadSigner(
+        _issue_credential(
+            artifacts.authority,
+            gateway_private,
+            credential_id="credential-gateway-short-lived-0003",
+            subject=GATEWAY_SUBJECT,
+            role=WorkloadRole.GATEWAY,
+            audience=EFFECT_COORDINATOR_AUDIENCE,
+            expires_at=NOW + timedelta(seconds=2),
+        ),
+        gateway_private,
+    )
+    prepare = SignedEffectPrepareRequest.issue(
+        dispatch=artifacts.dispatch,
+        signer=gateway_signer,
+        request_nonce="short-lived-prepare-nonce-0001",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(seconds=30),
+    )
+    receipt = CoordinationReceipt.issue(
+        request=prepare,
+        signer=artifacts.coordinator_signer,
+        prepared_at=NOW + timedelta(milliseconds=500),
+    )
+    commit = SignedEffectCommitRequest.issue(
+        receipt=receipt,
+        signer=gateway_signer,
+        request_nonce="short-lived-commit-nonce-0001",
+        issued_at=NOW + timedelta(seconds=1),
+        expires_at=NOW + timedelta(seconds=31),
+    )
+    acceptance = DurableCommitAcceptance.issue(
+        request=commit,
+        signer=artifacts.coordinator_signer,
+        accepted_at=NOW + timedelta(milliseconds=1250),
+    )
+    outcome = SignedEffectOutcome.issue(
+        request=commit,
+        disposition=EffectDisposition.APPLIED,
+        reason="terminal_outcome_after_gateway_leaf_expiry",
+        signer=artifacts.coordinator_signer,
+        signed_at=NOW + timedelta(seconds=4),
+        acceptance=acceptance,
+        acknowledgment=artifacts.acknowledgment,
+    )
+    evaluated_at = NOW + timedelta(seconds=5)
+
+    assert not _outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
+    assert _historical_outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
+
+    authority_public = artifacts.authority.public_key()
+    revoked_bundle = WorkloadTrustBundle(
+        bundle_id="trust-bundle-m4i-short-lived-revoked-0002",
+        sequence=2,
+        trust_domain=TRUST_DOMAIN,
+        authority_key_id=workload_key_id(authority_public),
+        authority_public_key_b64=public_key_base64(authority_public),
+        issued_at=NOW - timedelta(minutes=5),
+        expires_at=NOW + timedelta(hours=1),
+        revocations=(
+            WorkloadRevocation(
+                credential_id=gateway_signer.credential.credential.credential_id,
+                revoked_at=acceptance.accepted_at,
+                reason="gateway compromised before durable commit acceptance",
+            ),
+        ),
+    ).signed(artifacts.authority)
+    artifacts.trust_bundle_path.write_bytes(canonical_json_file_bytes(revoked_bundle))
+
+    assert not _historical_outcome_verifies(
+        artifacts,
+        outcome,
+        commit,
+        evaluated_at=evaluated_at,
+    )
 
 
 def test_reconciliation_uses_temporal_revocation_for_historical_chain(
