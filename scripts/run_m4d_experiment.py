@@ -97,6 +97,16 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
             temporary.unlink()
 
 
+def _canonical_sha256(value: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
     status = _run("git", "status", "--porcelain").stdout
     if status:
@@ -182,6 +192,18 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
         ],
     }
     evidence["accepted"] = all(evidence["acceptance"].values())
+    semantic_probe = dict(probe)
+    semantic_probe.pop("agent_hostname", None)
+    evidence["semantic_outcome_sha256"] = _canonical_sha256(
+        {
+            "git_commit": commit,
+            "resolved_compose_sha256": evidence["resolved_compose_sha256"],
+            "network_inventory": networks,
+            "probe": semantic_probe,
+            "acceptance": evidence["acceptance"],
+            "accepted": evidence["accepted"],
+        }
+    )
     if evidence["accepted"] is not True:
         raise ExperimentError("retained M4d acceptance criteria were not all satisfied")
     _atomic_write_json(output, evidence)
