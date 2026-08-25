@@ -80,7 +80,7 @@ def test_await_gateway_exhaustion_is_explicit(monkeypatch: pytest.MonkeyPatch) -
         m4g_probe._await_gateway("http://gateway", attempts=2)
 
 
-def test_capture_pre_uses_bound_challenge_and_json_mode_parser(
+def test_capture_pre_uses_bound_challenge_and_strict_json_parser(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -88,8 +88,8 @@ def test_capture_pre_uses_bound_challenge_and_json_mode_parser(
 
     class Parser:
         @staticmethod
-        def model_validate(value: dict[str, Any]) -> object:
-            captured["parsed"] = value
+        def model_validate_json(value: str) -> object:
+            captured["parsed"] = json.loads(value)
             return parsed
 
     def exchange(
@@ -115,6 +115,21 @@ def test_capture_pre_uses_bound_challenge_and_json_mode_parser(
         },
         "parsed": {"signed": "observation"},
     }
+
+
+def test_capture_pre_accepts_strict_model_wire_encodings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = _observation()
+    monkeypatch.setattr(
+        m4g_probe,
+        "request_json",
+        lambda *_args, **_kwargs: expected.model_dump(mode="json"),
+    )
+
+    parsed = m4g_probe._capture_pre("http://gateway", expected.correlation_id)
+
+    assert parsed == expected
 
 
 def test_request_binds_proposal_to_exact_observation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,8 +165,8 @@ def test_execute_posts_exact_request_and_parses_terminal_result(
 
     class Parser:
         @staticmethod
-        def model_validate(value: dict[str, Any]) -> object:
-            captured["parsed"] = value
+        def model_validate_json(value: str) -> object:
+            captured["parsed"] = json.loads(value)
             return parsed
 
     def exchange(*args: Any, **kwargs: Any) -> dict[str, Any]:

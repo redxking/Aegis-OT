@@ -31,6 +31,12 @@ from .workload_runtime import (
 AGENT_PROOF_TTL = timedelta(seconds=30)
 
 
+def _wire_json(payload: dict[str, Any]) -> str:
+    """Re-enter Pydantic through its strict JSON decoding boundary."""
+
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
 def _gateway_url() -> str:
     return os.getenv(
         "AEGIS_GATEWAY_URL",
@@ -60,7 +66,7 @@ def _capture_pre(url: str, correlation_id: str) -> SignedObservationEnvelope:
             "challenge_nonce": secrets.token_urlsafe(24),
         },
     )
-    return SignedObservationEnvelope.model_validate(payload)
+    return SignedObservationEnvelope.model_validate_json(_wire_json(payload))
 
 
 def _request(
@@ -103,7 +109,7 @@ def _execute(
         request.model_dump(mode="json"),
         timeout_seconds=15.0,
     )
-    return SegmentedCapabilityClosedLoopResult.model_validate(payload)
+    return SegmentedCapabilityClosedLoopResult.model_validate_json(_wire_json(payload))
 
 
 def _wire_request(
