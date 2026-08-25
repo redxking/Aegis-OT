@@ -380,9 +380,16 @@ def test_post_deletion_acceptance_requires_no_ot_dispatch_and_no_plant_effect(
             "commit_count": 2,
         }
     }
+    failed_closed = {
+        "schema_version": "segmented-capability-closed-loop-result-v1",
+        "status": "not_dispatched",
+        "reasons": ["pre_observation_unavailable", "CapabilityTransportUnavailable"],
+        "dispatch_attempts": 0,
+        "acknowledgment": None,
+    }
     accepted = runner._post_deletion_acceptance(
-        response_status=503,
-        response_document={"status": "error", "reason": "gateway_runtime_unavailable"},
+        response_status=200,
+        response_document=failed_closed,
         fetch_loss={"fresh_fetch_unavailable": True},
         plant_before=plant,
         plant_after=json.loads(json.dumps(plant)),
@@ -392,14 +399,42 @@ def test_post_deletion_acceptance_requires_no_ot_dispatch_and_no_plant_effect(
     assert all(accepted.values())
 
     assert not runner._post_deletion_acceptance(
-        response_status=503,
-        response_document={"status": "error", "reason": "gateway_runtime_unavailable"},
+        response_status=200,
+        response_document=failed_closed,
         fetch_loss={"fresh_fetch_unavailable": True},
         plant_before=plant,
         plant_after=json.loads(json.dumps(plant)),
         ot_before={"execute_endpoint_records": 2},
         ot_after={"execute_endpoint_records": 3},
     )["no_ot_consequence_dispatch_observed"]
+
+    for field, invalid in (
+        ("schema_version", "unexpected-result-v1"),
+        ("status", "completed"),
+        ("reasons", ["pre_observation_unavailable"]),
+        ("dispatch_attempts", 1),
+        ("acknowledgment", {"executed": False}),
+    ):
+        response = {**failed_closed, field: invalid}
+        assert not runner._post_deletion_acceptance(
+            response_status=200,
+            response_document=response,
+            fetch_loss={"fresh_fetch_unavailable": True},
+            plant_before=plant,
+            plant_after=json.loads(json.dumps(plant)),
+            ot_before={"execute_endpoint_records": 2},
+            ot_after={"execute_endpoint_records": 2},
+        )["fresh_action_failed_closed_before_dispatch"]
+
+    assert not runner._post_deletion_acceptance(
+        response_status=503,
+        response_document=failed_closed,
+        fetch_loss={"fresh_fetch_unavailable": True},
+        plant_before=plant,
+        plant_after=json.loads(json.dumps(plant)),
+        ot_before={"execute_endpoint_records": 2},
+        ot_after={"execute_endpoint_records": 2},
+    )["fresh_action_failed_closed_before_dispatch"]
 
 
 def test_failed_acceptance_checks_are_sorted_and_require_literal_true(
@@ -444,7 +479,7 @@ def test_retention_is_atomic_hashed_private_and_credential_free(
             "wire_request_retained": False,
         },
         "post_deletion_action": {
-            "http_status": 503,
+            "http_status": 200,
             "acceptance": {"plant_effect_absent": True},
         },
         "credential_material_retained": False,

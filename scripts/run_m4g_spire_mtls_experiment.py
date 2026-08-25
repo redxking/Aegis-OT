@@ -934,10 +934,15 @@ def _post_deletion_acceptance(
     ) == ot_after.get("execute_endpoint_records")
     return {
         "fresh_gateway_svid_fetch_unavailable": (fetch_loss.get("fresh_fetch_unavailable") is True),
-        "fresh_action_failed_closed": (
-            response_status == 503
-            and response_document.get("status") == "error"
-            and response_document.get("reason") == "gateway_runtime_unavailable"
+        "fresh_action_failed_closed_before_dispatch": (
+            response_status == 200
+            and response_document.get("schema_version")
+            == "segmented-capability-closed-loop-result-v1"
+            and response_document.get("status") == "not_dispatched"
+            and response_document.get("reasons")
+            == ["pre_observation_unavailable", "CapabilityTransportUnavailable"]
+            and response_document.get("dispatch_attempts") == 0
+            and response_document.get("acknowledgment") is None
         ),
         "no_ot_consequence_dispatch_observed": no_ot_dispatch,
         "plant_effect_absent": unchanged_plant,
@@ -1247,7 +1252,9 @@ def _campaign(
                 },
                 "post_deletion_action": {
                     "status": response_status,
-                    "reason": response_document.get("reason"),
+                    "terminal_status": response_document.get("status"),
+                    "reasons": response_document.get("reasons"),
+                    "dispatch_attempts": response_document.get("dispatch_attempts"),
                     "ot_execute_records_unchanged": ot_before.get("execute_endpoint_records")
                     == ot_after.get("execute_endpoint_records"),
                     "plant_state_unchanged": post_deletion_acceptance["plant_effect_absent"],
@@ -1314,8 +1321,9 @@ def _campaign(
                         "of every already-issued certificate."
                     ),
                     (
-                        "The post-deletion action returned a fail-closed gateway error "
-                        "without a new OT execute-endpoint record or plant-state change."
+                        "The post-deletion action returned an exact not-dispatched terminal "
+                        "result without a new OT execute-endpoint record or plant-state "
+                        "change."
                     ),
                     (
                         "UID/GID selectors plus host PID visibility are a bounded lab "
@@ -1331,9 +1339,19 @@ def _campaign(
             m4g._assert_checkout(commit)
             failed_acceptance = _failed_acceptance_checks(acceptance)
             if failed_acceptance:
+                response_summary = {
+                    "http_status": response_status,
+                    "schema_version": response_document.get("schema_version"),
+                    "terminal_status": response_document.get("status"),
+                    "reasons": response_document.get("reasons"),
+                    "dispatch_attempts": response_document.get("dispatch_attempts"),
+                    "acknowledgment_present": response_document.get("acknowledgment") is not None,
+                }
                 raise m4d.ExperimentError(
                     "M4g SPIRE/mTLS acceptance criteria were not all satisfied: "
                     + ", ".join(failed_acceptance)
+                    + "; post-deletion response: "
+                    + _canonical_text(response_summary).strip()
                 )
     finally:
         if project_created:
