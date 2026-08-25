@@ -1,16 +1,16 @@
 # Aegis-OT Project Plan
 
-## State as of 2026-08-24
+## State as of 2026-08-25
 
 The original package is unavailable. This repository is a clean reconstruction based on the controlled handoff. No earlier implementation, test, experiment, or document artifact is treated as recovered or independently verified.
 
 | Work package | State | Current exit evidence |
 |---|---|---|
-| WP0 Governance and reproducibility | In progress | Canonical study revision 0.6, revision log, experiment and formal manifests, and reproducible outcome hashes established |
+| WP0 Governance and reproducibility | In progress | Canonical study revision 0.7, revision log, experiment and formal manifests, and reproducible outcome hashes established |
 | WP1 Executable assurance kernel | Initial implementation complete | Isolated candidate suite: 478 tests pass with 92.05 percent branch-aware coverage; strict typing, linting, and schema-drift checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate has a verified 30-session result and a local outcome reproduction under matching recorded conditions; M4a adds a locally conformance-tested capability-separated plant/observer/virtual-PLC loop without a retained experiment package; HELICS/OpenPLC, segmented deployment, and external validation are not implemented |
+| WP4 Power-system and OT integration | In progress | The bounded local pandapower/PyModbus gate and M4b capability-separated loop each have accepted 30-session retained runs and same-code local reproductions; M4b adds root-signed evidence and a separate-process topology-consequence evaluator, but not independent sensing, an independent AC solver, HELICS/OpenPLC, segmentation, hardware, or external validation |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
 | WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
 | WP7 Scale and economics | Planned | No measurements |
@@ -25,10 +25,13 @@ The original package is unavailable. This repository is a clean reconstruction b
 5. M4a: capability-separated deterministic-local plant, signed-observer, and
    research virtual-PLC loop; retained evidence and broader WP4 integration
    remain separate gates.
-6. M4: SPIFFE/SPIRE identity, OPA service, network isolation, and six-node deployment.
-7. M5: operate-through-compromise and degraded-mode evaluation.
-8. M6: logical fleet scaling and economic sensitivity model.
-9. M7-M8: independent review, replication package, publication, and release.
+6. M4b: immutable root-signed evidence, capability probes, restart/replay
+   evaluation, and a separate-process topology-consequence check for the M4a
+   loop under the same-host deterministic-local boundary.
+7. M4: SPIFFE/SPIRE identity, OPA service, network isolation, and six-node deployment.
+8. M5: operate-through-compromise and degraded-mode evaluation.
+9. M6: logical fleet scaling and economic sensitivity model.
+10. M7-M8: independent review, replication package, publication, and release.
 
 ## Immediate acceptance gates
 
@@ -100,7 +103,7 @@ establish operational effectiveness.
 
 ## Active M4a capability-separation increment
 
-Implemented and locally conformance-tested:
+Implemented, retained, and locally reproduced:
 
 - Distinct spawned plant, signed-observer, and Python research virtual-PLC
   processes with distinct PIDs and separate observer/PLC signing keys and boot
@@ -143,6 +146,80 @@ Acceptance boundary:
   segmented or multi-host deployment, hardware-in-the-loop, recovery evaluation,
   concurrent controllers, external validation, and operational effectiveness
   remain open. M4a does not satisfy the WP4 exit gate.
+
+## Active M4b independent-consequence evidence increment
+
+Implemented and locally conformance-tested:
+
+- Closed M4b transaction, component-registration, capability-probe, orderly-
+  restart, independent-evaluation, trust-anchor, manifest, and detached-
+  signature contracts with generated schemas.
+- A solver-neutral topology fixture derived from the registered CIGRE MV model
+  and a separately implemented graph/Decimal consequence evaluator that does
+  not import the Aegis-OT controller, pandapower, or its numerical stack.
+- A file/process bridge that converts a retained M4a transaction into a closed
+  independent-evaluation request, executes the separate evaluator process, and
+  rejects malformed, unsigned, incorrectly bound, or exit-code-inconsistent
+  reports.
+- A live same-host lab test in which one completed line-isolation transaction
+  crossed that process boundary and returned a signed `agree` report for the
+  registered topology consequence.
+- A stable pre-report transaction projection for evaluator binding. This
+  removes the former circular dependency in which a transaction record could
+  hash a report that itself hashed a request claiming to hash the final
+  transaction record.
+- An immutable, content-addressed package finalizer and offline verifier with an
+  external Ed25519 trust anchor, detached manifest signature, exact artifact
+  hashes and counts, canonical JSON/JSONL checks, closed schemas, transaction
+  correlations, source/fixture/configuration bindings, and separate integrity,
+  acceptance, and checkout-match results.
+- Two separately finalized 30-session packages from clean detached checkout
+  `ad3f3a9c861d53293c1b764226e33c7bcc991234`. Each package contains 90
+  transaction records, 120 denied capability probes, 30 signed independent
+  evaluations, and 30 orderly-restart replay attempts. Both passed the offline
+  verifier with trusted roots, accepted experiment semantics, and matching
+  checkout bindings.
+- Across each package, 30 nominal transactions completed with exactly one
+  dispatch and no automatic retry; 60 identity/freshness cases were not
+  dispatched; all 120 capability probes were denied; all 30 replay attempts
+  were rejected without a second state effect; and all 30 independent
+  topology-connectivity evaluations returned `agree`.
+- The two packages have different package IDs and signing keys but the same
+  timing-independent deterministic outcome hash
+  `02af9e6b29b55fbde8a7de2ba2c45754281f61f9439a182541ca27632d0c0ebf`.
+  This is a same-code, same-host local reproduction, not an independent
+  replication.
+- The clean detached checkout passed 516 tests; ruff, strict mypy across 43
+  source files, generated-schema drift, and neutral-topology-fixture drift
+  checks were also clean. The single warning is an upstream Starlette/httpx
+  deprecation warning and did not affect test outcomes.
+
+Evidence boundary and next hypothesis-critical gate:
+
+- M4b supports only the tested same-host deterministic-local proposition: the
+  registered identity and freshness failures were stopped before dispatch,
+  unavailable cross-role capabilities remained unavailable, the registered
+  nominal command produced one exact modeled effect, orderly replacement did
+  not permit replay, and a separately implemented topology-connectivity check
+  agreed with the retained post-observation.
+- The evaluator does not independently sense the plant and is not an independent
+  AC power-flow solver. It checks signed retained observations against a neutral
+  topology/load fixture using graph and decimal arithmetic. Agreement therefore
+  does not validate the plant model, measurements, voltage or thermal behavior.
+- The retained protocol does not yet exercise signed contradiction,
+  missing-observation, malformed evaluator input, lost-response/unknown-effect,
+  concurrent-controller, crash-recovery, or hostile-host conditions. Relevant
+  implementation tests fail closed, but they are not retained multi-session
+  experimental evidence.
+- M4b is not external custody, independent replication, segmented or multi-host
+  deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
+  production readiness, operational effectiveness, or WP4 completion.
+- The next shortest claim-critical increment is retained fault/adversarial
+  evaluation of contradiction, missing post-observation, malformed independent
+  input, lost response/unknown effect, and durable replay across crash/full-stack
+  restart. After that, identity/policy/control separation must move across an
+  actual segmented deployment before the central system claim can be tested
+  beyond a single-host process-capability boundary.
 
 ## Read-only public demonstration increment
 

@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-ot"
+version = "0.1.0"
+description = "Research implementation of identity-bound runtime assurance for simulated OT actions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Angelis Pseftis"}]
+dependencies = [
+  "cryptography>=43,<47",
+  "fastapi>=0.115,<1",
+  "pydantic>=2.10,<3",
+  "PyYAML>=6.0.2,<7",
+  "typer>=0.15,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "hypothesis>=6.120,<7",
+  "mypy>=1.14,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<8",
+  "ruff>=0.9,<1",
+]
+docs = [
+  "Pillow>=11,<13",
+  "python-docx>=1.1.2,<2",
+]
+simulation = [
+  "pandapower==3.5.4",
+  "pymodbus==3.15.0",
+]
+
+[project.scripts]
+aegis-ot = "aegis_ot.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aegis_ot = ["web_demo/*.css", "web_demo/*.html", "web_demo/*.js", "web_demo/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+
+[tool.coverage.run]
+branch = true
+concurrency = ["multiprocessing"]
+parallel = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/build_figures.py" = ["E501"]
+"scripts/build_research_doc.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+packages = ["aegis_ot", "aegis_ot_independent"]
