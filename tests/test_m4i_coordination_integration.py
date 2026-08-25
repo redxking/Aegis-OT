@@ -233,6 +233,7 @@ def test_cross_side_lost_commit_response_reconciles_once_after_journal_reopen(
         ot_harness.clock,
         boot_epoch=RESTARTED_OT_BOOT,
         observer_boot_epoch=RESTARTED_OBSERVER_BOOT,
+        plant_at_post=True,
     )
     restarted_client = TestClient(create_ot_app(lambda: restarted_runtime))
     exchange.client = restarted_client
