@@ -13,7 +13,7 @@ import socket
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -140,7 +140,9 @@ class SignedSegmentedExecutionRequest(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: str = "m4e-signed-execution-request-v1"
+    schema_version: Literal["m4e-signed-execution-request-v1"] = (
+        "m4e-signed-execution-request-v1"
+    )
     request: SegmentedExecutionRequest
     audience: str = "aegis-ot:ot-adapter"
     gateway_key_id: str = Field(min_length=1)
@@ -172,7 +174,9 @@ class SignedSegmentedExecutionResponse(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: str = "m4e-signed-execution-response-v1"
+    schema_version: Literal["m4e-signed-execution-response-v1"] = (
+        "m4e-signed-execution-response-v1"
+    )
     request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     execution: ExecutionResult
     ot_key_id: str = Field(min_length=1)

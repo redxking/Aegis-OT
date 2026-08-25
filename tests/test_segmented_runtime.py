@@ -10,6 +10,7 @@ import yaml
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 import aegis_ot.segmented_runtime as segmented
 from aegis_ot.lab import nominal_state
@@ -177,6 +178,11 @@ def test_authenticated_ot_adapter_verifies_gateway_and_signs_bound_response(
     with pytest.raises(HTTPException) as tampered:
         segmented.ot_execute(altered)
     assert tampered.value.status_code == 403
+
+    unsupported = signed.model_dump(mode="json")
+    unsupported["schema_version"] = "m4e-signed-execution-request-v2"
+    with pytest.raises(ValidationError):
+        segmented.SignedSegmentedExecutionRequest.model_validate(unsupported)
 
 
 def test_authenticated_ot_adapter_rejects_unsigned_request(
