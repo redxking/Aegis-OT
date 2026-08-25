@@ -1,0 +1,1385 @@
+{
+  "$defs": {
+    "ActionProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "delegation_chain": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Delegation Chain",
+          "type": "array"
+        },
+        "human_approval_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Approval Id"
+        },
+        "mission_id": {
+          "minLength": 1,
+          "title": "Mission Id",
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Nonce",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "observed_state_version": {
+          "minimum": 0,
+          "title": "Observed State Version",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "mission_id",
+        "resource",
+        "operation",
+        "observed_state_version",
+        "observed_at",
+        "nonce",
+        "confidence",
+        "risk_score",
+        "delegation_chain"
+      ],
+      "title": "ActionProposal",
+      "type": "object"
+    },
+    "CandidateAssessment": {
+      "additionalProperties": false,
+      "description": "Independent candidate power-flow result used before permit issuance.",
+      "properties": {
+        "assessment_id": {
+          "minLength": 1,
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "post_state": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        "pre_state": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "safe": {
+          "title": "Safe",
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": "candidate-assessment-v1",
+          "default": "candidate-assessment-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_digest",
+        "pre_state",
+        "post_state",
+        "safe",
+        "reasons"
+      ],
+      "title": "CandidateAssessment",
+      "type": "object"
+    },
+    "CapabilityActionRequest": {
+      "additionalProperties": false,
+      "description": "An agent proposal plus a reference to observer-held signed state, never a state body.",
+      "properties": {
+        "correlation_id": {
+          "minLength": 1,
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "observation_challenge_nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Observation Challenge Nonce",
+          "type": "string"
+        },
+        "observation_envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Envelope Digest",
+          "type": "string"
+        },
+        "observation_id": {
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/ActionProposal"
+        },
+        "request_id": {
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "capability-action-request-v1",
+          "default": "capability-action-request-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correlation_id",
+        "proposal",
+        "observation_id",
+        "observation_envelope_digest",
+        "observation_challenge_nonce"
+      ],
+      "title": "CapabilityActionRequest",
+      "type": "object"
+    },
+    "CapabilityExecutionPermit": {
+      "additionalProperties": false,
+      "description": "Signed M3 permit extension binding the action request to the signed observation.",
+      "properties": {
+        "base_permit": {
+          "$ref": "#/$defs/ExecutionPermit"
+        },
+        "observation_envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Envelope Digest",
+          "type": "string"
+        },
+        "observation_id": {
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "observer_boot_epoch": {
+          "minLength": 16,
+          "title": "Observer Boot Epoch",
+          "type": "string"
+        },
+        "observer_id": {
+          "minLength": 1,
+          "title": "Observer Id",
+          "type": "string"
+        },
+        "observer_key_id": {
+          "minLength": 1,
+          "title": "Observer Key Id",
+          "type": "string"
+        },
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "capability-execution-permit-v1",
+          "default": "capability-execution-permit-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "signing_key_id": {
+          "minLength": 1,
+          "title": "Signing Key Id",
+          "type": "string"
+        },
+        "target_plc_boot_epoch": {
+          "minLength": 16,
+          "title": "Target Plc Boot Epoch",
+          "type": "string"
+        },
+        "target_plc_id": {
+          "minLength": 1,
+          "title": "Target Plc Id",
+          "type": "string"
+        },
+        "target_plc_key_id": {
+          "minLength": 1,
+          "title": "Target Plc Key Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_permit",
+        "request_digest",
+        "observation_id",
+        "observation_envelope_digest",
+        "observer_id",
+        "observer_key_id",
+        "observer_boot_epoch",
+        "target_plc_id",
+        "target_plc_key_id",
+        "target_plc_boot_epoch",
+        "signing_key_id"
+      ],
+      "title": "CapabilityExecutionPermit",
+      "type": "object"
+    },
+    "Decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "evidence_record_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Record Hash"
+        },
+        "outcome": {
+          "$ref": "#/$defs/DecisionOutcome"
+        },
+        "policy_version": {
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "safety_version": {
+          "title": "Safety Version",
+          "type": "string"
+        },
+        "state_version": {
+          "title": "State Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "outcome",
+        "reasons",
+        "policy_version",
+        "safety_version",
+        "state_version"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "DecisionOutcome": {
+      "enum": [
+        "permit",
+        "deny",
+        "modify",
+        "defer",
+        "simulate",
+        "require_approval",
+        "quarantine",
+        "revoke"
+      ],
+      "title": "DecisionOutcome",
+      "type": "string"
+    },
+    "EffectIdentity": {
+      "additionalProperties": false,
+      "description": "Canonical semantic effect key, independent of M4i delivery lifecycle.\n\nExact proposal, decision, command, and authorization trace remains in the\nsigned dispatch.  It is deliberately absent here so one ``effect_id`` has\nexactly one possible ``EffectIdentity`` value.",
+      "properties": {
+        "authorized_model_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Model Sha256",
+          "type": "string"
+        },
+        "authorized_observation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Observation Sha256",
+          "type": "string"
+        },
+        "authorized_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized State Sha256",
+          "type": "string"
+        },
+        "authorized_state_version": {
+          "minimum": 0,
+          "title": "Authorized State Version",
+          "type": "integer"
+        },
+        "authorized_topology_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Topology Sha256",
+          "type": "string"
+        },
+        "command_semantics_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Semantics Sha256",
+          "type": "string"
+        },
+        "effect_id": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "expected_post_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post State Sha256",
+          "type": "string"
+        },
+        "expected_post_state_version": {
+          "minimum": 0,
+          "title": "Expected Post State Version",
+          "type": "integer"
+        },
+        "expected_post_topology_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post Topology Sha256",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "m4i-effect-identity-v1",
+          "default": "m4i-effect-identity-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "target_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Target Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect_id",
+        "request_sha256",
+        "command_semantics_sha256",
+        "target_id",
+        "authorized_state_sha256",
+        "authorized_state_version",
+        "authorized_observation_sha256",
+        "authorized_topology_sha256",
+        "authorized_model_sha256",
+        "expected_post_state_sha256",
+        "expected_post_state_version",
+        "expected_post_topology_sha256"
+      ],
+      "title": "EffectIdentity",
+      "type": "object"
+    },
+    "ExecutionPermit": {
+      "additionalProperties": false,
+      "description": "Integrity-protected, one-time authorization for one exact control command.",
+      "properties": {
+        "assessment_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Assessment Digest",
+          "type": "string"
+        },
+        "audience": {
+          "minLength": 1,
+          "title": "Audience",
+          "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/PhysicalControlCommand"
+        },
+        "command_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Digest",
+          "type": "string"
+        },
+        "decision_id": {
+          "minLength": 1,
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_outcome": {
+          "const": "permit",
+          "default": "permit",
+          "title": "Decision Outcome",
+          "type": "string"
+        },
+        "evidence_record_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Record Hash",
+          "type": "string"
+        },
+        "expected_post_state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post State Digest",
+          "type": "string"
+        },
+        "expected_post_state_version": {
+          "minimum": 1,
+          "title": "Expected Post State Version",
+          "type": "integer"
+        },
+        "expected_post_topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post Topology Digest",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "model_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Digest",
+          "type": "string"
+        },
+        "observation_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Digest",
+          "type": "string"
+        },
+        "permit_id": {
+          "minLength": 1,
+          "title": "Permit Id",
+          "type": "string"
+        },
+        "permit_nonce": {
+          "minLength": 16,
+          "title": "Permit Nonce",
+          "type": "string"
+        },
+        "policy_version": {
+          "minLength": 1,
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "proposal_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Proposal Digest",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "safety_version": {
+          "minLength": 1,
+          "title": "Safety Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "execution-permit-v1",
+          "default": "execution-permit-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "signing_key_id": {
+          "minLength": 1,
+          "title": "Signing Key Id",
+          "type": "string"
+        },
+        "state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Digest",
+          "type": "string"
+        },
+        "state_version": {
+          "minimum": 0,
+          "title": "State Version",
+          "type": "integer"
+        },
+        "topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Topology Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "proposal_id",
+        "proposal_digest",
+        "command",
+        "command_digest",
+        "assessment_digest",
+        "state_version",
+        "state_digest",
+        "observation_digest",
+        "topology_digest",
+        "model_digest",
+        "expected_post_state_version",
+        "expected_post_state_digest",
+        "expected_post_topology_digest",
+        "evidence_record_hash",
+        "policy_version",
+        "safety_version",
+        "audience",
+        "issued_at",
+        "expires_at",
+        "signing_key_id"
+      ],
+      "title": "ExecutionPermit",
+      "type": "object"
+    },
+    "ObservationPhase": {
+      "enum": [
+        "pre_authorization",
+        "post_dispatch"
+      ],
+      "title": "ObservationPhase",
+      "type": "string"
+    },
+    "Operation": {
+      "enum": [
+        "isolate_asset",
+        "restore_asset",
+        "shed_load",
+        "dispatch_battery"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "PhysicalCommandType": {
+      "enum": [
+        "set_line_service",
+        "set_battery_injection"
+      ],
+      "title": "PhysicalCommandType",
+      "type": "string"
+    },
+    "PhysicalControlCommand": {
+      "additionalProperties": false,
+      "description": "Exact actuator command derived by a trusted resource mapping.",
+      "properties": {
+        "command_id": {
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "command_type": {
+          "$ref": "#/$defs/PhysicalCommandType"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "resource": {
+          "minLength": 1,
+          "title": "Resource",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "physical-command-v1",
+          "default": "physical-command-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "setpoint": {
+          "title": "Setpoint",
+          "type": "number"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "target_index": {
+          "minimum": 0,
+          "title": "Target Index",
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "boolean",
+            "MW"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "operation",
+        "resource",
+        "command_type",
+        "target",
+        "target_index",
+        "setpoint",
+        "unit"
+      ],
+      "title": "PhysicalControlCommand",
+      "type": "object"
+    },
+    "PhysicalStateSnapshot": {
+      "additionalProperties": false,
+      "description": "Authoritative, versioned steady-state result returned by the plant model.",
+      "properties": {
+        "battery_injection_mw": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Battery Injection Mw",
+          "type": "object"
+        },
+        "bus_voltage_pu": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Bus Voltage Pu",
+          "type": "array"
+        },
+        "converged": {
+          "title": "Converged",
+          "type": "boolean"
+        },
+        "input_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "isolated_resources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Isolated Resources",
+          "type": "array"
+        },
+        "line_loading_pct": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Line Loading Pct",
+          "type": "array"
+        },
+        "maximum_line_loading_pct": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Line Loading Pct"
+        },
+        "maximum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Voltage Pu"
+        },
+        "minimum_voltage_pu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Voltage Pu"
+        },
+        "model_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Digest",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "observation_clock_domain": {
+          "minLength": 1,
+          "title": "Observation Clock Domain",
+          "type": "string"
+        },
+        "observation_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observation Digest",
+          "type": "string"
+        },
+        "observation_sequence": {
+          "minimum": 0,
+          "title": "Observation Sequence",
+          "type": "integer"
+        },
+        "observation_source_id": {
+          "minLength": 1,
+          "title": "Observation Source Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "priority_load_demand_mw": {
+          "minimum": 0,
+          "title": "Priority Load Demand Mw",
+          "type": "number"
+        },
+        "priority_load_served_mw": {
+          "minimum": 0,
+          "title": "Priority Load Served Mw",
+          "type": "number"
+        },
+        "priority_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority Load Served Pct",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "physical-state-v1",
+          "default": "physical-state-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "served_load_mw": {
+          "minimum": 0,
+          "title": "Served Load Mw",
+          "type": "number"
+        },
+        "simulation_time_s": {
+          "minimum": 0,
+          "title": "Simulation Time S",
+          "type": "number"
+        },
+        "simulator_version": {
+          "minLength": 1,
+          "title": "Simulator Version",
+          "type": "string"
+        },
+        "state_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "State Digest",
+          "type": "string"
+        },
+        "state_version": {
+          "minimum": 0,
+          "title": "State Version",
+          "type": "integer"
+        },
+        "thermal_violation_count": {
+          "minimum": 0,
+          "title": "Thermal Violation Count",
+          "type": "integer"
+        },
+        "topology_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Topology Digest",
+          "type": "string"
+        },
+        "total_load_demand_mw": {
+          "minimum": 0,
+          "title": "Total Load Demand Mw",
+          "type": "number"
+        },
+        "total_load_served_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Load Served Pct",
+          "type": "number"
+        },
+        "unsafe_state": {
+          "title": "Unsafe State",
+          "type": "boolean"
+        },
+        "unserved_load_mw": {
+          "minimum": 0,
+          "title": "Unserved Load Mw",
+          "type": "number"
+        },
+        "voltage_violation_count": {
+          "minimum": 0,
+          "title": "Voltage Violation Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "simulator_version",
+        "model_digest",
+        "input_digest",
+        "topology_digest",
+        "state_digest",
+        "observation_digest",
+        "observation_sequence",
+        "observation_source_id",
+        "observation_clock_domain",
+        "state_version",
+        "simulation_time_s",
+        "observed_at",
+        "converged",
+        "total_load_demand_mw",
+        "served_load_mw",
+        "unserved_load_mw",
+        "total_load_served_pct",
+        "priority_load_demand_mw",
+        "priority_load_served_mw",
+        "priority_load_served_pct",
+        "voltage_violation_count",
+        "thermal_violation_count",
+        "unsafe_state",
+        "bus_voltage_pu",
+        "line_loading_pct"
+      ],
+      "title": "PhysicalStateSnapshot",
+      "type": "object"
+    },
+    "SegmentedCapabilityDispatch": {
+      "additionalProperties": false,
+      "description": "The complete artifact set the gateway sends to the virtual PLC.",
+      "properties": {
+        "assessment": {
+          "$ref": "#/$defs/CandidateAssessment"
+        },
+        "decision": {
+          "$ref": "#/$defs/Decision"
+        },
+        "permit": {
+          "$ref": "#/$defs/CapabilityExecutionPermit"
+        },
+        "pre_observation": {
+          "$ref": "#/$defs/SignedObservationEnvelope"
+        },
+        "request": {
+          "$ref": "#/$defs/CapabilityActionRequest"
+        },
+        "schema_version": {
+          "const": "m4g-capability-dispatch-v1",
+          "default": "m4g-capability-dispatch-v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request",
+        "pre_observation",
+        "decision",
+        "assessment",
+        "permit"
+      ],
+      "title": "SegmentedCapabilityDispatch",
+      "type": "object"
+    },
+    "SignedEffectPrepareRequest": {
+      "additionalProperties": false,
+      "description": "Gateway-signed prepare intent binding the exact admitted dispatch.",
+      "properties": {
+        "audience": {
+          "default": "aegis-ot:m4i:effect-coordinator",
+          "minLength": 1,
+          "title": "Audience",
+          "type": "string"
+        },
+        "dispatch": {
+          "$ref": "#/$defs/SegmentedCapabilityDispatch"
+        },
+        "dispatch_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dispatch Sha256",
+          "type": "string"
+        },
+        "effect": {
+          "$ref": "#/$defs/EffectIdentity"
+        },
+        "effect_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Effect Sha256",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "request_nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Request Nonce",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "m4i-effect-prepare-request-v1",
+          "default": "m4i-effect-prepare-request-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sender_credential": {
+          "$ref": "#/$defs/SignedWorkloadCredential"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect",
+        "effect_sha256",
+        "sender_credential",
+        "request_nonce",
+        "issued_at",
+        "expires_at",
+        "dispatch",
+        "dispatch_sha256"
+      ],
+      "title": "SignedEffectPrepareRequest",
+      "type": "object"
+    },
+    "SignedObservationEnvelope": {
+      "additionalProperties": false,
+      "description": "Observer-signed state artifact with boot, sequence, time, and correlation binding.",
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "challenge_nonce": {
+          "maxLength": 256,
+          "minLength": 16,
+          "title": "Challenge Nonce",
+          "type": "string"
+        },
+        "command_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command Digest"
+        },
+        "correlation_id": {
+          "minLength": 1,
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "envelope_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Envelope Digest",
+          "type": "string"
+        },
+        "logical_time_s": {
+          "minimum": 0,
+          "title": "Logical Time S",
+          "type": "number"
+        },
+        "observation_id": {
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "observer_boot_epoch": {
+          "minLength": 16,
+          "title": "Observer Boot Epoch",
+          "type": "string"
+        },
+        "observer_id": {
+          "minLength": 1,
+          "title": "Observer Id",
+          "type": "string"
+        },
+        "observer_key_id": {
+          "minLength": 1,
+          "title": "Observer Key Id",
+          "type": "string"
+        },
+        "observer_sequence": {
+          "minimum": 1,
+          "title": "Observer Sequence",
+          "type": "integer"
+        },
+        "permit_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permit Id"
+        },
+        "phase": {
+          "$ref": "#/$defs/ObservationPhase"
+        },
+        "plc_acknowledgment_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plc Acknowledgment Digest"
+        },
+        "previous_envelope_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For a post-dispatch observation, the exact pre-authorization envelope for the same transaction; it is not a continuous global-chain claim.",
+          "title": "Previous Envelope Digest"
+        },
+        "schema_version": {
+          "const": "signed-observation-v1",
+          "default": "signed-observation-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/PhysicalStateSnapshot"
+        }
+      },
+      "required": [
+        "correlation_id",
+        "phase",
+        "challenge_nonce",
+        "observer_id",
+        "observer_key_id",
+        "observer_boot_epoch",
+        "observer_sequence",
+        "captured_at",
+        "logical_time_s",
+        "snapshot",
+        "envelope_digest"
+      ],
+      "title": "SignedObservationEnvelope",
+      "type": "object"
+    },
+    "SignedWorkloadCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "credential": {
+          "$ref": "#/$defs/WorkloadCredential"
+        },
+        "signature": {
+          "maxLength": 88,
+          "minLength": 88,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential",
+        "signature"
+      ],
+      "title": "SignedWorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadCredential": {
+      "additionalProperties": false,
+      "description": "Closed claims signed by the configured research identity authority.",
+      "properties": {
+        "audiences": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Audiences",
+          "type": "array"
+        },
+        "authority_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Authority Key Id",
+          "type": "string"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "not_before": {
+          "format": "date-time",
+          "title": "Not Before",
+          "type": "string"
+        },
+        "public_key_b64": {
+          "maxLength": 44,
+          "minLength": 44,
+          "title": "Public Key B64",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/WorkloadRole"
+        },
+        "schema_version": {
+          "default": "m4g-workload-credential-v1",
+          "pattern": "^m4g-workload-credential-v1$",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Subject",
+          "type": "string"
+        },
+        "trust_domain": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Trust Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential_id",
+        "trust_domain",
+        "subject",
+        "role",
+        "key_id",
+        "public_key_b64",
+        "authority_key_id",
+        "audiences",
+        "issued_at",
+        "not_before",
+        "expires_at"
+      ],
+      "title": "WorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadRole": {
+      "enum": [
+        "agent",
+        "candidate",
+        "gateway",
+        "ot-adapter",
+        "observer",
+        "policy",
+        "plant",
+        "permit-issuer",
+        "simulation"
+      ],
+      "title": "WorkloadRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Coordinator-signed proof that an exact effect was durably prepared.",
+  "properties": {
+    "audience": {
+      "default": "aegis-ot:m4i:gateway",
+      "minLength": 1,
+      "title": "Audience",
+      "type": "string"
+    },
+    "coordinator_credential": {
+      "$ref": "#/$defs/SignedWorkloadCredential"
+    },
+    "effect": {
+      "$ref": "#/$defs/EffectIdentity"
+    },
+    "effect_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Effect Sha256",
+      "type": "string"
+    },
+    "prepare_request": {
+      "$ref": "#/$defs/SignedEffectPrepareRequest"
+    },
+    "prepare_request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prepare Request Sha256",
+      "type": "string"
+    },
+    "prepared_at": {
+      "format": "date-time",
+      "title": "Prepared At",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "m4i-coordination-receipt-v1",
+      "default": "m4i-coordination-receipt-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    },
+    "state": {
+      "const": "dispatch_armed",
+      "default": "dispatch_armed",
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "effect",
+    "effect_sha256",
+    "prepare_request",
+    "prepare_request_sha256",
+    "coordinator_credential",
+    "prepared_at"
+  ],
+  "title": "CoordinationReceipt",
+  "type": "object"
+}

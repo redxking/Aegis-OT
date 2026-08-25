@@ -1,0 +1,276 @@
+{
+  "$defs": {
+    "EffectIdentity": {
+      "additionalProperties": false,
+      "description": "Canonical semantic effect key, independent of M4i delivery lifecycle.\n\nExact proposal, decision, command, and authorization trace remains in the\nsigned dispatch.  It is deliberately absent here so one ``effect_id`` has\nexactly one possible ``EffectIdentity`` value.",
+      "properties": {
+        "authorized_model_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Model Sha256",
+          "type": "string"
+        },
+        "authorized_observation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Observation Sha256",
+          "type": "string"
+        },
+        "authorized_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized State Sha256",
+          "type": "string"
+        },
+        "authorized_state_version": {
+          "minimum": 0,
+          "title": "Authorized State Version",
+          "type": "integer"
+        },
+        "authorized_topology_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authorized Topology Sha256",
+          "type": "string"
+        },
+        "command_semantics_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Command Semantics Sha256",
+          "type": "string"
+        },
+        "effect_id": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "expected_post_state_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post State Sha256",
+          "type": "string"
+        },
+        "expected_post_state_version": {
+          "minimum": 0,
+          "title": "Expected Post State Version",
+          "type": "integer"
+        },
+        "expected_post_topology_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expected Post Topology Sha256",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "m4i-effect-identity-v1",
+          "default": "m4i-effect-identity-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "target_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Target Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect_id",
+        "request_sha256",
+        "command_semantics_sha256",
+        "target_id",
+        "authorized_state_sha256",
+        "authorized_state_version",
+        "authorized_observation_sha256",
+        "authorized_topology_sha256",
+        "authorized_model_sha256",
+        "expected_post_state_sha256",
+        "expected_post_state_version",
+        "expected_post_topology_sha256"
+      ],
+      "title": "EffectIdentity",
+      "type": "object"
+    },
+    "SignedWorkloadCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "credential": {
+          "$ref": "#/$defs/WorkloadCredential"
+        },
+        "signature": {
+          "maxLength": 88,
+          "minLength": 88,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential",
+        "signature"
+      ],
+      "title": "SignedWorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadCredential": {
+      "additionalProperties": false,
+      "description": "Closed claims signed by the configured research identity authority.",
+      "properties": {
+        "audiences": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Audiences",
+          "type": "array"
+        },
+        "authority_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Authority Key Id",
+          "type": "string"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "not_before": {
+          "format": "date-time",
+          "title": "Not Before",
+          "type": "string"
+        },
+        "public_key_b64": {
+          "maxLength": 44,
+          "minLength": 44,
+          "title": "Public Key B64",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/WorkloadRole"
+        },
+        "schema_version": {
+          "default": "m4g-workload-credential-v1",
+          "pattern": "^m4g-workload-credential-v1$",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 256,
+          "minLength": 3,
+          "title": "Subject",
+          "type": "string"
+        },
+        "trust_domain": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Trust Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credential_id",
+        "trust_domain",
+        "subject",
+        "role",
+        "key_id",
+        "public_key_b64",
+        "authority_key_id",
+        "audiences",
+        "issued_at",
+        "not_before",
+        "expires_at"
+      ],
+      "title": "WorkloadCredential",
+      "type": "object"
+    },
+    "WorkloadRole": {
+      "enum": [
+        "agent",
+        "candidate",
+        "gateway",
+        "ot-adapter",
+        "observer",
+        "policy",
+        "plant",
+        "permit-issuer",
+        "simulation"
+      ],
+      "title": "WorkloadRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Gateway-signed query by stable effect identity after ambiguous delivery.",
+  "properties": {
+    "audience": {
+      "default": "aegis-ot:m4i:effect-coordinator",
+      "minLength": 1,
+      "title": "Audience",
+      "type": "string"
+    },
+    "effect": {
+      "$ref": "#/$defs/EffectIdentity"
+    },
+    "effect_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Effect Sha256",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "issued_at": {
+      "format": "date-time",
+      "title": "Issued At",
+      "type": "string"
+    },
+    "request_nonce": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Request Nonce",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "m4i-effect-query-request-v1",
+      "default": "m4i-effect-query-request-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sender_credential": {
+      "$ref": "#/$defs/SignedWorkloadCredential"
+    },
+    "signature": {
+      "default": "",
+      "title": "Signature",
+      "type": "string"
+    }
+  },
+  "required": [
+    "effect",
+    "effect_sha256",
+    "sender_credential",
+    "request_nonce",
+    "issued_at",
+    "expires_at"
+  ],
+  "title": "SignedEffectQueryRequest",
+  "type": "object"
+}

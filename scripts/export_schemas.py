@@ -17,6 +17,16 @@ from aegis_ot.capability_models import (
     PlcCommandAcknowledgment,
     SignedObservationEnvelope,
 )
+from aegis_ot.coordination_models import (
+    CapabilityOutcomeResolution,
+    CoordinationReceipt,
+    DurableCommitAcceptance,
+    EffectIdentity,
+    SignedEffectCommitRequest,
+    SignedEffectOutcome,
+    SignedEffectPrepareRequest,
+    SignedEffectQueryRequest,
+)
 from aegis_ot.m4b_models import (
     IndependentConsequenceReport,
     IndependentEvaluationRequest,
@@ -57,6 +67,24 @@ from aegis_ot.workload_identity import (
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
 MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
+    ROOT / "schemas" / "m4i-capability-outcome-resolution.schema.json": (
+        CapabilityOutcomeResolution
+    ),
+    ROOT / "schemas" / "m4i-coordination-receipt.schema.json": CoordinationReceipt,
+    ROOT / "schemas" / "m4i-durable-commit-acceptance.schema.json": (
+        DurableCommitAcceptance
+    ),
+    ROOT / "schemas" / "m4i-effect-identity.schema.json": EffectIdentity,
+    ROOT / "schemas" / "m4i-signed-effect-commit-request.schema.json": (
+        SignedEffectCommitRequest
+    ),
+    ROOT / "schemas" / "m4i-signed-effect-outcome.schema.json": SignedEffectOutcome,
+    ROOT / "schemas" / "m4i-signed-effect-prepare-request.schema.json": (
+        SignedEffectPrepareRequest
+    ),
+    ROOT / "schemas" / "m4i-signed-effect-query-request.schema.json": (
+        SignedEffectQueryRequest
+    ),
     ROOT / "schemas" / "m4g-capability-dispatch.schema.json": (
         SegmentedCapabilityDispatch
     ),

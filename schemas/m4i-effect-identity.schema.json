@@ -1,0 +1,89 @@
+{
+  "additionalProperties": false,
+  "description": "Canonical semantic effect key, independent of M4i delivery lifecycle.\n\nExact proposal, decision, command, and authorization trace remains in the\nsigned dispatch.  It is deliberately absent here so one ``effect_id`` has\nexactly one possible ``EffectIdentity`` value.",
+  "properties": {
+    "authorized_model_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authorized Model Sha256",
+      "type": "string"
+    },
+    "authorized_observation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authorized Observation Sha256",
+      "type": "string"
+    },
+    "authorized_state_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authorized State Sha256",
+      "type": "string"
+    },
+    "authorized_state_version": {
+      "minimum": 0,
+      "title": "Authorized State Version",
+      "type": "integer"
+    },
+    "authorized_topology_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authorized Topology Sha256",
+      "type": "string"
+    },
+    "command_semantics_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Command Semantics Sha256",
+      "type": "string"
+    },
+    "effect_id": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Effect Id",
+      "type": "string"
+    },
+    "expected_post_state_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Post State Sha256",
+      "type": "string"
+    },
+    "expected_post_state_version": {
+      "minimum": 0,
+      "title": "Expected Post State Version",
+      "type": "integer"
+    },
+    "expected_post_topology_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Post Topology Sha256",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "m4i-effect-identity-v1",
+      "default": "m4i-effect-identity-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Target Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "effect_id",
+    "request_sha256",
+    "command_semantics_sha256",
+    "target_id",
+    "authorized_state_sha256",
+    "authorized_state_version",
+    "authorized_observation_sha256",
+    "authorized_topology_sha256",
+    "authorized_model_sha256",
+    "expected_post_state_sha256",
+    "expected_post_state_version",
+    "expected_post_topology_sha256"
+  ],
+  "title": "EffectIdentity",
+  "type": "object"
+}
