@@ -1,0 +1,113 @@
+schema_version: aegis-ot-m4j-topology-v1
+deployment_status: configuration_only
+claim_boundary: no_live_deployment_or_multi_host_isolation_evidence
+
+box:
+  name: generic/ubuntu2204
+  version: 4.3.12
+  provider: virtualbox
+  check_update: false
+
+bootstrap_nat:
+  enabled: true
+  purpose: vagrant_bootstrap_only
+  application_bindings_allowed: false
+  guest_ssh_port: 22
+
+capacity:
+  max_total_cpus: 12
+  max_total_memory_mb: 18432
+  max_node_cpus: 4
+  max_node_memory_mb: 4096
+
+addressing:
+  ipv4_prefix_length: 24
+  first_node_host_offset: 10
+
+networks:
+  management:
+    cidr: 192.168.56.0/24
+    kind: host_only
+    purpose: ssh_control_only
+    gateway: 192.168.56.1
+    internal_name: null
+    members: [management, trust, agents, gateway, ot, simulation]
+  trust_enrollment:
+    cidr: 192.168.57.0/24
+    kind: virtualbox_internal
+    purpose: workload_identity_enrollment
+    gateway: null
+    internal_name: aegis-m4j-trust-enrollment
+    members: [trust, agents, gateway, ot, simulation]
+  agent_lane:
+    cidr: 192.168.58.0/24
+    kind: virtualbox_internal
+    purpose: agent_to_gateway_only
+    gateway: null
+    internal_name: aegis-m4j-agent-lane
+    members: [agents, gateway]
+  control_dmz:
+    cidr: 192.168.59.0/24
+    kind: virtualbox_internal
+    purpose: trusted_control_services
+    gateway: null
+    internal_name: aegis-m4j-control-dmz
+    members: [trust, gateway, ot]
+  simulation_lane:
+    cidr: 192.168.60.0/24
+    kind: virtualbox_internal
+    purpose: plant_access_only
+    gateway: null
+    internal_name: aegis-m4j-simulation-lane
+    members: [trust, ot, simulation]
+
+nodes:
+  management:
+    hostname: aegis-management
+    cpus: 1
+    memory_mb: 2048
+    interfaces:
+      management: 192.168.56.10
+  trust:
+    hostname: aegis-trust
+    cpus: 2
+    memory_mb: 3072
+    interfaces:
+      management: 192.168.56.11
+      trust_enrollment: 192.168.57.11
+      control_dmz: 192.168.59.11
+      simulation_lane: 192.168.60.11
+  agents:
+    hostname: aegis-agents
+    cpus: 2
+    memory_mb: 2048
+    interfaces:
+      management: 192.168.56.12
+      trust_enrollment: 192.168.57.12
+      agent_lane: 192.168.58.12
+  gateway:
+    hostname: aegis-gateway
+    cpus: 2
+    memory_mb: 3072
+    interfaces:
+      management: 192.168.56.13
+      trust_enrollment: 192.168.57.13
+      agent_lane: 192.168.58.13
+      control_dmz: 192.168.59.13
+  ot:
+    hostname: aegis-ot
+    cpus: 2
+    memory_mb: 3072
+    interfaces:
+      management: 192.168.56.14
+      trust_enrollment: 192.168.57.14
+      control_dmz: 192.168.59.14
+      simulation_lane: 192.168.60.14
+  simulation:
+    hostname: aegis-simulation
+    cpus: 2
+    memory_mb: 4096
+    interfaces:
+      management: 192.168.56.15
+      trust_enrollment: 192.168.57.15
+      simulation_lane: 192.168.60.15
