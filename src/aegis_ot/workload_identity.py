@@ -489,6 +489,89 @@ class WorkloadIdentityVerifier:
             now=now,
         ).public_key
 
+    def verify_historical_credential(
+        self,
+        signed: SignedWorkloadCredential,
+        *,
+        expected_role: WorkloadRole,
+        expected_audience: str,
+        expected_subject: str | None = None,
+        authenticated_at: datetime,
+        now: datetime | None = None,
+        maximum_future_skew: timedelta = timedelta(0),
+    ) -> Ed25519PublicKey:
+        """Verify a credential at a retained protocol-admission time.
+
+        The current signed trust bundle is still loaded and checked, including
+        monotonic sequence protection.  A revocation effective at or before the
+        retained admission time rejects the credential; a later revocation or
+        ordinary leaf expiry does not erase an already retained admission.
+
+        ``authenticated_at`` is supplied by the signed protocol artifact.  This
+        bounded verifier does not provide an external timestamp or hostile
+        rollback resistance: callers must anchor the artifact in their durable,
+        single-writer journal and must not treat this check as proof that a
+        compromised leaf key could not have backdated a newly forged artifact.
+        """
+
+        evaluated_at = datetime.now(UTC) if now is None else now
+        if (
+            evaluated_at.tzinfo is None
+            or evaluated_at.utcoffset() is None
+            or authenticated_at.tzinfo is None
+            or authenticated_at.utcoffset() is None
+            or maximum_future_skew < timedelta(0)
+        ):
+            raise WorkloadCredentialRejected(
+                "historical workload verification time must be timezone-aware"
+            )
+        evaluated_at = evaluated_at.astimezone(UTC)
+        authenticated_at = authenticated_at.astimezone(UTC)
+        if authenticated_at > evaluated_at + maximum_future_skew:
+            raise WorkloadCredentialRejected(
+                "historical workload authentication time is in the future"
+            )
+
+        bundle, _ = self._trusted_bundle(evaluated_at)
+        credential = signed.credential
+        if (
+            credential.trust_domain != self.trust_domain
+            or credential.authority_key_id != self.trust_root_key_id
+            or not signed.verify(self.trust_root_public_key)
+        ):
+            raise WorkloadCredentialRejected(
+                "historical workload credential issuer or signature is invalid"
+            )
+        if credential.expires_at - credential.not_before > self.maximum_credential_lifetime:
+            raise WorkloadCredentialRejected(
+                "historical workload credential lifetime exceeds policy"
+            )
+        if not credential.not_before <= authenticated_at < credential.expires_at:
+            raise WorkloadCredentialRejected(
+                "workload credential was not valid at historical admission"
+            )
+        if credential.role is not expected_role:
+            raise WorkloadCredentialRejected(
+                "historical workload credential role is not authorized"
+            )
+        if expected_subject is not None and credential.subject != expected_subject:
+            raise WorkloadCredentialRejected(
+                "historical workload credential subject is not authorized"
+            )
+        if expected_audience not in credential.audiences:
+            raise WorkloadCredentialRejected(
+                "historical workload credential audience is not authorized"
+            )
+        if any(
+            revoked.credential_id == credential.credential_id
+            and revoked.revoked_at <= authenticated_at
+            for revoked in bundle.revocations
+        ):
+            raise WorkloadCredentialRejected(
+                "workload credential was revoked at historical admission"
+            )
+        return credential.public_key
+
 
 @dataclass(frozen=True)
 class WorkloadVerificationReceipt:
