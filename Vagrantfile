@@ -57,6 +57,7 @@ module M4jTopology
   ADDRESSING_KEYS = %w[ipv4_prefix_length first_node_host_offset].freeze
   NETWORK_KEYS = %w[cidr kind purpose gateway internal_name members].freeze
   NODE_KEYS = %w[hostname cpus memory_mb interfaces].freeze
+  COMMUNICATOR_MARKER_SCHEMA = "aegis-ot-m4j-management-communicator-v1".freeze
 
   module_function
 
@@ -296,6 +297,24 @@ module M4jTopology
       end
     end
   end
+
+  def management_communicator_ready!(path, role, address)
+    return false unless File.exist?(path) || File.symlink?(path)
+
+    stat = File.lstat(path)
+    expected = "#{COMMUNICATOR_MARKER_SCHEMA}\nrole=#{role}\naddress=#{address}\n"
+    unless stat.file? && !stat.symlink? && stat.uid == Process.euid &&
+           (stat.mode & 0o777) == 0o600 && stat.size == expected.bytesize
+      raise Error, "M4j management communicator marker is unsafe"
+    end
+    unless File.binread(path, expected.bytesize + 1) == expected
+      raise Error, "M4j management communicator marker is stale or malformed"
+    end
+
+    true
+  rescue Errno::EACCES, Errno::ENOENT => e
+    raise Error, "M4j management communicator marker could not be verified: #{e.message}"
+  end
 end
 
 topology_path = File.join(__dir__, "infra", "m4j", "topology.yml")
@@ -313,6 +332,19 @@ Vagrant.configure("2") do |config|
   topology.fetch("nodes").each do |role, specification|
     config.vm.define role do |node|
       node.vm.hostname = specification.fetch("hostname")
+      management_address = specification.fetch("interfaces").fetch("management")
+      communicator_marker = File.join(
+        __dir__,
+        ".vagrant",
+        "machines",
+        role,
+        box.fetch("provider"),
+        "m4j-management-communicator",
+      )
+      if M4jTopology.management_communicator_ready!(communicator_marker, role, management_address)
+        node.ssh.host = management_address
+        node.ssh.port = 22
+      end
       specification.fetch("interfaces").each do |network_name, address|
         network = networks.fetch(network_name)
         options = {
@@ -336,6 +368,16 @@ Vagrant.configure("2") do |config|
           "--description",
           "Aegis-OT M4j #{role}; adapter 1 NAT is bootstrap-only; application bindings prohibited",
         ]
+      end
+
+      node.vm.provision "ansible" do |ansible|
+        ansible.playbook = "infra/ansible/site.yml"
+        ansible.inventory_path = "infra/ansible/inventory.ini"
+        ansible.limit = "#{role},localhost"
+        ansible.compatibility_mode = "2.0"
+        ansible.extra_vars = {
+          "m4j_vagrant_machine" => role,
+        }
       end
     end
   end

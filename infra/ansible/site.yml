@@ -1,22 +1,89 @@
 ---
-- name: Establish defensive research host baseline
-  hosts: all
-  become: true
+- name: Validate M4j controller inputs before selecting a managed host
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
   tasks:
-    - name: Install base packages
-      ansible.builtin.apt:
-        name:
-          - ca-certificates
-          - curl
-          - python3
-          - python3-venv
-        state: present
-        update_cache: true
+    - name: Load the authoritative M4j topology contract for controller preflight
+      ansible.builtin.include_vars:
+        file: ../m4j/topology.yml
+        name: m4j_topology
 
-    - name: Record environment role
-      ansible.builtin.copy:
-        dest: /etc/aegis-ot-role
-        content: "{{ group_names | join(',') }}\n"
-        owner: root
-        group: root
-        mode: "0644"
+    - name: Reject topology, inventory, controller, or package-pin drift
+      ansible.builtin.assert:
+        that:
+          - m4j_topology.schema_version == "aegis-ot-m4j-topology-v1"
+          - m4j_topology.deployment_status == "configuration_only"
+          - >-
+            m4j_topology.claim_boundary ==
+            "no_live_deployment_or_multi_host_isolation_evidence"
+          - m4j_topology.nodes.keys() | list == m4j_expected_roles
+          - >-
+            groups["all"] | reject("equalto", "localhost") | list | sort ==
+            m4j_expected_roles | sort
+          - m4j_vagrant_machine is defined
+          - m4j_vagrant_machine in m4j_expected_roles
+          - >-
+            m4j_vagrant_communicator_marker_path ==
+            ((playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
+             m4j_vagrant_machine ~ "/virtualbox/m4j-management-communicator")
+          - m4j_required_ansible_core_version is match("^[0-9]+\\.[0-9]+\\.[0-9]+$")
+          - ansible_version.full == m4j_required_ansible_core_version
+          - >-
+            m4j_required_apt_sources_manifest_sha256 is match("^[0-9a-f]{64}$")
+          - >-
+            m4j_required_package_versions.keys() | sort ==
+            m4j_required_package_names | sort
+          - >-
+            m4j_required_package_versions.values() | reject("equalto", "") | list | length ==
+            m4j_required_package_names | length
+          - >-
+            m4j_required_package_versions.values() | reject("search", "[*]") | list | length ==
+            m4j_required_package_names | length
+          - '"latest" not in m4j_required_package_versions.values()'
+          - '"present" not in m4j_required_package_versions.values()'
+        fail_msg: >-
+          M4j provisioning preflight rejected drift or an absent/non-exact external version pin.
+
+    - name: Reject drift in every inventory role and management address
+      ansible.builtin.assert:
+        that:
+          - groups[item] == [item]
+          - hostvars[item].aegis_role == item
+          - hostvars[item].ansible_host == m4j_topology.nodes[item].interfaces.management
+        fail_msg: "M4j inventory differs from the authoritative management-plane topology."
+      loop: "{{ m4j_expected_roles }}"
+
+- name: Establish deterministic M4j defensive host baseline
+  hosts: "{{ m4j_vagrant_machine }}"
+  become: true
+  gather_facts: true
+  vars_files:
+    - group_vars/all.yml
+  pre_tasks:
+    - name: Load the authoritative M4j topology contract for host preflight
+      ansible.builtin.include_vars:
+        file: ../m4j/topology.yml
+        name: m4j_topology
+
+    - name: Reject host identity, operating-system, or interface drift
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == m4j_vagrant_machine
+          - inventory_hostname in m4j_expected_roles
+          - aegis_role == inventory_hostname
+          - inventory_hostname in group_names
+          - group_names | intersect(m4j_expected_roles) | length == 1
+          - ansible_host == m4j_topology.nodes[inventory_hostname].interfaces.management
+          - ansible_host in ansible_all_ipv4_addresses
+          - ansible_hostname == m4j_topology.nodes[inventory_hostname].hostname
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version == "22.04"
+          - ansible_distribution_release == "jammy"
+        fail_msg: "Managed host identity or pinned Ubuntu 22.04 base differs from the contract."
+
+  roles:
+    - role: m4j_base

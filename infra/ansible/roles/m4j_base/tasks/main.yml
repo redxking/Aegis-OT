@@ -1,0 +1,553 @@
+---
+- name: Reject malformed exact package-version inputs
+  ansible.builtin.assert:
+    that:
+      - item.value is string
+      - item.value == item.value | trim
+      - item.value is match("^[0-9][0-9A-Za-z.+:~_-]*$")
+    fail_msg: "Package {{ item.key }} requires an exact Debian version string."
+  loop: "{{ m4j_required_package_versions | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Enumerate configured Ubuntu package sources
+  ansible.builtin.find:
+    paths: /etc/apt
+    patterns:
+      - "*.list"
+      - "*.sources"
+    recurse: true
+    file_type: file
+    get_checksum: true
+  register: m4j_apt_source_files
+
+- name: Reject a host without explicit package sources
+  ansible.builtin.assert:
+    that:
+      - m4j_apt_source_files.matched | int > 0
+    fail_msg: "No Ubuntu package-source files were available to validate."
+
+- name: Initialize the package-source manifest
+  ansible.builtin.set_fact:
+    m4j_observed_apt_sources_manifest: ""
+
+- name: Build the deterministic package-source manifest
+  ansible.builtin.set_fact:
+    m4j_observed_apt_sources_manifest: >-
+      {{ m4j_observed_apt_sources_manifest + item.path + "=" + item.checksum + "\n" }}
+  loop: "{{ m4j_apt_source_files.files | sort(attribute='path') }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Reject package-source configuration drift
+  ansible.builtin.assert:
+    that:
+      - >-
+        m4j_observed_apt_sources_manifest | hash("sha256") ==
+        m4j_required_apt_sources_manifest_sha256
+    fail_msg: "Ubuntu package-source configuration differs from the required manifest digest."
+
+- name: Stop any pre-existing Docker activation before package work
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - stop
+      - docker.service
+      - docker.socket
+  register: m4j_preexisting_docker_stop
+  changed_when: m4j_preexisting_docker_stop.rc == 0
+  failed_when: m4j_preexisting_docker_stop.rc not in [0, 5]
+
+- name: Mask Docker activation throughout package installation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - mask
+      - docker.service
+      - docker.socket
+  changed_when: true
+  notify: Reconfigure restricted Docker
+
+- name: Refresh the validated Ubuntu package metadata once
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+    force_apt_get: true
+
+- name: Install exact base package versions
+  ansible.builtin.apt:
+    name: "{{ item.key }}={{ item.value }}"
+    state: present
+    install_recommends: false
+    force_apt_get: true
+    policy_rc_d: 101
+    fail_on_autoremove: true
+    allow_unauthenticated: false
+    allow_downgrade: false
+  loop: "{{ m4j_required_package_versions | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+- name: Hold the exact base packages against implicit upgrades
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ m4j_required_package_names }}"
+
+- name: Create the non-login Aegis service group
+  ansible.builtin.group:
+    name: "{{ m4j_service_account.group }}"
+    gid: "{{ m4j_service_account.gid }}"
+    system: true
+    state: present
+
+- name: Create the non-login Aegis service account
+  ansible.builtin.user:
+    name: "{{ m4j_service_account.name }}"
+    uid: "{{ m4j_service_account.uid }}"
+    group: "{{ m4j_service_account.group }}"
+    groups: ""
+    append: false
+    home: "{{ m4j_service_account.home }}"
+    shell: "{{ m4j_service_account.shell }}"
+    create_home: false
+    password_lock: true
+    system: true
+    state: present
+
+- name: Create root-controlled Aegis directory roots
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ m4j_service_account.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: /etc/aegis-ot
+      mode: "0750"
+    - path: /var/lib/aegis-ot
+      mode: "0710"
+    - path: /var/lib/aegis-ot/state
+      mode: "0710"
+    - path: /var/lib/aegis-ot/evidence
+      mode: "0710"
+
+- name: Create the role-specific read-only configuration directory
+  ansible.builtin.file:
+    path: "/etc/aegis-ot/{{ aegis_role }}"
+    state: directory
+    owner: root
+    group: "{{ m4j_service_account.group }}"
+    mode: "0750"
+
+- name: Create role-specific private state and evidence directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ m4j_service_account.name }}"
+    group: "{{ m4j_service_account.group }}"
+    mode: "0700"
+  loop:
+    - "/var/lib/aegis-ot/state/{{ aegis_role }}"
+    - "/var/lib/aegis-ot/evidence/{{ aegis_role }}"
+
+- name: Record the validated node role and configuration-only boundary
+  ansible.builtin.copy:
+    dest: "/etc/aegis-ot/{{ aegis_role }}/role"
+    content: |
+      schema_version={{ m4j_topology.schema_version }}
+      role={{ aegis_role }}
+      deployment_status={{ m4j_topology.deployment_status }}
+    owner: root
+    group: "{{ m4j_service_account.group }}"
+    mode: "0440"
+
+- name: Install the forwarding-disabled kernel policy
+  ansible.builtin.copy:
+    src: 99-aegis-ot-forwarding.conf
+    dest: /etc/sysctl.d/99-aegis-ot-forwarding.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply the forwarding-disabled kernel policy
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sysctl
+      - --load
+      - /etc/sysctl.d/99-aegis-ot-forwarding.conf
+  changed_when: true
+
+- name: Enumerate persistent forwarding definitions
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/grep
+      - -R
+      - -n
+      - -E
+      - -e
+      - '^[[:space:]]*net\.(ipv4\.ip_forward|ipv6\.conf\.(all|default)\.forwarding)[[:space:]]*='
+      - /etc/sysctl.conf
+      - /etc/sysctl.d
+      - /usr/lib/sysctl.d
+  changed_when: false
+  register: m4j_persistent_forwarding_definitions
+
+- name: Reject conflicting persistent forwarding definitions
+  ansible.builtin.assert:
+    that:
+      - m4j_persistent_forwarding_definitions.stdout_lines | length == 3
+      - >-
+        m4j_persistent_forwarding_definitions.stdout_lines |
+        reject("match", "^/etc/sysctl.d/99-aegis-ot-forwarding[.]conf:[0-9]+:") |
+        list | length == 0
+    fail_msg: "Another persistent sysctl definition can override disabled forwarding."
+
+- name: Create root-controlled Docker configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/docker
+    - /etc/systemd/system/docker.service.d
+    - /etc/systemd/system/docker.socket.d
+
+- name: Install the forwarding-disabled Docker daemon policy
+  ansible.builtin.copy:
+    src: daemon.json
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reconfigure restricted Docker
+
+- name: Restrict Docker service activation to its local systemd socket
+  ansible.builtin.copy:
+    src: docker.service.conf
+    dest: /etc/systemd/system/docker.service.d/10-aegis-ot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconfigure restricted Docker
+
+- name: Restrict Docker socket activation to a Unix socket
+  ansible.builtin.copy:
+    src: docker.socket.conf
+    dest: /etc/systemd/system/docker.socket.d/10-aegis-ot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconfigure restricted Docker
+
+- name: Apply Docker configuration before verification and firewalling
+  ansible.builtin.meta: flush_handlers
+
+- name: Keep the restricted Docker socket and service enabled
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - docker.socket
+    - docker.service
+
+- name: Read the effective Docker service command
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - --property=ExecStart
+      - --value
+      - docker.service
+  changed_when: false
+  register: m4j_docker_exec_start
+
+- name: Read the effective Docker socket listeners
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - show
+      - --property=Listen
+      - --value
+      - docker.socket
+  changed_when: false
+  register: m4j_docker_socket_listen
+
+- name: Require the Docker daemon to be active
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - is-active
+      - --quiet
+      - docker.service
+  changed_when: false
+
+- name: Read listening TCP sockets
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ss
+      - -H
+      - -lntp
+  changed_when: false
+  register: m4j_tcp_listeners
+
+- name: Inspect whether Docker exposed a default bridge network
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - network
+      - inspect
+      - bridge
+  changed_when: false
+  failed_when: false
+  register: m4j_docker_default_bridge
+
+- name: Inspect the local Docker socket
+  ansible.builtin.stat:
+    path: /run/docker.sock
+  register: m4j_docker_socket
+
+- name: Reject Docker TCP exposure or an unexpected local socket
+  ansible.builtin.assert:
+    that:
+      - '"/usr/bin/dockerd" in m4j_docker_exec_start.stdout'
+      - '"-H fd://" in m4j_docker_exec_start.stdout'
+      - '"--config-file=/etc/docker/daemon.json" in m4j_docker_exec_start.stdout'
+      - '"tcp://" not in m4j_docker_exec_start.stdout'
+      - m4j_docker_socket_listen.stdout_lines | length == 1
+      - '"/run/docker.sock" in m4j_docker_socket_listen.stdout'
+      - '":" not in m4j_docker_socket_listen.stdout'
+      - '"dockerd" not in m4j_tcp_listeners.stdout'
+      - m4j_docker_default_bridge.rc != 0
+      - m4j_docker_socket.stat.exists
+      - m4j_docker_socket.stat.issock
+      - m4j_docker_socket.stat.pw_name == "root"
+      - m4j_docker_socket.stat.gr_name == "root"
+      - m4j_docker_socket.stat.mode == "0600"
+    fail_msg: "Docker did not converge to the required Unix-only local boundary."
+
+- name: Locate the authoritative management interface
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - -4
+      - addr
+      - show
+      - to
+      - "{{ ansible_host }}/32"
+  changed_when: false
+  register: m4j_management_interface_result
+
+- name: Reject an absent or ambiguous management interface
+  ansible.builtin.assert:
+    that:
+      - m4j_management_interface_result.stdout_lines | length == 1
+      - ansible_host in m4j_management_interface_result.stdout
+    fail_msg: "The authoritative management address did not resolve to exactly one interface."
+
+- name: Select the validated management interface
+  ansible.builtin.set_fact:
+    m4j_management_interface: >-
+      {{ m4j_management_interface_result.stdout_lines[0].split()[1] }}
+
+- name: Converge UFW with an emergency default-deny recovery path
+  block:
+    - name: Reset UFW to a deterministic empty user policy
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - --force
+          - reset
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Establish default-deny UFW policy
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      changed_when: true
+      environment:
+        LC_ALL: C
+      loop:
+        - [/usr/sbin/ufw, default, deny, incoming]
+        - [/usr/sbin/ufw, default, allow, outgoing]
+        - [/usr/sbin/ufw, default, deny, routed]
+
+    - name: Permit SSH only on the management interface address and subnet
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - allow
+          - in
+          - "on"
+          - "{{ m4j_management_interface }}"
+          - from
+          - "{{ m4j_topology.networks.management.cidr }}"
+          - to
+          - "{{ ansible_host }}"
+          - port
+          - "22"
+          - proto
+          - tcp
+          - comment
+          - Aegis-M4j-management-SSH
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Enable UFW after installing the bounded management allowance
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - --force
+          - enable
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Enable bounded UFW logging
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - logging
+          - low
+      changed_when: true
+      environment:
+        LC_ALL: C
+  rescue:
+    - name: Clear UFW user policy during emergency recovery
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - --force
+          - reset
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Restore emergency UFW default-deny policies
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      changed_when: true
+      environment:
+        LC_ALL: C
+      loop:
+        - [/usr/sbin/ufw, default, deny, incoming]
+        - [/usr/sbin/ufw, default, deny, routed]
+
+    - name: Restore management SSH during emergency recovery
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - allow
+          - in
+          - "on"
+          - "{{ m4j_management_interface }}"
+          - from
+          - "{{ m4j_topology.networks.management.cidr }}"
+          - to
+          - "{{ ansible_host }}"
+          - port
+          - "22"
+          - proto
+          - tcp
+          - comment
+          - Aegis-M4j-management-SSH
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Re-enable UFW after restoring emergency management SSH
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/ufw
+          - --force
+          - enable
+      changed_when: true
+      environment:
+        LC_ALL: C
+
+    - name: Record the emergency management communicator path
+      ansible.builtin.copy:
+        dest: "{{ m4j_vagrant_communicator_marker_path }}"
+        content: |
+          aegis-ot-m4j-management-communicator-v1
+          role={{ m4j_vagrant_machine }}
+          address={{ ansible_host }}
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+
+    - name: Stop after fail-closed UFW recovery
+      ansible.builtin.fail:
+        msg: >-
+          UFW convergence failed; emergency default-deny policy was re-enabled and provisioning
+          stopped.
+
+- name: Read effective UFW defaults
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ufw
+      - status
+      - verbose
+  changed_when: false
+  register: m4j_ufw_verbose
+  environment:
+    LC_ALL: C
+
+- name: Read effective UFW rules
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ufw
+      - status
+      - numbered
+  changed_when: false
+  register: m4j_ufw_rules
+  environment:
+    LC_ALL: C
+
+- name: Reject firewall drift or any additional user-defined inbound allowance
+  ansible.builtin.assert:
+    that:
+      - '"Status: active" in m4j_ufw_verbose.stdout'
+      - '"Default: deny (incoming), allow (outgoing), deny (routed)" in m4j_ufw_verbose.stdout'
+      - >-
+        m4j_ufw_rules.stdout_lines | select("search", "ALLOW IN") | list | length == 1
+      - '"22/tcp on " + m4j_management_interface in m4j_ufw_rules.stdout'
+      - ansible_host in m4j_ufw_rules.stdout
+      - m4j_topology.networks.management.cidr in m4j_ufw_rules.stdout
+    fail_msg: "UFW differs from the single user-defined management-plane SSH allowance."
+
+- name: Read final effective forwarding controls
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sysctl
+      - -n
+      - "{{ item }}"
+  changed_when: false
+  register: m4j_forwarding_controls
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+    - net.ipv6.conf.default.forwarding
+
+- name: Reject a final effective forwarding control that is not disabled
+  ansible.builtin.assert:
+    that:
+      - m4j_forwarding_controls.results | map(attribute="stdout") | unique | list == ["0"]
+    fail_msg: "IPv4 or IPv6 forwarding remained enabled after complete baseline application."
+
+- name: Record the validated management communicator path
+  ansible.builtin.copy:
+    dest: "{{ m4j_vagrant_communicator_marker_path }}"
+    content: |
+      aegis-ot-m4j-management-communicator-v1
+      role={{ m4j_vagrant_machine }}
+      address={{ ansible_host }}
+    mode: "0600"
+  delegate_to: localhost
+  become: false

@@ -197,7 +197,11 @@ def test_vagrantfile_loads_only_the_contract_and_exposes_no_application_port() -
     assert "options[:virtualbox__intnet]" in source
     assert "adapter 1 NAT is bootstrap-only; application bindings prohibited" in source
     assert "forwarded_port" not in source
-    assert ".provision" not in source
+    assert 'node.vm.provision "ansible"' in source
+    assert 'ansible.playbook = "infra/ansible/site.yml"' in source
+    assert 'ansible.inventory_path = "infra/ansible/inventory.ini"' in source
+    assert 'ansible.limit = "#{role},localhost"' in source
+    assert 'node.vm.provision "shell"' not in source
     assert "192.168." not in source
     assert "generic/ubuntu2204" not in source
 

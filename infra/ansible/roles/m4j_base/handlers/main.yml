@@ -1,0 +1,34 @@
+---
+- name: Stop Docker before applying the restricted activation boundary
+  ansible.builtin.systemd:
+    name: docker.service
+    state: stopped
+  listen: Reconfigure restricted Docker
+
+- name: Reload systemd for the restricted Docker units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: Reconfigure restricted Docker
+
+- name: Unmask the restricted Docker units
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: false
+  loop:
+    - docker.socket
+    - docker.service
+  listen: Reconfigure restricted Docker
+
+- name: Restart the restricted local Docker socket
+  ansible.builtin.systemd:
+    name: docker.socket
+    enabled: true
+    state: restarted
+  listen: Reconfigure restricted Docker
+
+- name: Start Docker through the restricted local socket
+  ansible.builtin.systemd:
+    name: docker.service
+    enabled: true
+    state: started
+  listen: Reconfigure restricted Docker

@@ -1,0 +1,10 @@
+{
+  "bridge": "none",
+  "icc": false,
+  "ip-forward": false,
+  "ip-masq": false,
+  "ip6tables": false,
+  "iptables": false,
+  "live-restore": true,
+  "userland-proxy": false
+}

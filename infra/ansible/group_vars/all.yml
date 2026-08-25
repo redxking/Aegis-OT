@@ -1,0 +1,58 @@
+---
+m4j_expected_roles:
+  - management
+  - trust
+  - agents
+  - gateway
+  - ot
+  - simulation
+
+m4j_required_ansible_core_version: >-
+  {{ lookup('ansible.builtin.env', 'AEGIS_M4J_ANSIBLE_CORE_VERSION') }}
+# Binds source-declaration text only, not mirror contents or transitive dependency closure.
+# Value is SHA-256 of sorted "absolute-path=per-file-SHA1\n" records for *.list/*.sources.
+m4j_required_apt_sources_manifest_sha256: >-
+  {{ lookup('ansible.builtin.env', 'AEGIS_M4J_APT_SOURCES_MANIFEST_SHA256') }}
+
+m4j_required_package_names:
+  - ca-certificates
+  - python3
+  - python3-venv
+  - iproute2
+  - iptables
+  - runc
+  - containerd
+  - ufw
+  - docker.io
+
+m4j_required_package_versions:
+  ca-certificates: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_CA_CERTIFICATES') }}
+  python3: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_PYTHON3') }}
+  python3-venv: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_PYTHON3_VENV') }}
+  iproute2: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_IPROUTE2') }}
+  iptables: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_IPTABLES') }}
+  runc: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_RUNC') }}
+  containerd: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_CONTAINERD') }}
+  ufw: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_UFW') }}
+  docker.io: >-
+    {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PKG_DOCKER_IO') }}
+
+m4j_service_account:
+  name: aegis
+  group: aegis
+  uid: 65532
+  gid: 65532
+  home: /nonexistent
+  shell: /usr/sbin/nologin
+
+m4j_vagrant_communicator_marker_path: >-
+  {{ (playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
+     m4j_vagrant_machine ~ "/virtualbox/m4j-management-communicator" }}
