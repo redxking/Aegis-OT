@@ -9,9 +9,16 @@ import os
 import platform
 import subprocess
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+from uuid import uuid4
+
+from aegis_ot.models import ActionProposal, Operation, SystemState
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -72,6 +79,95 @@ def _network_inventory(project_name: str, network_names: list[str]) -> dict[str,
         names = [item.get("Name") for item in containers.values() if isinstance(item, dict)]
         inventory[name] = sorted(str(value) for value in names if isinstance(value, str))
     return inventory
+
+
+def _http_json(
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    if urlsplit(url).scheme != "http":
+        raise ExperimentError("M4d local probe URL must use HTTP")
+    body = None
+    headers = {"Accept": "application/json"}
+    if payload is not None:
+        body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        headers["Content-Type"] = "application/json"
+    request = Request(url, data=body, headers=headers, method=method)  # noqa: S310
+    try:
+        with urlopen(request, timeout=5.0) as response:  # noqa: S310
+            status = response.status
+            raw = response.read(1_048_577)
+    except HTTPError as exc:
+        status = exc.code
+        raw = exc.read(1_048_577)
+    except (TimeoutError, URLError, OSError) as exc:
+        raise ExperimentError(f"local gateway exchange failed: {url}") from exc
+    if len(raw) > 1_048_576:
+        raise ExperimentError("local gateway response exceeded the size limit")
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ExperimentError("local gateway response was not an object")
+    return status, value
+
+
+def _proposal(state: SystemState, *, suffix: str) -> ActionProposal:
+    return ActionProposal(
+        proposal_id=f"m4d-fault-{suffix}-{uuid4()}",
+        actor_id="agent:operator-1",
+        mission_id="microgrid-containment",
+        resource="battery-1",
+        operation=Operation.DISPATCH_BATTERY,
+        parameters={
+            "mw": 1.0,
+            "minimum_voltage_delta_pu": 0.0,
+            "maximum_voltage_delta_pu": 0.0,
+        },
+        observed_state_version=state.version,
+        observed_at=state.observed_at,
+        submitted_at=datetime.now(UTC),
+        nonce=str(uuid4()),
+        confidence=0.9,
+        risk_score=60.0,
+        delegation_chain=("grant-root", "grant-leaf"),
+    )
+
+
+def _await_gateway_observation(expected_status: int = 200) -> dict[str, Any]:
+    last_status = 0
+    last_payload: dict[str, Any] = {}
+    for _ in range(40):
+        last_status, last_payload = _http_json(
+            "GET", "http://127.0.0.1:8081/v1/observation"
+        )
+        if last_status == expected_status:
+            return last_payload
+        time.sleep(0.25)
+    raise ExperimentError(
+        f"gateway observation did not reach HTTP {expected_status}; last={last_status}"
+    )
+
+
+def _await_opa(compose_prefix: tuple[str, ...]) -> None:
+    command = (
+        "from urllib.request import urlopen; "
+        "urlopen('http://opa:8181/health', timeout=1).read()"
+    )
+    for _ in range(40):
+        completed = _run(
+            *compose_prefix,
+            "exec",
+            "-T",
+            "segmented-gateway",
+            "python",
+            "-c",
+            command,
+            check=False,
+        )
+        if completed.returncode == 0:
+            return
+        time.sleep(0.25)
+    raise ExperimentError("OPA did not recover within the bounded readiness interval")
 
 
 def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
@@ -135,6 +231,55 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
     if not isinstance(probe, dict) or probe.get("accepted") is not True:
         raise ExperimentError("agent-network probe did not satisfy its acceptance criteria")
 
+    _, before_policy = _http_json("GET", "http://127.0.0.1:8081/v1/observation")
+    policy_state = SystemState.model_validate(before_policy)
+    _run(*compose_prefix, "stop", "opa")
+    policy_status, policy_result = _http_json(
+        "POST",
+        "http://127.0.0.1:8081/v1/actions",
+        _proposal(policy_state, suffix="policy-loss").model_dump(mode="json"),
+    )
+    _, after_policy = _http_json("GET", "http://127.0.0.1:8081/v1/observation")
+    _run(*compose_prefix, "start", "opa")
+    _await_opa(compose_prefix)
+
+    _run(*compose_prefix, "stop", "observer")
+    observer_status, observer_result = _http_json(
+        "GET", "http://127.0.0.1:8081/v1/observation"
+    )
+    _run(*compose_prefix, "start", "observer")
+    recovered_observation = SystemState.model_validate(_await_gateway_observation())
+
+    ot_proposal = _proposal(recovered_observation, suffix="ot-loss")
+    _run(*compose_prefix, "stop", "ot-adapter")
+    ot_status, ot_result = _http_json(
+        "POST",
+        "http://127.0.0.1:8081/v1/actions",
+        ot_proposal.model_dump(mode="json"),
+    )
+    _run(*compose_prefix, "start", "ot-adapter")
+    after_ot = SystemState.model_validate(_await_gateway_observation())
+
+    service_faults = {
+        "policy_service_loss": {
+            "http_status": policy_status,
+            "decision": policy_result.get("decision"),
+            "state_version_before": policy_state.version,
+            "state_version_after": after_policy.get("version"),
+        },
+        "observer_service_loss": {
+            "http_status": observer_status,
+            "response": observer_result,
+            "recovered": recovered_observation.version == policy_state.version,
+        },
+        "ot_adapter_service_loss": {
+            "http_status": ot_status,
+            "response": ot_result,
+            "state_version_before": recovered_observation.version,
+            "state_version_after": after_ot.version,
+        },
+    }
+
     expected_networks = ["agent", "trust", "control_dmz", "simulation"]
     networks = _network_inventory(project_name, expected_networks)
     images = _json_records(_run(*compose_prefix, "images", "--format", "json").stdout)
@@ -155,6 +300,7 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
         "images": images,
         "network_inventory": networks,
         "probe": probe,
+        "service_faults": service_faults,
         "acceptance": {
             "agent_direct_observer_unreachable": probe[
                 "agent_network_direct_reachability"
@@ -182,6 +328,24 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
                 and probe["replay"]["dispatched"] is False
                 and "replayed_nonce" in probe["replay"]["reasons"]
             ),
+            "policy_loss_denied_without_effect": (
+                policy_status == 200
+                and policy_result.get("decision", {}).get("outcome") == "deny"
+                and "policy_service_unavailable"
+                in policy_result.get("decision", {}).get("reasons", [])
+                and policy_result.get("execution") is None
+                and after_policy.get("version") == policy_state.version
+            ),
+            "observer_loss_failed_closed_and_recovered": (
+                observer_status == 503
+                and observer_result.get("detail") == "trusted observation unavailable"
+                and recovered_observation.version == policy_state.version
+            ),
+            "ot_adapter_loss_preserved_state": (
+                ot_status == 503
+                and ot_result.get("detail") == "OT execution outcome unavailable"
+                and after_ot.version == recovered_observation.version
+            ),
         },
         "evidence_boundary": [
             "Docker network membership and in-container reachability on one local host",
@@ -200,6 +364,7 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
             "resolved_compose_sha256": evidence["resolved_compose_sha256"],
             "network_inventory": networks,
             "probe": semantic_probe,
+            "service_faults": service_faults,
             "acceptance": evidence["acceptance"],
             "accepted": evidence["accepted"],
         }
