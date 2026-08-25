@@ -709,3 +709,160 @@ def test_key_and_signature_encodings_are_canonical_and_length_checked() -> None:
         M4bTrustAnchor.model_validate(
             {**anchor.model_dump(mode="json"), "not_before": NOW.replace(tzinfo=None)}
         )
+
+
+def test_m4b_anchor_and_registration_reject_remaining_identity_inconsistencies() -> None:
+    private_key = Ed25519PrivateKey.generate()
+    anchor = M4bTrustAnchor(
+        anchor_id="anchor-1",
+        key_id="key-1",
+        public_key_b64=public_key_base64(private_key.public_key()),
+        public_key_sha256=_public_key_sha256(private_key),
+        not_before=NOW,
+    )
+    with pytest.raises(ValidationError, match="expiry must be after"):
+        M4bTrustAnchor.model_validate(
+            {**anchor.model_dump(mode="json"), "not_after": NOW.isoformat()}
+        )
+
+    base = {
+        "session_id": "session-1",
+        "session_index": 0,
+        "master_seed": 1,
+        "component_id": "component:test",
+        "pid": 100,
+        "boot_epoch": "component-boot-epoch-0001",
+        "capabilities": ["admin:health"],
+        "registered_at": NOW.isoformat(),
+    }
+    with pytest.raises(ValidationError, match="requires an Ed25519 key"):
+        M4bComponentRegistration.model_validate(
+            {**base, "role": M4bComponentRole.OBSERVER}
+        )
+    with pytest.raises(ValidationError, match="digest is inconsistent"):
+        M4bComponentRegistration.model_validate(
+            {
+                **base,
+                "role": M4bComponentRole.OBSERVER,
+                "key_id": "observer-key",
+                "public_key_b64": public_key_base64(private_key.public_key()),
+                "public_key_sha256": DIGEST_A,
+            }
+        )
+    with pytest.raises(ValidationError, match="plant registration"):
+        M4bComponentRegistration.model_validate(
+            {**base, "role": M4bComponentRole.PLANT}
+        )
+
+
+def test_m4b_manifest_rejects_temporal_collection_and_count_inconsistencies() -> None:
+    manifest = _manifest()
+
+    invalid_cases: tuple[tuple[dict[str, Any], str], ...] = (
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "completed_at_utc": (NOW - timedelta(seconds=1)).isoformat(),
+            },
+            "completion precedes",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "master_seeds": [20260826, 20260826],
+                "session_count": 2,
+            },
+            "master seeds must be unique",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "artifacts": [
+                    _artifact("manifest.json").model_dump(mode="json"),
+                ],
+            },
+            "cannot describe themselves",
+        ),
+        (
+            {**manifest.model_dump(mode="json"), "source_sha256": {}},
+            "source hashes cannot be empty",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "source_sha256": {"z.py": DIGEST_A, "a.py": DIGEST_B},
+            },
+            "source hashes paths must be sorted",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "component_versions": {"python": "3.14", "aegis-ot": "0.1.0"},
+            },
+            "component-version keys must be sorted",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "known_limitations": ["same limitation", "same limitation"],
+            },
+            "known limitations must be unique",
+        ),
+        (
+            {
+                **manifest.model_dump(mode="json"),
+                "transaction_record_count": 0,
+                "independent_evaluation_count": 1,
+            },
+            "exceeds transaction records",
+        ),
+    )
+    for value, message in invalid_cases:
+        with pytest.raises(ValidationError, match=message):
+            M4bEvidenceManifest.model_validate(value)
+
+
+def test_m4b_independent_report_rejects_incomplete_or_misclassified_results() -> None:
+    observer_private = Ed25519PrivateKey.generate()
+    evaluator_private = Ed25519PrivateKey.generate()
+    request = _evaluation_request(observer_private)
+    report = _report(request, evaluator_private)
+    material = report.model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="require both value sets"):
+        IndependentConsequenceReport.model_validate(
+            {**material, "predicted_values": None, "signature": ""}
+        )
+    with pytest.raises(ValidationError, match="every registered metric"):
+        IndependentConsequenceReport.model_validate(
+            {**material, "metric_comparisons": material["metric_comparisons"][:-1], "signature": ""}
+        )
+
+    mismatched = list(material["metric_comparisons"])
+    mismatched[0] = {**mismatched[0], "outcome": "mismatch", "observed": "9.0"}
+    with pytest.raises(ValidationError, match="agree status cannot"):
+        IndependentConsequenceReport.model_validate(
+            {**material, "metric_comparisons": mismatched, "signature": ""}
+        )
+    with pytest.raises(ValidationError, match="explanatory reason"):
+        IndependentConsequenceReport.model_validate(
+            {
+                **material,
+                "status": "contradict",
+                "reasons": [],
+                "metric_comparisons": mismatched,
+                "signature": "",
+            }
+        )
+    with pytest.raises(ValidationError, match="require a reason"):
+        IndependentConsequenceReport.model_validate(
+            {
+                **material,
+                "status": "indeterminate",
+                "reasons": [],
+                "predicted_values": None,
+                "observed_values": None,
+                "metric_comparisons": [],
+                "signature": "",
+            }
+        )

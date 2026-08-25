@@ -290,6 +290,36 @@ def test_m4f_retained_pair_locks_execution_acceptance_and_semantics(
     assert comparison["role"] in {"primary", "reproduction"}
 
 
+def test_m4f_retained_files_are_distinct_reproduced_campaigns() -> None:
+    primary = _load(EVIDENCE_PATHS[0])
+    reproduction = _load(EVIDENCE_PATHS[1])
+
+    assert primary["reproduction_comparison"]["role"] == "primary"
+    assert reproduction["reproduction_comparison"]["role"] == "reproduction"
+    assert primary["project_name"] != reproduction["project_name"]
+    assert primary["replay_volume_name"] != reproduction["replay_volume_name"]
+
+    primary_material = primary["public_verification_material"]
+    reproduction_material = reproduction["public_verification_material"]
+    assert (
+        primary_material["gateway_public_key_sha256"]
+        != reproduction_material["gateway_public_key_sha256"]
+    )
+    assert primary_material["ot_public_key_sha256"] != reproduction_material["ot_public_key_sha256"]
+
+    primary_services = primary["service_identities_before_replacement"]
+    reproduction_services = reproduction["service_identities_before_replacement"]
+    assert set(primary_services) == set(reproduction_services)
+    assert all(
+        primary_services[service]["container_id"] != reproduction_services[service]["container_id"]
+        for service in primary_services
+    )
+
+    assert primary["normalized_compose_sha256"] == reproduction["normalized_compose_sha256"]
+    assert primary["semantic_projection"] == reproduction["semantic_projection"]
+    assert primary["semantic_outcome_sha256"] == reproduction["semantic_outcome_sha256"]
+
+
 def test_m4f_retained_public_artifacts_verify_independently(
     evidence: dict[str, Any],
 ) -> None:
