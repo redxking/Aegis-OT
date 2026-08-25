@@ -1,0 +1,10 @@
+ARG SPIRE_SERVER_IMAGE=ghcr.io/spiffe/spire-server:1.15.2@sha256:aa74ef1be86bc8e0684007d84a4d9859d294384d842c30425048d73429f3216e
+ARG BUSYBOX_IMAGE=docker.io/library/busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+
+FROM ${SPIRE_SERVER_IMAGE} AS spire
+FROM ${BUSYBOX_IMAGE}
+
+COPY --from=spire /opt/spire/bin/spire-server /opt/spire/bin/spire-server
+COPY --chmod=0555 bootstrap.sh /usr/local/bin/bootstrap-spire
+
+ENTRYPOINT ["/usr/local/bin/bootstrap-spire"]

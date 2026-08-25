@@ -16,6 +16,7 @@ services:
       - --port
       - "8081"
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_CANDIDATE_URL: http://candidate:8085
       AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
@@ -47,6 +48,7 @@ services:
       - --port
       - "8082"
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
       AEGIS_OBSERVER_PRIVATE_KEY_FILE: /run/secrets/observer_private
@@ -69,6 +71,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
       AEGIS_CANDIDATE_PRIVATE_KEY_FILE: /run/secrets/candidate_private
       AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
@@ -90,6 +93,7 @@ services:
       - --port
       - "8083"
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
       AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
@@ -119,6 +123,7 @@ services:
       - --port
       - "8084"
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
       AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate_public
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
@@ -142,6 +147,7 @@ services:
     build: *m4g-build
     command: [python, -m, aegis_ot.m4g_probe]
     environment:
+      AEGIS_SPIRE_MTLS_MODE: disabled
       AEGIS_WORKLOAD_IDENTITY_MODE: disabled
 
 secrets:

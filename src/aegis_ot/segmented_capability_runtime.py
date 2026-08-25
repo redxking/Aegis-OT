@@ -88,6 +88,7 @@ from .segmented_capability_models import (
 )
 from .segmented_capability_transport import (
     CandidateHealthMetadata,
+    HttpExchange,
     ObserverHealthMetadata,
     OtHealthMetadata,
     PlantHealthMetadata,
@@ -103,8 +104,10 @@ from .segmented_capability_transport import (
     discover_segmented_capabilities_via_ot,
     fetch_observer_health,
     fetch_plant_health,
+    urllib_http_exchange,
 )
 from .segmented_runtime import OpaBackedPolicy
+from .spire_mtls import capability_http_exchange_from_environment
 from .strict_json_request import (
     StrictJsonRequestError,
     parse_strict_json_request,
@@ -1175,6 +1178,57 @@ def _validate_plant_pin(health: PlantHealthMetadata) -> None:
     )
 
 
+def _configured_capability_exchange() -> HttpExchange:
+    """Select one explicit transport for every outbound service link."""
+
+    return capability_http_exchange_from_environment()
+
+
+def _fetch_plant_over_configured_transport(
+    url: str,
+    exchange: HttpExchange,
+) -> PlantHealthMetadata:
+    # Retain the exact plain-HTTP call shape for the non-SPIRE lab and its
+    # existing test seams. Required mTLS receives the selected exchange on
+    # discovery as well as every subsequent call.
+    if exchange is urllib_http_exchange:
+        return fetch_plant_health(url)
+    return fetch_plant_health(url, exchange=exchange)
+
+
+def _fetch_observer_over_configured_transport(
+    url: str,
+    exchange: HttpExchange,
+) -> ObserverHealthMetadata:
+    if exchange is urllib_http_exchange:
+        return fetch_observer_health(url)
+    return fetch_observer_health(url, exchange=exchange)
+
+
+def _discover_over_configured_transport(
+    *,
+    observer_url: str,
+    candidate_url: str,
+    ot_url: str,
+    gateway_key_id: str,
+    exchange: HttpExchange,
+) -> SegmentedCapabilityDiscovery:
+    if exchange is urllib_http_exchange:
+        return discover_segmented_capabilities_via_ot(
+            observer_url=observer_url,
+            candidate_url=candidate_url,
+            ot_url=ot_url,
+            gateway_key_id=gateway_key_id,
+        )
+    return discover_segmented_capabilities_via_ot(
+        observer_url=observer_url,
+        candidate_url=candidate_url,
+        ot_url=ot_url,
+        gateway_key_id=gateway_key_id,
+        exchange=exchange,
+    )
+
+
 def _build_plant_runtime() -> CapabilityPlantRuntime:
     boot_epoch = str(uuid4())
     private_key = _load_private_key(
@@ -1214,7 +1268,8 @@ def _build_plant_runtime() -> CapabilityPlantRuntime:
 
 def _build_observer_runtime() -> CapabilityObserverRuntime:
     plant_url = _expected_environment("AEGIS_PLANT_URL")
-    plant = fetch_plant_health(plant_url)
+    exchange = _configured_capability_exchange()
+    plant = _fetch_plant_over_configured_transport(plant_url, exchange)
     _validate_plant_pin(plant)
     private_key = _load_private_key(
         _expected_environment("AEGIS_OBSERVER_PRIVATE_KEY_FILE")
@@ -1238,6 +1293,7 @@ def _build_observer_runtime() -> CapabilityObserverRuntime:
         plant=plant,
         observer=metadata,
         caller_private_key=private_key,
+        exchange=exchange,
     )
     return CapabilityObserverRuntime(
         plant=client,
@@ -1251,7 +1307,8 @@ def _build_observer_runtime() -> CapabilityObserverRuntime:
 
 def _build_candidate_runtime() -> CapabilityCandidateRuntime:
     plant_url = _expected_environment("AEGIS_PLANT_URL")
-    plant = fetch_plant_health(plant_url)
+    exchange = _configured_capability_exchange()
+    plant = _fetch_plant_over_configured_transport(plant_url, exchange)
     _validate_plant_pin(plant)
     private_key = _load_private_key(
         _expected_environment("AEGIS_CANDIDATE_PRIVATE_KEY_FILE")
@@ -1272,6 +1329,7 @@ def _build_candidate_runtime() -> CapabilityCandidateRuntime:
         plant=plant,
         candidate=metadata,
         caller_private_key=private_key,
+        exchange=exchange,
     )
     return CapabilityCandidateRuntime(
         plant=client,
@@ -1285,8 +1343,9 @@ def _build_candidate_runtime() -> CapabilityCandidateRuntime:
 def _build_ot_runtime() -> CapabilityOtRuntime:
     plant_url = _expected_environment("AEGIS_PLANT_URL")
     observer_url = _expected_environment("AEGIS_OBSERVER_URL")
-    plant = fetch_plant_health(plant_url)
-    observer = fetch_observer_health(observer_url)
+    exchange = _configured_capability_exchange()
+    plant = _fetch_plant_over_configured_transport(plant_url, exchange)
+    observer = _fetch_observer_over_configured_transport(observer_url, exchange)
     _validate_plant_pin(plant)
     _require_pin(
         label="observer",
@@ -1365,6 +1424,7 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
         plant=plant,
         ot=provisional,
         caller_private_key=private_key,
+        exchange=exchange,
     )
     device = CapabilityVirtualPlc(
         plant_client,
@@ -1437,11 +1497,16 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         gateway_key_id = gateway_workload_identity.resolve().key_id
     else:
         gateway_key_id = _expected_environment("AEGIS_GATEWAY_KEY_ID")
-    discovery = discover_segmented_capabilities_via_ot(
-        observer_url=_expected_environment("AEGIS_OBSERVER_URL"),
-        candidate_url=_expected_environment("AEGIS_CANDIDATE_URL"),
-        ot_url=_expected_environment("AEGIS_OT_URL"),
+    exchange = _configured_capability_exchange()
+    observer_url = _expected_environment("AEGIS_OBSERVER_URL")
+    candidate_url = _expected_environment("AEGIS_CANDIDATE_URL")
+    ot_url = _expected_environment("AEGIS_OT_URL")
+    discovery = _discover_over_configured_transport(
+        observer_url=observer_url,
+        candidate_url=candidate_url,
+        ot_url=ot_url,
         gateway_key_id=gateway_key_id,
+        exchange=exchange,
     )
     _validate_plant_pin(discovery.plant)
     pinned_peers = [
@@ -1533,28 +1598,32 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         version="surrogate-safety-v1-m4g-supervisory-limits",
     )
     observer_port = RemoteObservationPort(
-        _expected_environment("AEGIS_OBSERVER_URL"),
+        observer_url,
         observer=discovery.observer,
+        exchange=exchange,
     )
     candidate_port = RemoteCandidatePort(
-        _expected_environment("AEGIS_CANDIDATE_URL"),
+        candidate_url,
         candidate=discovery.candidate,
         plant=discovery.plant,
+        exchange=exchange,
     )
     if gateway_workload_identity is not None:
         assert ot_workload_identity is not None
         plc_port: RemoteVirtualPlcPort = WorkloadRemoteVirtualPlcPort(
-            _expected_environment("AEGIS_OT_URL"),
+            ot_url,
             ot=discovery.ot,
             gateway_identity=gateway_workload_identity,
             ot_identity=ot_workload_identity,
+            exchange=exchange,
         )
     else:
         plc_port = RemoteVirtualPlcPort(
-            _expected_environment("AEGIS_OT_URL"),
+            ot_url,
             ot=discovery.ot,
             gateway_key_id=gateway_key_id,
             gateway_private_key=gateway_private,
+            exchange=exchange,
         )
     plc_info = _plc_process_info(discovery.ot)
     base_issuer = ExecutionPermitIssuer(

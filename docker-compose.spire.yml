@@ -1,0 +1,267 @@
+x-spire-build-pins: &spire-build-pins
+  SPIRE_SERVER_IMAGE: "ghcr.io/spiffe/spire-server:1.15.2@sha256:aa74ef1be86bc8e0684007d84a4d9859d294384d842c30425048d73429f3216e"
+  BUSYBOX_IMAGE: "docker.io/library/busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616"
+
+x-spire-workload-environment: &spire-workload-environment
+  SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+
+x-spire-system-tmpfs: &spire-system-tmpfs /tmp:rw,noexec,nosuid,nodev,size=1m,mode=1777
+
+services:
+  spire-storage-init:
+    image: docker.io/library/busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+    command:
+      - sh
+      - -ec
+      - >-
+        chown -R 1000:1000 /var/lib/spire/server /run/spire/server/private;
+        chmod 0700 /var/lib/spire/server /run/spire/server/private
+    network_mode: none
+    volumes:
+      - spire-server-data:/var/lib/spire/server
+      - spire-server-socket:/run/spire/server/private
+
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.15.2@sha256:aa74ef1be86bc8e0684007d84a4d9859d294384d842c30425048d73429f3216e
+    command: [-config, /etc/spire/server/server.conf]
+    user: "1000:1000"
+    depends_on:
+      spire-storage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - /opt/spire/bin/spire-server
+        - healthcheck
+        - -socketPath
+        - /run/spire/server/private/api.sock
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    networks: [trust]
+    volumes:
+      - ./infra/spire/server.conf:/etc/spire/server/server.conf:ro
+      - spire-server-data:/var/lib/spire/server
+      - spire-server-socket:/run/spire/server/private
+
+  spire-bootstrap:
+    build:
+      context: ./infra/spire
+      dockerfile: Dockerfile.bootstrap
+      args: *spire-build-pins
+    depends_on:
+      spire-server:
+        condition: service_healthy
+    network_mode: none
+    volumes:
+      - ./infra/spire/registration-entries.json:/etc/spire/registration-entries.json:ro
+      - spire-bootstrap:/run/spire/bootstrap
+      - spire-server-socket:/run/spire/server/private
+
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.15.2@sha256:1d042e4040466686e0ee46f74981ff2167c86adfadca19b3835946f4d6047536
+    command: [-config, /etc/spire/agent/agent.conf]
+    depends_on:
+      spire-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - /opt/spire/bin/spire-agent
+        - healthcheck
+        - -socketPath
+        - /run/spire/agent/public/api.sock
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    pid: host
+    networks: [trust]
+    volumes:
+      - ./infra/spire/agent.conf:/etc/spire/agent/agent.conf:ro
+      - spire-agent-data:/var/lib/spire/agent
+      - spire-agent-socket:/run/spire/agent/public
+      - spire-bootstrap:/run/spire/bootstrap:ro
+
+  segmented-gateway:
+    user: "65532:65532"
+    entrypoint:
+      - python
+      - -m
+      - aegis_ot.spire_workload_identity
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+      - --
+    environment:
+      <<: *spire-workload-environment
+      AEGIS_WORKLOAD_IDENTITY_MODE: required
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/gateway
+      AEGIS_SPIFFE_PEER_IDS: '{"candidate":"spiffe://aegis-ot.m4g.local/workload/candidate","observer":"spiffe://aegis-ot.m4g.local/workload/observer","ot-adapter":"spiffe://aegis-ot.m4g.local/workload/ot-adapter"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_CANDIDATE_URL: https://candidate:8085
+      AEGIS_OBSERVER_URL: https://observer:8082
+      AEGIS_OT_URL: https://ot-adapter:8083
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    volumes:
+      - spire-agent-socket:/run/spire/agent/public:ro
+    tmpfs:
+      - *spire-system-tmpfs
+      - /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65532
+
+  observer:
+    user: "65532:65533"
+    entrypoint:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_observer_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8082"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/observer
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+    command: []
+    environment:
+      <<: *spire-workload-environment
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/observer
+      AEGIS_SPIFFE_PEER_IDS: '{"simulation":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_PLANT_URL: https://simulation:8084
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    volumes:
+      - spire-agent-socket:/run/spire/agent/public:ro
+    tmpfs:
+      - *spire-system-tmpfs
+      - /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65533
+
+  candidate:
+    user: "65532:65534"
+    entrypoint:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_candidate_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8085"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/candidate
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+    command: []
+    environment:
+      <<: *spire-workload-environment
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/candidate
+      AEGIS_SPIFFE_PEER_IDS: '{"simulation":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_PLANT_URL: https://simulation:8084
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    volumes:
+      - spire-agent-socket:/run/spire/agent/public:ro
+    tmpfs:
+      - *spire-system-tmpfs
+      - /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65534
+
+  ot-adapter:
+    user: "65532:65535"
+    entrypoint:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_ot_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8083"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+    command: []
+    environment:
+      <<: *spire-workload-environment
+      AEGIS_WORKLOAD_IDENTITY_MODE: required
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/ot-adapter
+      AEGIS_SPIFFE_PEER_IDS: '{"observer":"spiffe://aegis-ot.m4g.local/workload/observer","simulation":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_OBSERVER_URL: https://observer:8082
+      AEGIS_PLANT_URL: https://simulation:8084
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    volumes:
+      - spire-agent-socket:/run/spire/agent/public:ro
+    tmpfs:
+      - *spire-system-tmpfs
+      - /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65535
+
+  simulation:
+    user: "65532:65536"
+    entrypoint:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_plant_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8084"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/plant
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/observer
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/candidate
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+    command: []
+    environment:
+      <<: *spire-workload-environment
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/plant
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    volumes:
+      - spire-agent-socket:/run/spire/agent/public:ro
+    tmpfs:
+      - *spire-system-tmpfs
+      - /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65536
+
+  replay-init:
+    environment:
+      AEGIS_RUNTIME_UID: "65532"
+      AEGIS_RUNTIME_GID: "65535"
+
+volumes:
+  spire-agent-data: {}
+  spire-agent-socket: {}
+  spire-bootstrap: {}
+  spire-server-data: {}
+  spire-server-socket: {}

@@ -1,0 +1,54 @@
+{
+  "entries": [
+    {
+      "entry_id": "m4g-workload-gateway-v1",
+      "parent_id": "spiffe://aegis-ot.m4g.local/agent/compose",
+      "spiffe_id": "spiffe://aegis-ot.m4g.local/workload/gateway",
+      "selectors": [
+        {"type": "unix", "value": "uid:65532"},
+        {"type": "unix", "value": "gid:65532"}
+      ],
+      "x509_svid_ttl": 300
+    },
+    {
+      "entry_id": "m4g-workload-observer-v1",
+      "parent_id": "spiffe://aegis-ot.m4g.local/agent/compose",
+      "spiffe_id": "spiffe://aegis-ot.m4g.local/workload/observer",
+      "selectors": [
+        {"type": "unix", "value": "uid:65532"},
+        {"type": "unix", "value": "gid:65533"}
+      ],
+      "x509_svid_ttl": 300
+    },
+    {
+      "entry_id": "m4g-workload-candidate-v1",
+      "parent_id": "spiffe://aegis-ot.m4g.local/agent/compose",
+      "spiffe_id": "spiffe://aegis-ot.m4g.local/workload/candidate",
+      "selectors": [
+        {"type": "unix", "value": "uid:65532"},
+        {"type": "unix", "value": "gid:65534"}
+      ],
+      "x509_svid_ttl": 300
+    },
+    {
+      "entry_id": "m4g-workload-ot-v1",
+      "parent_id": "spiffe://aegis-ot.m4g.local/agent/compose",
+      "spiffe_id": "spiffe://aegis-ot.m4g.local/workload/ot-adapter",
+      "selectors": [
+        {"type": "unix", "value": "uid:65532"},
+        {"type": "unix", "value": "gid:65535"}
+      ],
+      "x509_svid_ttl": 300
+    },
+    {
+      "entry_id": "m4g-workload-plant-v1",
+      "parent_id": "spiffe://aegis-ot.m4g.local/agent/compose",
+      "spiffe_id": "spiffe://aegis-ot.m4g.local/workload/plant",
+      "selectors": [
+        {"type": "unix", "value": "uid:65532"},
+        {"type": "unix", "value": "gid:65536"}
+      ],
+      "x509_svid_ttl": 300
+    }
+  ]
+}
