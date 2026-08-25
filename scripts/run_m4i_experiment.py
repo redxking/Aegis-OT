@@ -522,6 +522,8 @@ print(json.dumps({
 
 _ARTIFACT_MUTATOR_CODE = r"""
 import base64
+import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -557,6 +559,11 @@ try:
     os.fsync(directory)
 finally:
     os.close(directory)
+print(json.dumps({
+    'operation': operation,
+    'sha256': hashlib.sha256(material).hexdigest(),
+    'size_bytes': len(material),
+}, sort_keys=True, separators=(',', ':')))
 """.strip()
 
 
@@ -1693,18 +1700,19 @@ def _mutate_artifact(
     gid: str,
     operation: str,
     material_base64: str = "",
-) -> None:
+) -> dict[str, Any]:
     if operation not in {"corrupt", "restore"}:
         raise m4d.ExperimentError("M4i artifact mutation operation was invalid")
     if not uid.isdigit() or not gid.isdigit():
         raise m4d.ExperimentError("M4i artifact runtime identity was malformed")
     if Path(relative_path).name != relative_path:
         raise m4d.ExperimentError("M4i artifact relative path was not bounded")
-    _run_input(
+    completed = _run_input(
         (
             "docker",
             "run",
             "--rm",
+            "--interactive",
             "--read-only",
             "--cap-drop",
             "ALL",
@@ -1721,6 +1729,19 @@ def _mutate_artifact(
         ),
         material_base64,
     )
+    result = _json_object(
+        completed.stdout,
+        label=f"M4i artifact {operation} result",
+    )
+    if (
+        result.get("operation") != operation
+        or not isinstance(result.get("size_bytes"), int)
+        or result["size_bytes"] < 0
+        or not isinstance(result.get("sha256"), str)
+        or _SHA256.fullmatch(result["sha256"]) is None
+    ):
+        raise m4d.ExperimentError("M4i artifact mutation result was malformed")
+    return result
 
 
 def _artifact_fault_case(
@@ -1742,7 +1763,7 @@ def _artifact_fault_case(
     m4d._run(*prefix, "stop", service)
     restored = False
     try:
-        _mutate_artifact(
+        corrupted = _mutate_artifact(
             image=image,
             volume=volume,
             relative_path=relative_path,
@@ -1750,6 +1771,8 @@ def _artifact_fault_case(
             gid=gid,
             operation="corrupt",
         )
+        if corrupted["sha256"] == original_sha256:
+            raise m4d.ExperimentError("M4i corruption did not change the state artifact")
         m4d._run(
             *prefix,
             "up",
@@ -1762,7 +1785,7 @@ def _artifact_fault_case(
         failed = _await_service_not_ready(prefix, service=service, port=port)
     finally:
         m4d._run(*prefix, "stop", service, check=False)
-        _mutate_artifact(
+        restoration = _mutate_artifact(
             image=image,
             volume=volume,
             relative_path=relative_path,
@@ -1771,7 +1794,11 @@ def _artifact_fault_case(
             operation="restore",
             material_base64=original_material,
         )
-        restored = True
+        restored = restoration["sha256"] == original_sha256
+        if not restored:
+            raise m4d.ExperimentError(
+                "M4i state artifact restoration did not reproduce the original digest"
+            )
     return {
         **failed,
         "original_sha256": original_sha256,

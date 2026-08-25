@@ -54,7 +54,7 @@ def _aligned_recovery(*, applied: int, state_version: int) -> dict[str, Any]:
 
 
 def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, bool]]:
-    health = {
+    health: dict[str, dict[str, Any]] = {
         service: {"status": "ready"} for service in runner.m4g.AEGIS_HEALTH_PORTS
     }
     health["segmented-gateway"].update(
@@ -317,6 +317,90 @@ def test_scoped_relay_is_closed_and_records_commit_before_one_forward(
     forwarded = code.index("status, content_type, material = forward(", retained)
     assert retained < forwarded
     assert "/fault" not in code
+
+
+def test_artifact_restore_attaches_stdin_and_reports_written_digest(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[tuple[str, ...], str]] = []
+    expected_sha256 = runner._sha256(b"exact")
+
+    def run_input(
+        args: tuple[str, ...],
+        input_text: str,
+        *,
+        check: bool = True,
+    ) -> SimpleNamespace:
+        assert check is True
+        calls.append((args, input_text))
+        return SimpleNamespace(
+            stdout=runner.json.dumps(
+                {
+                    "operation": "restore",
+                    "sha256": expected_sha256,
+                    "size_bytes": 5,
+                }
+            )
+        )
+
+    monkeypatch.setattr(runner, "_run_input", run_input)
+
+    result = runner._mutate_artifact(
+        image="sha256:" + "a" * 64,
+        volume="bounded-state-volume",
+        relative_path="gateway-coordination.json",
+        uid="65532",
+        gid="65532",
+        operation="restore",
+        material_base64="ZXhhY3Q=",
+    )
+
+    assert result["sha256"] == expected_sha256
+    assert len(calls) == 1
+    args, stdin = calls[0]
+    assert "--interactive" in args
+    assert stdin == "ZXhhY3Q="
+    compile(runner._ARTIFACT_MUTATOR_CODE, "<m4i-artifact-mutator>", "exec")
+
+
+def test_artifact_fault_case_rejects_nonexact_restoration(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mutations = iter(
+        (
+            {"operation": "corrupt", "sha256": "b" * 64, "size_bytes": 18},
+            {"operation": "restore", "sha256": "c" * 64, "size_bytes": 5},
+        )
+    )
+    monkeypatch.setattr(runner, "_mutate_artifact", lambda **_: next(mutations))
+    monkeypatch.setattr(
+        runner.m4d,
+        "_run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_await_service_not_ready",
+        lambda *args, **kwargs: {"startup_ready": False},
+    )
+
+    with pytest.raises(
+        runner.m4d.ExperimentError,
+        match="restoration did not reproduce",
+    ):
+        runner._artifact_fault_case(
+            ("docker", "compose"),
+            service="segmented-gateway",
+            port=8081,
+            image="sha256:" + "a" * 64,
+            volume="bounded-state-volume",
+            relative_path="gateway-coordination.json",
+            uid="65532",
+            gid="65532",
+            snapshot={"sha256": "a" * 64, "bytes_base64": "ZXhhY3Q="},
+        )
 
 
 def test_source_binding_covers_clean_tree_lock_schemas_and_exact_files(
