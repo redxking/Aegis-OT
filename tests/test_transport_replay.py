@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
 import stat
 from concurrent.futures import ThreadPoolExecutor
@@ -10,6 +11,7 @@ from typing import Any
 import pytest
 
 import aegis_ot.transport_replay as replay_module
+from aegis_ot.replay_lock_probe import probe_transport_writer
 from aegis_ot.transport_replay import (
     DurableTransportReplayLedger,
     TransportReplayLedgerError,
@@ -59,6 +61,7 @@ def test_durable_transport_reservation_survives_reconstruction(tmp_path: Path) -
     assert ledger.reserve(nonce, request_digest)
     assert not ledger.reserve(nonce, request_digest)
     assert ledger.reservation_count == 1
+    ledger.close()
     reconstructed = _ledger(path)
     assert reconstructed.contains(nonce)
     assert reconstructed.reserve(nonce, request_digest) is False
@@ -74,6 +77,7 @@ def test_durable_transport_reservation_survives_reconstruction(tmp_path: Path) -
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
+    reconstructed.close()
 
 
 def test_concurrent_transport_reservation_succeeds_once(tmp_path: Path) -> None:
@@ -87,6 +91,45 @@ def test_concurrent_transport_reservation_succeeds_once(tmp_path: Path) -> None:
     assert outcomes.count(True) == 1
     assert outcomes.count(False) == 7
     assert ledger.reservation_count == 1
+    ledger.close()
+
+
+def test_transport_writer_lock_rejects_a_second_process_until_close(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "transport-replay.json"
+    ledger = _ledger(path, initialize=True)
+    context = multiprocessing.get_context("spawn")
+
+    blocked_reader, blocked_writer = context.Pipe(duplex=False)
+    blocked = context.Process(
+        target=probe_transport_writer,
+        args=(str(path), AUDIENCE, KEY_ID, PUBLIC_KEY_SHA256, blocked_writer),
+    )
+    blocked.start()
+    blocked_writer.close()
+    assert blocked_reader.poll(10)
+    assert blocked_reader.recv() == (
+        "error",
+        "transport replay writer lock is already held or unavailable",
+    )
+    blocked_reader.close()
+    blocked.join(10)
+    assert blocked.exitcode == 0
+
+    ledger.close()
+    acquired_reader, acquired_writer = context.Pipe(duplex=False)
+    acquired = context.Process(
+        target=probe_transport_writer,
+        args=(str(path), AUDIENCE, KEY_ID, PUBLIC_KEY_SHA256, acquired_writer),
+    )
+    acquired.start()
+    acquired_writer.close()
+    assert acquired_reader.poll(10)
+    assert acquired_reader.recv() == ("acquired", "")
+    acquired_reader.close()
+    acquired.join(10)
+    assert acquired.exitcode == 0
 
 
 @pytest.mark.parametrize(
@@ -218,6 +261,7 @@ def test_failed_pre_replace_update_preserves_prior_ledger(
     with pytest.raises(TransportReplayLedgerError, match="update failed"):
         ledger.reserve(second, "c" * 64)
     assert path.read_bytes() == before
+    ledger.close()
     assert _ledger(path).reservations == {first: "b" * 64}
 
 
@@ -240,6 +284,7 @@ def test_post_replace_directory_fsync_failure_leaves_valid_new_ledger(
     monkeypatch.setattr(replay_module.os, "fsync", fail_directory_fsync)
     with pytest.raises(TransportReplayLedgerError, match="update failed"):
         ledger.reserve(second, "c" * 64)
+    ledger.close()
     assert _ledger(path).reservations == {first: "b" * 64, second: "c" * 64}
 
 

@@ -12,7 +12,7 @@ import math
 import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Final, Literal, Protocol, TypeVar, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -201,9 +201,13 @@ class OtHealthMetadata(_StrictModel):
     boot_epoch: str = Field(min_length=16, max_length=256)
     key_id: str = Field(min_length=1, max_length=256)
     public_key_b64: str = Field(min_length=1)
+    gateway_key_id: str = Field(min_length=1, max_length=256)
+    gateway_public_key_b64: str = Field(min_length=1)
     permit_key_id: str = Field(min_length=1, max_length=256)
+    permit_public_key_b64: str = Field(min_length=1)
     plant_boot_epoch: str = Field(min_length=16, max_length=256)
     plant_model_digest: str = Field(pattern=SHA256_PATTERN)
+    plant: PlantHealthMetadata | None = None
     observer_boot_epoch: str = Field(min_length=16, max_length=256)
     transport_replay_reservations: int = Field(ge=0)
     semantic_replay_reservations: int = Field(ge=0)
@@ -213,13 +217,36 @@ class OtHealthMetadata(_StrictModel):
     @model_validator(mode="after")
     def require_valid_key_and_counters(self) -> OtHealthMetadata:
         _public_key(self.public_key_b64)
+        _public_key(self.gateway_public_key_b64)
+        _public_key(self.permit_public_key_b64)
+        if len(
+            {
+                self.public_key_b64,
+                self.gateway_public_key_b64,
+                self.permit_public_key_b64,
+            }
+        ) != 3:
+            raise ValueError("OT, gateway, and permit key material must be distinct")
         if self.scan_counter > self.execute_requests:
             raise ValueError("OT scan counter cannot exceed execute requests")
+        if self.plant is not None and (
+            self.plant.boot_epoch != self.plant_boot_epoch
+            or self.plant.model_digest != self.plant_model_digest
+        ):
+            raise ValueError("OT embedded plant metadata is inconsistent")
         return self
 
     @property
     def public_key(self) -> Ed25519PublicKey:
         return _public_key(self.public_key_b64)
+
+    @property
+    def gateway_public_key(self) -> Ed25519PublicKey:
+        return _public_key(self.gateway_public_key_b64)
+
+    @property
+    def permit_public_key(self) -> Ed25519PublicKey:
+        return _public_key(self.permit_public_key_b64)
 
 
 class SegmentedCapabilityDiscovery(_StrictModel):
@@ -259,19 +286,26 @@ class SegmentedCapabilityDiscovery(_StrictModel):
             self.observer.key_id,
             self.candidate.key_id,
             self.ot.key_id,
+            self.ot.gateway_key_id,
+            self.ot.permit_key_id,
         )
         if len(set(identities)) != len(identities):
             raise ValueError("segmented component signing key IDs must be distinct")
+        public_keys = (
+            self.plant.public_key_b64,
+            self.observer.public_key_b64,
+            self.candidate.public_key_b64,
+            self.ot.public_key_b64,
+            self.ot.gateway_public_key_b64,
+            self.ot.permit_public_key_b64,
+        )
+        if len(set(public_keys)) != len(public_keys):
+            raise ValueError("segmented component signing key material must be distinct")
         return self
 
     def require_distinct_gateway_key(self, gateway_key_id: str) -> None:
-        if not gateway_key_id or gateway_key_id in {
-            self.plant.key_id,
-            self.observer.key_id,
-            self.candidate.key_id,
-            self.ot.key_id,
-        }:
-            raise ValueError("gateway transport key must be distinct from service keys")
+        if not gateway_key_id or gateway_key_id != self.ot.gateway_key_id:
+            raise ValueError("gateway transport key does not match OT discovery")
 
 
 class TransportFailureBody(_StrictModel):
@@ -346,12 +380,15 @@ def _same_candidate_identity(
 
 
 def _same_ot_identity(current: OtHealthMetadata, expected: OtHealthMetadata) -> bool:
-    return (
+    base_matches = (
         current.plc_id,
         current.boot_epoch,
         current.key_id,
         current.public_key_b64,
+        current.gateway_key_id,
+        current.gateway_public_key_b64,
         current.permit_key_id,
+        current.permit_public_key_b64,
         current.plant_boot_epoch,
         current.plant_model_digest,
         current.observer_boot_epoch,
@@ -360,11 +397,19 @@ def _same_ot_identity(current: OtHealthMetadata, expected: OtHealthMetadata) -> 
         expected.boot_epoch,
         expected.key_id,
         expected.public_key_b64,
+        expected.gateway_key_id,
+        expected.gateway_public_key_b64,
         expected.permit_key_id,
+        expected.permit_public_key_b64,
         expected.plant_boot_epoch,
         expected.plant_model_digest,
         expected.observer_boot_epoch,
     )
+    if not base_matches:
+        return False
+    if current.plant is None or expected.plant is None:
+        return current.plant is expected.plant
+    return _same_plant_identity(current.plant, expected.plant)
 
 
 @dataclass(frozen=True)
@@ -688,6 +733,31 @@ def discover_segmented_capabilities(
     return discovery
 
 
+def discover_segmented_capabilities_via_ot(
+    *,
+    observer_url: str,
+    candidate_url: str,
+    ot_url: str,
+    gateway_key_id: str,
+    exchange: HttpExchange = urllib_http_exchange,
+) -> SegmentedCapabilityDiscovery:
+    """Discover the plant through OT without granting the gateway a plant route."""
+
+    ot = fetch_ot_health(ot_url, exchange=exchange)
+    if ot.plant is None:
+        raise CapabilityTransportProtocolError(
+            "OT health omitted the plant metadata required by the gateway"
+        )
+    discovery = SegmentedCapabilityDiscovery(
+        plant=ot.plant,
+        observer=fetch_observer_health(observer_url, exchange=exchange),
+        candidate=fetch_candidate_health(candidate_url, exchange=exchange),
+        ot=ot,
+    )
+    discovery.require_distinct_gateway_key(gateway_key_id)
+    return discovery
+
+
 class RemoteObservationPort(_RemoteJsonService, ObservationPort):
     def __init__(
         self,
@@ -844,6 +914,7 @@ class RemoteCandidatePort(_RemoteJsonService, CandidatePort):
         self.candidate = candidate
         self.plant = plant
         self.clock = clock
+        self.last_exchange: PlantExchange | None = None
 
     def health(self) -> CandidateHealthMetadata:
         health = self._success_model("GET", "/health", None, CandidateHealthMetadata)
@@ -891,6 +962,7 @@ class RemoteCandidatePort(_RemoteJsonService, CandidatePort):
             or assessment.post_state.model_digest != self.candidate.plant_model_digest
         ):
             raise CapabilityTransportProtocolError("candidate response binding is wrong")
+        self.last_exchange = exchange
         return assessment
 
 
@@ -910,8 +982,10 @@ class RemoteVirtualPlcPort(_RemoteJsonService, VirtualPlcPort):
     ) -> None:
         super().__init__(base_url, exchange=exchange, timeout_seconds=timeout_seconds)
         _validate_ttl(call_ttl)
-        if not gateway_key_id or gateway_key_id == ot.key_id:
-            raise ValueError("gateway and OT transport keys must be distinct")
+        if not gateway_key_id or gateway_key_id != ot.gateway_key_id:
+            raise ValueError("gateway transport key does not match OT discovery")
+        if not _private_key_matches(gateway_private_key, ot.gateway_public_key):
+            raise ValueError("gateway private key does not match OT discovery")
         self.ot = ot
         self.gateway_key_id = gateway_key_id
         self.gateway_private_key = gateway_private_key
@@ -1068,6 +1142,8 @@ class _RemotePlantClient(_RemoteJsonService):
             operation=operation,
             payload=payload,
             caller_key_id=self.caller_key_id,
+            target_plant_key_id=self.plant.key_id,
+            target_plant_boot_epoch=self.plant.boot_epoch,
             call_nonce=_nonce(self.nonce_factory),
             issued_at=issued_at,
             expires_at=issued_at + self.call_ttl,
@@ -1325,6 +1401,7 @@ class RemotePlcPlantClient(_RemotePlantClient, CapabilityPlcPlantPort):
         expected_pre_observation_digest: str | None = None,
         expected_post_state_digest: str | None = None,
         expected_post_topology_digest: str | None = None,
+        authorization_expires_at: datetime | None = None,
     ) -> PhysicalStateSnapshot:
         bindings = (
             expected_pre_state_version,
@@ -1332,6 +1409,7 @@ class RemotePlcPlantClient(_RemotePlantClient, CapabilityPlcPlantPort):
             expected_pre_observation_digest,
             expected_post_state_digest,
             expected_post_topology_digest,
+            authorization_expires_at,
         )
         if any(value is None for value in bindings):
             raise RemotePhysicalRejection("plant_apply_bindings_required")
@@ -1348,6 +1426,7 @@ class RemotePlcPlantClient(_RemotePlantClient, CapabilityPlcPlantPort):
                 expected_post_topology_digest=cast(
                     str, expected_post_topology_digest
                 ),
+                authorization_expires_at=cast(datetime, authorization_expires_at),
             ),
             consequential=True,
         )
@@ -1361,3 +1440,26 @@ class RemotePlcPlantClient(_RemotePlantClient, CapabilityPlcPlantPort):
                 "plant apply response diverges from the authorized post-state"
             )
         return snapshot
+
+    def apply_authorized_command_with_deadline(
+        self,
+        command: PhysicalControlCommand,
+        *,
+        expected_pre_state_version: int,
+        expected_pre_state_digest: str,
+        expected_pre_observation_digest: str,
+        expected_post_state_digest: str,
+        expected_post_topology_digest: str,
+        authorization_expires_at: datetime,
+    ) -> PhysicalStateSnapshot:
+        """Carry the signed permit deadline through the plant CAS call."""
+
+        return self.apply_authorized_command(
+            command,
+            expected_pre_state_version=expected_pre_state_version,
+            expected_pre_state_digest=expected_pre_state_digest,
+            expected_pre_observation_digest=expected_pre_observation_digest,
+            expected_post_state_digest=expected_post_state_digest,
+            expected_post_topology_digest=expected_post_topology_digest,
+            authorization_expires_at=authorization_expires_at,
+        )

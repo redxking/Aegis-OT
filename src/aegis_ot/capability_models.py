@@ -529,7 +529,11 @@ class PlcCommandAcknowledgment(BaseModel):
         if self.status is CommandStatus.REJECTED:
             if self.reason == "permit_not_yet_valid":
                 time_valid = self.acknowledged_at < base.issued_at
-            elif self.reason in {"permit_expired", "permit_expired_before_dispatch"}:
+            elif self.reason in {
+                "permit_expired",
+                "permit_expired_before_dispatch",
+                "permit_expired_after_replay_reservation",
+            }:
                 time_valid = self.acknowledged_at >= base.expires_at
             elif replay_rejection:
                 time_valid = self.acknowledged_at >= base.issued_at

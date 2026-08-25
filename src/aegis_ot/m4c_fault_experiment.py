@@ -651,54 +651,62 @@ def _run_replay_ledger_crash_checks() -> dict[str, JsonValue]:
         before_directory = root / "before-replace"
         before_directory.mkdir(mode=0o700)
         before_path = before_directory / "ledger.json"
-        before_ledger = OrderlyRestartReplayReservations(before_path)
-        _reserve_crash_probe(before_ledger, "initial")
-        before_digest = sha256_bytes(before_path.read_bytes())
+        with OrderlyRestartReplayReservations(
+            before_path,
+            initialize=True,
+        ) as before_ledger:
+            _reserve_crash_probe(before_ledger, "initial")
+            before_digest = sha256_bytes(before_path.read_bytes())
         before_worker = context.Process(
             target=_crash_replay_ledger_worker,
             args=(str(before_path), "before_replace"),
         )
         before_worker.start()
         _join_crash_worker(before_worker, 91)
-        before_reloaded = OrderlyRestartReplayReservations(before_path)
-        before_old_preserved = before_reloaded.replay_reason(
-            request_digest=sha256_bytes(b"request:initial"),
-            permit_id="permit-initial",
-            permit_nonce="permit-nonce-initial",
-            command_id="command-initial",
-        ) == "transaction_replayed"
-        before_new_absent = before_reloaded.replay_reason(
-            request_digest=sha256_bytes(b"request:new"),
-            permit_id="permit-new",
-            permit_nonce="permit-nonce-new",
-            command_id="command-new",
-        ) is None
-        before_file_unchanged = sha256_bytes(before_path.read_bytes()) == before_digest
+        with OrderlyRestartReplayReservations(before_path) as before_reloaded:
+            before_old_preserved = before_reloaded.replay_reason(
+                request_digest=sha256_bytes(b"request:initial"),
+                permit_id="permit-initial",
+                permit_nonce="permit-nonce-initial",
+                command_id="command-initial",
+            ) == "transaction_replayed"
+            before_new_absent = before_reloaded.replay_reason(
+                request_digest=sha256_bytes(b"request:new"),
+                permit_id="permit-new",
+                permit_nonce="permit-nonce-new",
+                command_id="command-new",
+            ) is None
+            before_file_unchanged = (
+                sha256_bytes(before_path.read_bytes()) == before_digest
+            )
 
         after_directory = root / "after-replace"
         after_directory.mkdir(mode=0o700)
         after_path = after_directory / "ledger.json"
-        after_ledger = OrderlyRestartReplayReservations(after_path)
-        _reserve_crash_probe(after_ledger, "initial")
+        with OrderlyRestartReplayReservations(
+            after_path,
+            initialize=True,
+        ) as after_ledger:
+            _reserve_crash_probe(after_ledger, "initial")
         after_worker = context.Process(
             target=_crash_replay_ledger_worker,
             args=(str(after_path), "after_replace"),
         )
         after_worker.start()
         _join_crash_worker(after_worker, 92)
-        after_reloaded = OrderlyRestartReplayReservations(after_path)
-        after_old_preserved = after_reloaded.replay_reason(
-            request_digest=sha256_bytes(b"request:initial"),
-            permit_id="permit-initial",
-            permit_nonce="permit-nonce-initial",
-            command_id="command-initial",
-        ) == "transaction_replayed"
-        after_new_present = after_reloaded.replay_reason(
-            request_digest=sha256_bytes(b"request:new"),
-            permit_id="permit-new",
-            permit_nonce="permit-nonce-new",
-            command_id="command-new",
-        ) == "transaction_replayed"
+        with OrderlyRestartReplayReservations(after_path) as after_reloaded:
+            after_old_preserved = after_reloaded.replay_reason(
+                request_digest=sha256_bytes(b"request:initial"),
+                permit_id="permit-initial",
+                permit_nonce="permit-nonce-initial",
+                command_id="command-initial",
+            ) == "transaction_replayed"
+            after_new_present = after_reloaded.replay_reason(
+                request_digest=sha256_bytes(b"request:new"),
+                permit_id="permit-new",
+                permit_nonce="permit-nonce-new",
+                command_id="command-new",
+            ) == "transaction_replayed"
 
         criteria_met = all(
             (

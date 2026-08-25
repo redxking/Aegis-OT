@@ -89,6 +89,7 @@ services:
     environment:
       AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
       AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer_public
+      AEGIS_OBSERVER_URL: http://observer:8082
       AEGIS_PERMIT_KEY_ID: m4g-permit-key-v1
       AEGIS_PERMIT_PUBLIC_KEY_FILE: /run/secrets/permit_public
       AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
@@ -96,6 +97,7 @@ services:
       AEGIS_PLANT_URL: http://simulation:8084
       AEGIS_SEMANTIC_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/semantic-replay.json
       AEGIS_TRANSPORT_AUDIENCE: aegis-ot:m4g:ot-adapter
+    depends_on: [observer, simulation]
     secrets:
       - gateway_public
       - ot_private

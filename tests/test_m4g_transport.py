@@ -311,7 +311,10 @@ def artifacts() -> Artifacts:
         boot_epoch=OT_BOOT,
         key_id=OT_KEY_ID,
         public_key_b64=_public_key_b64(ot_private),
+        gateway_key_id=GATEWAY_KEY_ID,
+        gateway_public_key_b64=_public_key_b64(gateway_private),
         permit_key_id=permit.signing_key_id,
+        permit_public_key_b64=_public_key_b64(permit_private),
         plant_boot_epoch=PLANT_BOOT,
         plant_model_digest=pre_state.model_digest,
         observer_boot_epoch=OBSERVER_BOOT,
@@ -383,6 +386,8 @@ def _candidate_exchange(
         operation=PlantOperation.SIMULATE,
         payload=PlantSimulatePayload(command=artifacts.command),
         caller_key_id=CANDIDATE_KEY_ID,
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT,
         call_nonce="m4g-candidate-call-nonce-0001",
         issued_at=NOW,
         expires_at=NOW.replace(second=30),
@@ -437,6 +442,20 @@ def test_discovery_is_closed_consistent_and_allows_dynamic_counters(
             plant=artifacts.plant_health,
             observer=artifacts.observer_health,
             candidate=wrong,
+            ot=artifacts.ot_health,
+        )
+
+    reused_candidate = CandidateHealthMetadata(
+        **{
+            **artifacts.candidate_health.model_dump(mode="python"),
+            "public_key_b64": artifacts.observer_health.public_key_b64,
+        }
+    )
+    with pytest.raises(ValidationError, match="key material must be distinct"):
+        SegmentedCapabilityDiscovery(
+            plant=artifacts.plant_health,
+            observer=artifacts.observer_health,
+            candidate=reused_candidate,
             ot=artifacts.ot_health,
         )
 
@@ -681,6 +700,7 @@ def test_role_signed_plant_clients_use_exact_calls_and_bound_capture(
         expected_pre_observation_digest=artifacts.pre_state.observation_digest,
         expected_post_state_digest=artifacts.assessment.post_state.state_digest,
         expected_post_topology_digest=artifacts.assessment.post_state.topology_digest,
+        authorization_expires_at=artifacts.permit.base_permit.expires_at,
     ) == artifacts.assessment.post_state
 
     capture = calls[0]
@@ -695,6 +715,10 @@ def test_role_signed_plant_clients_use_exact_calls_and_bound_capture(
         PlantCallerRole.PLC,
     ]
     assert isinstance(calls[-1].payload, PlantApplyPayload)
+    assert (
+        calls[-1].payload.authorization_expires_at
+        == artifacts.permit.base_permit.expires_at
+    )
 
 
 def test_apply_distinguishes_signed_4xx_rejection_from_ambiguous_failure(
@@ -723,6 +747,7 @@ def test_apply_distinguishes_signed_4xx_rejection_from_ambiguous_failure(
         "expected_pre_observation_digest": artifacts.pre_state.observation_digest,
         "expected_post_state_digest": artifacts.assessment.post_state.state_digest,
         "expected_post_topology_digest": artifacts.assessment.post_state.topology_digest,
+        "authorization_expires_at": artifacts.permit.base_permit.expires_at,
     }
     with pytest.raises(RemotePhysicalRejection, match="known_remote_rejection"):
         rejected.apply_authorized_command(artifacts.command, **kwargs)

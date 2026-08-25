@@ -170,6 +170,26 @@ class SegmentedCapabilityClosedLoopResult(CapabilityClosedLoopResult):
     coordination_backend: Literal["segmented-compose-http-v1"] = (
         "segmented-compose-http-v1"  # type: ignore[assignment]
     )
+    candidate_exchange: PlantExchange | None = None
+
+    @model_validator(mode="after")
+    def require_candidate_exchange_binding(self) -> SegmentedCapabilityClosedLoopResult:
+        if self.assessment is None:
+            if self.candidate_exchange is not None:
+                raise ValueError("candidate exchange requires a retained assessment")
+            return self
+        exchange = self.candidate_exchange
+        if (
+            exchange is None
+            or exchange.response.status is not PlantResponseStatus.OK
+            or not isinstance(
+                exchange.response.payload,
+                PlantSimulationResponsePayload,
+            )
+            or exchange.response.payload.assessment != self.assessment
+        ):
+            raise ValueError("segmented assessment requires its exact candidate exchange")
+        return self
 
 
 class SignedSegmentedCapabilityDispatch(_StrictFrozenModel):
@@ -468,7 +488,10 @@ class PlantApplyPayload(_StrictFrozenModel):
     """Low-level CAS command; semantic authorization remains at the OT adapter.
 
     A plant signature does not establish permit validity or semantic replay
-    resistance.  The plant deliberately receives no gateway request or permit.
+    resistance.  The plant receives no gateway request or full permit.  It does
+    receive the OT-asserted authorization deadline so that both that deadline
+    and the shorter plant-call deadline can be rechecked immediately before the
+    atomic compare-and-swap effect.
     """
 
     schema_version: Literal["m4g-plant-apply-v1"] = "m4g-plant-apply-v1"
@@ -478,6 +501,13 @@ class PlantApplyPayload(_StrictFrozenModel):
     expected_pre_observation_digest: str = Field(pattern=SHA256_PATTERN)
     expected_post_state_digest: str = Field(pattern=SHA256_PATTERN)
     expected_post_topology_digest: str = Field(pattern=SHA256_PATTERN)
+    authorization_expires_at: datetime
+
+    @model_validator(mode="after")
+    def require_aware_authorization_deadline(self) -> PlantApplyPayload:
+        if not _is_aware(self.authorization_expires_at):
+            raise ValueError("plant authorization deadline must be timezone-aware")
+        return self
 
 
 PlantCallPayload = Annotated[
@@ -511,6 +541,8 @@ class SignedPlantCall(_StrictFrozenModel):
     payload: PlantCallPayload
     payload_sha256: str = Field(pattern=SHA256_PATTERN)
     audience: str = Field(default=PHYSICAL_PLANT_AUDIENCE, min_length=1)
+    target_plant_key_id: str = Field(min_length=1, max_length=256)
+    target_plant_boot_epoch: str = Field(min_length=16, max_length=256)
     caller_key_id: str = Field(min_length=1)
     call_nonce: str = Field(min_length=16, max_length=256)
     issued_at: datetime
@@ -546,6 +578,8 @@ class SignedPlantCall(_StrictFrozenModel):
         | PlantSimulatePayload
         | PlantApplyPayload,
         caller_key_id: str,
+        target_plant_key_id: str,
+        target_plant_boot_epoch: str,
         call_nonce: str,
         issued_at: datetime,
         expires_at: datetime,
@@ -558,6 +592,8 @@ class SignedPlantCall(_StrictFrozenModel):
             payload=payload,
             payload_sha256=canonical_digest(payload),
             audience=audience,
+            target_plant_key_id=target_plant_key_id,
+            target_plant_boot_epoch=target_plant_boot_epoch,
             caller_key_id=caller_key_id,
             call_nonce=call_nonce,
             issued_at=issued_at,
@@ -586,12 +622,16 @@ class SignedPlantCall(_StrictFrozenModel):
         expected_role: PlantCallerRole,
         expected_caller_key_id: str,
         expected_audience: str,
+        expected_plant_key_id: str,
+        expected_plant_boot_epoch: str,
         evaluated_at: datetime,
     ) -> bool:
         return (
             self.role is expected_role
             and self.caller_key_id == expected_caller_key_id
             and self.audience == expected_audience
+            and self.target_plant_key_id == expected_plant_key_id
+            and self.target_plant_boot_epoch == expected_plant_boot_epoch
             and _valid_at(self.issued_at, self.expires_at, evaluated_at)
             and self.verify(public_key)
         )
@@ -823,6 +863,8 @@ class PlantExchange(_StrictFrozenModel):
                 expected_role=expected_role,
                 expected_caller_key_id=expected_caller_key_id,
                 expected_audience=expected_audience,
+                expected_plant_key_id=expected_plant_key_id,
+                expected_plant_boot_epoch=expected_plant_boot_epoch,
                 evaluated_at=evaluated_at,
             )
             and self.response.verify_for_call(
@@ -832,3 +874,6 @@ class PlantExchange(_StrictFrozenModel):
                 expected_plant_key_id=expected_plant_key_id,
             )
         )
+
+
+SegmentedCapabilityClosedLoopResult.model_rebuild()

@@ -41,6 +41,7 @@ def test_m4f_volume_initializer_provisions_identity_bound_private_ledger(
     monkeypatch.setenv("AEGIS_TRANSPORT_PROBE_DIRECTORY", str(probe_directory))
     monkeypatch.setenv("AEGIS_GATEWAY_PUBLIC_KEY_FILE", str(public_path))
     monkeypatch.setenv("AEGIS_GATEWAY_KEY_ID", "gateway-test-key")
+    monkeypatch.delenv("AEGIS_SEMANTIC_REPLAY_LEDGER_FILE", raising=False)
     monkeypatch.setenv("AEGIS_RUNTIME_UID", str(os.getuid()))
     monkeypatch.setenv("AEGIS_RUNTIME_GID", str(os.getgid()))
 
@@ -57,6 +58,7 @@ def test_m4f_volume_initializer_provisions_identity_bound_private_ledger(
         gateway_public_key_sha256=hashlib.sha256(gateway_public).hexdigest(),
     )
     assert ledger.reservation_count == 0
+    ledger.close()
     with pytest.raises(RuntimeError, match="must be empty"):
         initialize()
 
@@ -206,6 +208,19 @@ def test_m4f_semantic_difference_reports_the_first_stable_path(
     )
 
     assert difference == ("$.a[1].status", 409, 503)
+
+
+def test_m4f_crash_checks_release_writer_ownership_before_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    m4f_runner = import_module("run_m4f_experiment")
+
+    result = m4f_runner._crash_checks()
+
+    assert result["accepted"] is True
+    assert result["before_replace"]["exit_code"] == 91
+    assert result["after_replace"]["exit_code"] == 92
 
 
 def test_m4f_path_normalization_accepts_raw_and_resolved_aliases(

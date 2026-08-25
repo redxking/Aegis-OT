@@ -133,6 +133,7 @@ def _configure_initializer(
     monkeypatch.setenv("AEGIS_TRANSPORT_PROBE_DIRECTORY", str(probe_directory))
     monkeypatch.setenv("AEGIS_GATEWAY_PUBLIC_KEY_FILE", str(public_key_path))
     monkeypatch.setenv("AEGIS_GATEWAY_KEY_ID", "gateway-test-key")
+    monkeypatch.delenv("AEGIS_SEMANTIC_REPLAY_LEDGER_FILE", raising=False)
     monkeypatch.setenv(
         "AEGIS_RUNTIME_UID",
         str(os.getuid() if runtime_uid is None else runtime_uid),

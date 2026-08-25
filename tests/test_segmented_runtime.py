@@ -308,14 +308,9 @@ def test_durable_transport_replay_survives_runtime_reconstruction(
     health = segmented.ot_health()
     assert health["replay_mode"] == "durable"
     assert health["replay_reservations"] == 1
-    assert DurableTransportReplayLedger(
-        replay_path,
-        audience="aegis-ot:ot-adapter",
-        gateway_key_id="gateway-test-key",
-        gateway_public_key_sha256=hashlib.sha256(
-            (tmp_path / "gateway.public").read_bytes()
-        ).hexdigest(),
-    ).reservation_count == 1
+    active_ledger = segmented._durable_transport_replay
+    assert active_ledger is not None
+    assert active_ledger.reservation_count == 1
 
 
 def test_durable_replay_missing_or_corrupt_fails_closed_without_dispatch(

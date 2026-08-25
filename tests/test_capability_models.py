@@ -53,6 +53,7 @@ from aegis_ot.physical_models import (
     PhysicalStateSnapshot,
     canonical_digest,
 )
+from aegis_ot.replay_lock_probe import probe_semantic_writer
 
 NOW = datetime(2026, 8, 24, 16, 0, tzinfo=UTC)
 OBSERVER_CHALLENGE = "observer-pre-challenge-0001"
@@ -90,7 +91,7 @@ def test_replay_ledger_rejects_noncanonical_and_unsafe_files(tmp_path: Path) -> 
 
 def test_replay_ledger_persists_canonical_mode_and_survives_reload(tmp_path: Path) -> None:
     path = tmp_path / "replay.json"
-    ledger = OrderlyRestartReplayReservations(path)
+    ledger = OrderlyRestartReplayReservations(path, initialize=True)
     ledger.reserve(
         request_digest="1" * 64,
         permit_id="permit-1",
@@ -105,6 +106,7 @@ def test_replay_ledger_persists_canonical_mode_and_survives_reload(tmp_path: Pat
         "permit_nonces": ["permit-nonce-1"],
         "request_digests": ["1" * 64],
     }
+    ledger.close()
     reloaded = OrderlyRestartReplayReservations(path)
     assert reloaded.replay_reason(
         request_digest="1" * 64,
@@ -112,6 +114,57 @@ def test_replay_ledger_persists_canonical_mode_and_survives_reload(tmp_path: Pat
         permit_nonce="permit-nonce-1",
         command_id="command-1",
     ) == "transaction_replayed"
+    reloaded.close()
+
+
+def test_initialized_replay_ledger_missing_state_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "replay.json"
+    with OrderlyRestartReplayReservations(path, initialize=True) as ledger:
+        writer_lock_path = ledger.writer_lock_path
+
+    path.unlink()
+
+    assert writer_lock_path.is_file()
+    with pytest.raises(ValueError, match="missing or unavailable"):
+        OrderlyRestartReplayReservations(path)
+
+
+def test_semantic_replay_writer_lock_rejects_a_second_process_until_close(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "replay.json"
+    ledger = OrderlyRestartReplayReservations(path, initialize=True)
+    context = multiprocessing.get_context("spawn")
+
+    blocked_reader, blocked_writer = context.Pipe(duplex=False)
+    blocked = context.Process(
+        target=probe_semantic_writer,
+        args=(str(path), blocked_writer),
+    )
+    blocked.start()
+    blocked_writer.close()
+    assert blocked_reader.poll(10)
+    assert blocked_reader.recv() == (
+        "error",
+        "PLC replay writer lock is already held or unavailable",
+    )
+    blocked_reader.close()
+    blocked.join(10)
+    assert blocked.exitcode == 0
+
+    ledger.close()
+    acquired_reader, acquired_writer = context.Pipe(duplex=False)
+    acquired = context.Process(
+        target=probe_semantic_writer,
+        args=(str(path), acquired_writer),
+    )
+    acquired.start()
+    acquired_writer.close()
+    assert acquired_reader.poll(10)
+    assert acquired_reader.recv() == ("acquired", "")
+    acquired_reader.close()
+    acquired.join(10)
+    assert acquired.exitcode == 0
 
 
 @dataclass(frozen=True)
@@ -915,7 +968,10 @@ def test_plc_reports_atomic_observation_cas_as_verified_known_no_effect(
         observer_info=observer_info,
         acknowledgment_private_key=artifacts.plc_private_key,
         acknowledgment_key_id=PLC_KEY_ID,
-        replay=OrderlyRestartReplayReservations(tmp_path / "replay.json"),
+        replay=OrderlyRestartReplayReservations(
+            tmp_path / "replay.json",
+            initialize=True,
+        ),
         clock=lambda: NOW,
     )
 
@@ -957,6 +1013,7 @@ def test_plc_reports_atomic_observation_cas_as_verified_known_no_effect(
         ("permit_expired", NOW + timedelta(seconds=2), True),
         ("permit_expired", NOW + timedelta(seconds=1), False),
         ("permit_expired_before_dispatch", NOW + timedelta(seconds=2), True),
+        ("permit_expired_after_replay_reservation", NOW + timedelta(seconds=2), True),
         ("transaction_replayed", NOW + timedelta(days=1), True),
     ],
 )

@@ -613,6 +613,7 @@ def _plant_payloads(
                 expected_pre_observation_digest=base.observation_digest,
                 expected_post_state_digest=base.expected_post_state_digest,
                 expected_post_topology_digest=base.expected_post_topology_digest,
+                authorization_expires_at=base.expires_at,
             ),
         ),
     )
@@ -628,6 +629,8 @@ def test_all_registered_plant_role_operations_sign_round_trip_and_hash(
             operation=operation,
             payload=payload,
             caller_key_id=f"m4g-{role.value}-key",
+            target_plant_key_id=PLANT_KEY_ID,
+            target_plant_boot_epoch=PLANT_BOOT_EPOCH,
             call_nonce=f"m4g-plant-call-nonce-{index:04d}",
             issued_at=NOW,
             expires_at=NOW + timedelta(seconds=5),
@@ -642,6 +645,8 @@ def test_all_registered_plant_role_operations_sign_round_trip_and_hash(
             expected_role=role,
             expected_caller_key_id=f"m4g-{role.value}-key",
             expected_audience=PHYSICAL_PLANT_AUDIENCE,
+            expected_plant_key_id=PLANT_KEY_ID,
+            expected_plant_boot_epoch=PLANT_BOOT_EPOCH,
             evaluated_at=NOW,
         )
 
@@ -658,6 +663,8 @@ def test_signed_plant_success_responses_cover_each_operation_and_exact_call(
             operation=operation,
             payload=payload,
             caller_key_id=f"m4g-{role.value}-response-key",
+            target_plant_key_id=PLANT_KEY_ID,
+            target_plant_boot_epoch=PLANT_BOOT_EPOCH,
             call_nonce=f"m4g-response-call-nonce-{index:04d}",
             issued_at=NOW,
             expires_at=NOW + timedelta(seconds=5),
@@ -702,6 +709,8 @@ def test_signed_plant_negative_responses_are_closed_and_bound(
         operation=PlantOperation.READ,
         payload=PlantReadPayload(correlation_id="m4g-negative-read"),
         caller_key_id="m4g-negative-plc-key",
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT_EPOCH,
         call_nonce="m4g-negative-call-nonce-0001",
         issued_at=NOW,
         expires_at=NOW + timedelta(seconds=5),
@@ -740,6 +749,8 @@ def test_candidate_exchange_verifies_candidate_and_plant_signatures(
         operation=PlantOperation.SIMULATE,
         payload=PlantSimulatePayload(command=artifacts.command),
         caller_key_id="m4g-candidate-key-1",
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT_EPOCH,
         call_nonce="m4g-candidate-call-nonce-0001",
         issued_at=NOW,
         expires_at=NOW + timedelta(seconds=5),
@@ -781,6 +792,41 @@ def test_candidate_exchange_verifies_candidate_and_plant_signatures(
         expected_plant_key_id=PLANT_KEY_ID,
         evaluated_at=NOW,
     )
+
+    retained = SegmentedCapabilityClosedLoopResult(
+        status=CapabilityClosedLoopStatus.CANDIDATE_REJECTED,
+        reasons=("candidate_binding_mismatch",),
+        request=artifacts.dispatch.request,
+        pre_observation=artifacts.dispatch.pre_observation,
+        decision=artifacts.dispatch.decision,
+        command=artifacts.command,
+        assessment=artifacts.dispatch.assessment,
+        candidate_exchange=decoded,
+        dispatch_attempts=0,
+        execution_evidence_hash=canonical_digest({"retained": decoded.digest}),
+    )
+    assert SegmentedCapabilityClosedLoopResult.model_validate_json(
+        retained.model_dump_json()
+    ).candidate_exchange == decoded
+    with pytest.raises(ValidationError, match="plant response is not bound"):
+        SegmentedCapabilityClosedLoopResult(
+            **{
+                **retained.model_dump(mode="python"),
+                "candidate_exchange": decoded.model_copy(
+                    update={
+                        "response": decoded.response.model_copy(
+                            update={
+                                "payload": PlantSimulationResponsePayload(
+                                    assessment=artifacts.dispatch.assessment.model_copy(
+                                        update={"command_digest": "7" * 64}
+                                    )
+                                )
+                            }
+                        )
+                    }
+                ),
+            }
+        )
 
 
 @pytest.mark.parametrize(
@@ -825,6 +871,8 @@ def test_plant_calls_reject_wrong_role_operation_and_payload(
             operation=operation,
             payload=payload,
             caller_key_id="m4g-forbidden-caller-key",
+            target_plant_key_id=PLANT_KEY_ID,
+            target_plant_boot_epoch=PLANT_BOOT_EPOCH,
             call_nonce="m4g-forbidden-call-nonce-0001",
             issued_at=NOW,
             expires_at=NOW + timedelta(seconds=5),
@@ -842,6 +890,8 @@ def test_plant_call_signature_rejects_payload_role_and_audience_tamper(
         operation=PlantOperation.READ,
         payload=payload,
         caller_key_id="m4g-plc-caller-key",
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT_EPOCH,
         call_nonce="m4g-plant-read-call-nonce-0001",
         issued_at=NOW,
         expires_at=NOW + timedelta(seconds=5),
@@ -858,8 +908,22 @@ def test_plant_call_signature_rejects_payload_role_and_audience_tamper(
         expected_role=PlantCallerRole.PLC,
         expected_caller_key_id="m4g-plc-caller-key",
         expected_audience="wrong-plant",
+        expected_plant_key_id=PLANT_KEY_ID,
+        expected_plant_boot_epoch=PLANT_BOOT_EPOCH,
         evaluated_at=NOW,
     )
+    assert not call.verify_for_plant(
+        caller_public,
+        expected_role=PlantCallerRole.PLC,
+        expected_caller_key_id="m4g-plc-caller-key",
+        expected_audience=PHYSICAL_PLANT_AUDIENCE,
+        expected_plant_key_id=PLANT_KEY_ID,
+        expected_plant_boot_epoch="replacement-plant-boot-epoch-0002",
+        evaluated_at=NOW,
+    )
+    assert not call.model_copy(
+        update={"target_plant_boot_epoch": "replacement-plant-boot-epoch-0002"}
+    ).verify(caller_public)
 
     changed_hash = call.model_dump(mode="json")
     changed_hash["payload"]["correlation_id"] = "altered-correlation"
@@ -876,6 +940,8 @@ def test_plant_response_rejects_tamper_wrong_identity_and_call_substitution(
         operation=PlantOperation.READ,
         payload=PlantReadPayload(correlation_id="m4g-bound-read"),
         caller_key_id="m4g-bound-plc-key",
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT_EPOCH,
         call_nonce="m4g-bound-read-call-nonce-0001",
         issued_at=NOW,
         expires_at=NOW + timedelta(seconds=5),
@@ -969,6 +1035,8 @@ def test_plant_response_rejects_wrong_typed_payload_status_time_and_semantics(
         operation=PlantOperation.SIMULATE,
         payload=PlantSimulatePayload(command=artifacts.command),
         caller_key_id="m4g-candidate-shape-key",
+        target_plant_key_id=PLANT_KEY_ID,
+        target_plant_boot_epoch=PLANT_BOOT_EPOCH,
         call_nonce="m4g-candidate-shape-nonce-0001",
         issued_at=NOW,
         expires_at=NOW + timedelta(seconds=5),
@@ -1041,6 +1109,8 @@ def test_plant_calls_reject_invalid_windows_extra_fields_strict_numbers_and_nan(
             operation=PlantOperation.READ,
             payload=payload,
             caller_key_id="m4g-plc-caller-key",
+            target_plant_key_id=PLANT_KEY_ID,
+            target_plant_boot_epoch=PLANT_BOOT_EPOCH,
             call_nonce="m4g-plant-window-call-nonce-0001",
             issued_at=NOW,
             expires_at=NOW + MAX_SIGNED_CALL_TTL + timedelta(seconds=1),

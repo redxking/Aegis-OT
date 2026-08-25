@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing.connection import wait
 from pathlib import Path
 from threading import RLock
-from typing import Any, Protocol
+from types import TracebackType
+from typing import Any, Protocol, Self, runtime_checkable
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
@@ -48,6 +50,7 @@ from .physical_models import (
     PhysicalStateSnapshot,
     proposal_digest,
 )
+from .transport_replay import _LifetimeReplayWriterLock, _ReplayWriterLockError
 
 PLC_CAPABILITIES: dict[str, frozenset[str]] = {
     "admin": frozenset({"health", "shutdown"}),
@@ -81,6 +84,23 @@ class CapabilityPlcPlantPort(Protocol):
     ) -> PhysicalStateSnapshot: ...
 
 
+@runtime_checkable
+class EffectDeadlineCapabilityPlcPlantPort(Protocol):
+    """Optional plant port that carries the permit deadline to final effect."""
+
+    def apply_authorized_command_with_deadline(
+        self,
+        command: PhysicalControlCommand,
+        *,
+        expected_pre_state_version: int,
+        expected_pre_state_digest: str,
+        expected_pre_observation_digest: str,
+        expected_post_state_digest: str,
+        expected_post_topology_digest: str,
+        authorization_expires_at: datetime,
+    ) -> PhysicalStateSnapshot: ...
+
+
 @dataclass(frozen=True)
 class PlcProcessInfo:
     pid: int
@@ -103,10 +123,66 @@ class OrderlyRestartReplayReservations:
 
     MAX_LEDGER_BYTES = 4 * 1024 * 1024
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, initialize: bool = False) -> None:
         self.path = path
         self._lock = RLock()
-        self._state = self._load()
+        self._writer_lock: _LifetimeReplayWriterLock | None = None
+        self._state = self._empty()
+        if self.path.parent.is_symlink() or not self.path.parent.is_dir():
+            raise ValueError("PLC replay ledger directory must be a non-symlink directory")
+        try:
+            self._writer_lock = _LifetimeReplayWriterLock(self.path)
+            if initialize:
+                if self.path.exists() or self.path.is_symlink():
+                    raise ValueError(
+                        "PLC replay ledger already exists; refusing to initialize"
+                    )
+                self._persist()
+            self._state = self._load()
+        except _ReplayWriterLockError as exc:
+            self.close()
+            raise ValueError(
+                "PLC replay writer lock is already held or unavailable"
+            ) from exc
+        except Exception:
+            self.close()
+            raise
+
+    @property
+    def writer_lock_path(self) -> Path:
+        return _LifetimeReplayWriterLock.path_for(self.path)
+
+    def _assert_writer(self) -> None:
+        writer_lock = self._writer_lock
+        if writer_lock is None:
+            raise ValueError("PLC replay writer lock is closed")
+        try:
+            writer_lock.assert_held_by_current_process()
+        except _ReplayWriterLockError as exc:
+            raise ValueError(str(exc)) from exc
+
+    def close(self) -> None:
+        writer_lock = self._writer_lock
+        self._writer_lock = None
+        if writer_lock is not None:
+            writer_lock.close()
+
+    def __enter__(self) -> Self:
+        self._assert_writer()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_value, traceback
+        self.close()
+
+    def __del__(self) -> None:
+        with suppress(Exception):
+            self.close()
 
     @staticmethod
     def _empty() -> dict[str, set[str]]:
@@ -118,8 +194,9 @@ class OrderlyRestartReplayReservations:
         }
 
     def _load(self) -> dict[str, set[str]]:
+        self._assert_writer()
         if not self.path.exists():
-            return self._empty()
+            raise ValueError("PLC replay ledger is missing or unavailable")
         if self.path.is_symlink() or not self.path.is_file():
             raise ValueError("PLC replay ledger must be a regular non-symlink file")
         if self.path.stat().st_size > self.MAX_LEDGER_BYTES:
@@ -154,7 +231,7 @@ class OrderlyRestartReplayReservations:
         return expected
 
     def _persist(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._assert_writer()
         temporary = self.path.with_suffix(f".{uuid4().hex}.tmp")
         material = json.dumps(
             {key: sorted(values) for key, values in sorted(self._state.items())},
@@ -568,15 +645,38 @@ class CapabilityVirtualPlc:
                 pre_state=current,
             )
 
-        try:
-            post_state = self.plant.apply_authorized_command(
-                base.command,
-                expected_pre_state_version=base.state_version,
-                expected_pre_state_digest=base.state_digest,
-                expected_pre_observation_digest=base.observation_digest,
-                expected_post_state_digest=base.expected_post_state_digest,
-                expected_post_topology_digest=base.expected_post_topology_digest,
+        final_dispatch_time = self.clock()
+        if final_dispatch_time >= base.expires_at:
+            return self._acknowledge(
+                request=request,
+                permit=permit,
+                status=CommandStatus.REJECTED,
+                phase=DispatchPhase.PRE_DISPATCH,
+                reason="permit_expired_after_replay_reservation",
+                acknowledged_at=final_dispatch_time,
+                pre_state=current,
             )
+
+        try:
+            if isinstance(self.plant, EffectDeadlineCapabilityPlcPlantPort):
+                post_state = self.plant.apply_authorized_command_with_deadline(
+                    base.command,
+                    expected_pre_state_version=base.state_version,
+                    expected_pre_state_digest=base.state_digest,
+                    expected_pre_observation_digest=base.observation_digest,
+                    expected_post_state_digest=base.expected_post_state_digest,
+                    expected_post_topology_digest=base.expected_post_topology_digest,
+                    authorization_expires_at=base.expires_at,
+                )
+            else:
+                post_state = self.plant.apply_authorized_command(
+                    base.command,
+                    expected_pre_state_version=base.state_version,
+                    expected_pre_state_digest=base.state_digest,
+                    expected_pre_observation_digest=base.observation_digest,
+                    expected_post_state_digest=base.expected_post_state_digest,
+                    expected_post_topology_digest=base.expected_post_topology_digest,
+                )
         except PhysicalSimulationError as exc:
             reason = str(exc)
             cas_reasons = {
@@ -658,7 +758,12 @@ def _plc_process_main(
     plant = PlcPlantClient(plant_connection, plant_info)
     permit_public_key = Ed25519PublicKey.from_public_bytes(permit_public_key_bytes)
     acknowledgment_private, acknowledgment_public = generate_keypair()
-    replay = OrderlyRestartReplayReservations(Path(replay_ledger_path))
+    replay_path = Path(replay_ledger_path)
+    writer_lock_path = _LifetimeReplayWriterLock.path_for(replay_path)
+    replay = OrderlyRestartReplayReservations(
+        replay_path,
+        initialize=not replay_path.exists() and not writer_lock_path.exists(),
+    )
     device = CapabilityVirtualPlc(
         plant,
         plc_id=plc_id,

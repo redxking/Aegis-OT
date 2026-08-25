@@ -502,6 +502,7 @@ def _crash_checks() -> dict[str, Any]:
             )
             ledger.reserve("transport-crash-old-0001", "d" * 64)
             before = path.read_bytes()
+            ledger.close()
             worker = context.Process(target=_crash_worker, args=(str(path), phase))
             worker.start()
             worker.join(10)
@@ -526,6 +527,7 @@ def _crash_checks() -> dict[str, Any]:
                 "old_bytes_preserved": path.read_bytes() == before,
                 "ledger_valid": True,
             }
+            reloaded.close()
         results["accepted"] = (
             results["before_replace"]["exit_code"] == 91
             and results["before_replace"]["old_reservation_present"] is True

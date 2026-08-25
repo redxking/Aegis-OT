@@ -2,19 +2,90 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import stat
+from contextlib import suppress
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from types import TracebackType
+from typing import Any, Self
 from uuid import uuid4
 
 
 class TransportReplayLedgerError(RuntimeError):
     """The durable transport replay ledger could not be trusted or updated."""
+
+
+class _ReplayWriterLockError(RuntimeError):
+    """A ledger's stable, process-exclusive writer lock could not be held."""
+
+
+class _LifetimeReplayWriterLock:
+    """Hold a stable sidecar ``flock`` across atomic ledger replacements.
+
+    Locking the ledger inode itself would be unsafe because each durable update
+    replaces that inode.  The sidecar is intentionally retained after close so
+    a deleted initialized ledger remains distinguishable from a never-created
+    ledger and so contenders always address the same inode.
+    """
+
+    def __init__(self, ledger_path: Path) -> None:
+        self.path = self.path_for(ledger_path)
+        self._descriptor = -1
+        self._owner_pid = os.getpid()
+        flags = (
+            os.O_RDWR
+            | os.O_CREAT
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            descriptor = os.open(self.path, flags, 0o600)
+            file_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(file_stat.st_mode):
+                raise _ReplayWriterLockError(
+                    "replay writer lock must be a regular non-symlink file"
+                )
+            if stat.S_IMODE(file_stat.st_mode) != 0o600:
+                raise _ReplayWriterLockError("replay writer lock mode must be 0600")
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except _ReplayWriterLockError:
+            if "descriptor" in locals():
+                os.close(descriptor)
+            raise
+        except OSError as exc:
+            if "descriptor" in locals():
+                os.close(descriptor)
+            raise _ReplayWriterLockError(
+                "replay writer lock is already held or unavailable"
+            ) from exc
+        self._descriptor = descriptor
+
+    @staticmethod
+    def path_for(ledger_path: Path) -> Path:
+        return ledger_path.with_name(f".{ledger_path.name}.writer.lock")
+
+    def assert_held_by_current_process(self) -> None:
+        if self._descriptor < 0:
+            raise _ReplayWriterLockError("replay writer lock is closed")
+        if self._owner_pid != os.getpid():
+            raise _ReplayWriterLockError(
+                "replay writer lock cannot be used by an inherited child process"
+            )
+
+    def close(self) -> None:
+        descriptor = self._descriptor
+        if descriptor < 0:
+            return
+        self._descriptor = -1
+        # Closing, rather than explicitly unlocking, is fork-safe: a child that
+        # inherited this descriptor cannot accidentally unlock the parent's
+        # still-open copy of the same file description.
+        os.close(descriptor)
 
 
 class DurableTransportReplayLedger:
@@ -40,15 +111,62 @@ class DurableTransportReplayLedger:
         self.gateway_key_id = self._bounded_identity("gateway key ID", gateway_key_id)
         self.gateway_public_key_sha256 = self._digest(gateway_public_key_sha256)
         self._lock = RLock()
+        self._writer_lock: _LifetimeReplayWriterLock | None = None
         self._reservations: dict[str, str] = {}
         self._check_parent()
-        if initialize:
-            if self.path.exists() or self.path.is_symlink():
-                raise TransportReplayLedgerError(
-                    "transport replay ledger already exists; refusing to initialize"
-                )
-            self._persist()
-        self._reservations = self._load()
+        try:
+            self._writer_lock = _LifetimeReplayWriterLock(self.path)
+            if initialize:
+                if self.path.exists() or self.path.is_symlink():
+                    raise TransportReplayLedgerError(
+                        "transport replay ledger already exists; refusing to initialize"
+                    )
+                self._persist()
+            self._reservations = self._load()
+        except _ReplayWriterLockError as exc:
+            self.close()
+            raise TransportReplayLedgerError(
+                "transport replay writer lock is already held or unavailable"
+            ) from exc
+        except Exception:
+            self.close()
+            raise
+
+    @property
+    def writer_lock_path(self) -> Path:
+        return _LifetimeReplayWriterLock.path_for(self.path)
+
+    def _assert_writer(self) -> None:
+        writer_lock = self._writer_lock
+        if writer_lock is None:
+            raise TransportReplayLedgerError("transport replay writer lock is closed")
+        try:
+            writer_lock.assert_held_by_current_process()
+        except _ReplayWriterLockError as exc:
+            raise TransportReplayLedgerError(str(exc)) from exc
+
+    def close(self) -> None:
+        writer_lock = self._writer_lock
+        self._writer_lock = None
+        if writer_lock is not None:
+            writer_lock.close()
+
+    def __enter__(self) -> Self:
+        self._assert_writer()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_value, traceback
+        self.close()
+
+    def __del__(self) -> None:
+        with suppress(Exception):
+            self.close()
 
     @staticmethod
     def _bounded_identity(label: str, value: str) -> str:
@@ -97,6 +215,7 @@ class DurableTransportReplayLedger:
             )
 
     def _read(self) -> bytes:
+        self._assert_writer()
         self._check_parent()
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
         try:
@@ -228,6 +347,7 @@ class DurableTransportReplayLedger:
         return reservations
 
     def _persist(self) -> None:
+        self._assert_writer()
         self._check_parent()
         if len(self._reservations) > self.MAX_RESERVATIONS:
             raise TransportReplayLedgerError("transport replay ledger is at capacity")

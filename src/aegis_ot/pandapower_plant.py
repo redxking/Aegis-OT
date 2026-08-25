@@ -543,9 +543,17 @@ class PandapowerCigreMVPlant:
         expected_pre_observation_digest: str | None = None,
         expected_post_state_digest: str | None = None,
         expected_post_topology_digest: str | None = None,
+        effect_deadline: datetime | None = None,
+        effect_clock: Callable[[], datetime] | None = None,
     ) -> PhysicalStateSnapshot:
         """Apply atomically: a failed solver leaves the authoritative plant unchanged."""
 
+        if (effect_deadline is None) is not (effect_clock is None):
+            raise ValueError("effect deadline and clock must be configured together")
+        if effect_deadline is not None and (
+            effect_deadline.tzinfo is None or effect_deadline.utcoffset() is None
+        ):
+            raise ValueError("effect deadline must be timezone-aware")
         with self._lock:
             self._assert_model_integrity()
             current = self.read_state()
@@ -592,6 +600,12 @@ class PandapowerCigreMVPlant:
                 and snapshot.topology_digest != expected_post_topology_digest
             ):
                 raise PhysicalSimulationError("candidate_topology_diverged")
+            if (
+                effect_deadline is not None
+                and effect_clock is not None
+                and effect_clock() >= effect_deadline
+            ):
+                raise PhysicalSimulationError("authorization_expired_before_effect")
             self._net = candidate_net
             self._simulation_time_s = next_time
             self._state_version = next_version

@@ -91,11 +91,113 @@ EXPECTED_SECRETS = {
     },
 }
 
+RUNTIME_REQUIRED_ENVIRONMENT = {
+    "segmented-gateway": {
+        "AEGIS_CANDIDATE_KEY_ID",
+        "AEGIS_CANDIDATE_PUBLIC_KEY_FILE",
+        "AEGIS_CANDIDATE_URL",
+        "AEGIS_GATEWAY_KEY_ID",
+        "AEGIS_GATEWAY_PRIVATE_KEY_FILE",
+        "AEGIS_OBSERVER_KEY_ID",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE",
+        "AEGIS_OBSERVER_URL",
+        "AEGIS_OT_KEY_ID",
+        "AEGIS_OT_PUBLIC_KEY_FILE",
+        "AEGIS_OT_URL",
+        "AEGIS_PERMIT_KEY_ID",
+        "AEGIS_PERMIT_PRIVATE_KEY_FILE",
+        "AEGIS_PLANT_KEY_ID",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE",
+    },
+    "observer": {
+        "AEGIS_OBSERVER_KEY_ID",
+        "AEGIS_OBSERVER_PRIVATE_KEY_FILE",
+        "AEGIS_PLANT_KEY_ID",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE",
+        "AEGIS_PLANT_URL",
+    },
+    "candidate": {
+        "AEGIS_CANDIDATE_KEY_ID",
+        "AEGIS_CANDIDATE_PRIVATE_KEY_FILE",
+        "AEGIS_PLANT_KEY_ID",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE",
+        "AEGIS_PLANT_URL",
+    },
+    "ot-adapter": {
+        "AEGIS_GATEWAY_KEY_ID",
+        "AEGIS_GATEWAY_PUBLIC_KEY_FILE",
+        "AEGIS_OBSERVER_KEY_ID",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE",
+        "AEGIS_OBSERVER_URL",
+        "AEGIS_OT_KEY_ID",
+        "AEGIS_OT_PRIVATE_KEY_FILE",
+        "AEGIS_PERMIT_KEY_ID",
+        "AEGIS_PERMIT_PUBLIC_KEY_FILE",
+        "AEGIS_PLANT_KEY_ID",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE",
+        "AEGIS_PLANT_URL",
+        "AEGIS_SEMANTIC_REPLAY_LEDGER_FILE",
+        "AEGIS_TRANSPORT_REPLAY_LEDGER_FILE",
+    },
+    "simulation": {
+        "AEGIS_CANDIDATE_KEY_ID",
+        "AEGIS_CANDIDATE_PUBLIC_KEY_FILE",
+        "AEGIS_OBSERVER_KEY_ID",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE",
+        "AEGIS_OT_KEY_ID",
+        "AEGIS_OT_PUBLIC_KEY_FILE",
+        "AEGIS_PLANT_KEY_ID",
+        "AEGIS_PLANT_PRIVATE_KEY_FILE",
+    },
+}
+
+RUNTIME_KEY_SECRETS = {
+    "segmented-gateway": {
+        "AEGIS_CANDIDATE_PUBLIC_KEY_FILE": "candidate_public",
+        "AEGIS_GATEWAY_PRIVATE_KEY_FILE": "gateway_private",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE": "observer_public",
+        "AEGIS_OT_PUBLIC_KEY_FILE": "ot_public",
+        "AEGIS_PERMIT_PRIVATE_KEY_FILE": "permit_private",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE": "plant_public",
+    },
+    "observer": {
+        "AEGIS_OBSERVER_PRIVATE_KEY_FILE": "observer_private",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE": "plant_public",
+    },
+    "candidate": {
+        "AEGIS_CANDIDATE_PRIVATE_KEY_FILE": "candidate_private",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE": "plant_public",
+    },
+    "ot-adapter": {
+        "AEGIS_GATEWAY_PUBLIC_KEY_FILE": "gateway_public",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE": "observer_public",
+        "AEGIS_OT_PRIVATE_KEY_FILE": "ot_private",
+        "AEGIS_PERMIT_PUBLIC_KEY_FILE": "permit_public",
+        "AEGIS_PLANT_PUBLIC_KEY_FILE": "plant_public",
+    },
+    "simulation": {
+        "AEGIS_CANDIDATE_PUBLIC_KEY_FILE": "candidate_public",
+        "AEGIS_OBSERVER_PUBLIC_KEY_FILE": "observer_public",
+        "AEGIS_OT_PUBLIC_KEY_FILE": "ot_public",
+        "AEGIS_PLANT_PRIVATE_KEY_FILE": "plant_private",
+    },
+}
+
+STACK = (BASE, AUTH, REPLAY, CAPABILITY)
+
 
 def _service(name: str) -> dict[str, object]:
     value = CAPABILITY["services"][name]
     assert isinstance(value, dict)
     return value
+
+
+def _effective_environment(name: str) -> dict[str, object]:
+    environment: dict[str, object] = {}
+    for document in STACK:
+        service = document.get("services", {}).get(name, {})
+        environment.update(service.get("environment", {}))
+    return environment
 
 
 def test_m4g_commands_select_only_the_capability_apps() -> None:
@@ -229,6 +331,32 @@ def test_m4g_secret_paths_and_key_ids_are_explicit() -> None:
         "plant_private",
         "plant_public",
     }
+
+
+def test_m4g_runtime_environment_is_complete_after_overlay_merge() -> None:
+    for name, required in RUNTIME_REQUIRED_ENVIRONMENT.items():
+        environment = _effective_environment(name)
+        assert required <= environment.keys(), (
+            f"{name} is missing runtime settings: {sorted(required - environment.keys())}"
+        )
+        assert all(environment[variable] for variable in required)
+
+    assert _effective_environment("ot-adapter")["AEGIS_OBSERVER_URL"] == (
+        "http://observer:8082"
+    )
+    assert set(_service("ot-adapter")["depends_on"]) == {"observer", "simulation"}
+
+
+def test_m4g_every_runtime_key_file_is_bound_to_an_assigned_secret() -> None:
+    for name, bindings in RUNTIME_KEY_SECRETS.items():
+        environment = _effective_environment(name)
+        configured_key_files = {
+            variable for variable in environment if variable.endswith("_KEY_FILE")
+        }
+        assert configured_key_files == bindings.keys()
+        assert set(bindings.values()) == EXPECTED_SECRETS[name]
+        for variable, secret in bindings.items():
+            assert environment[variable] == f"/run/secrets/{secret}"
 
 
 def test_m4g_reuses_the_m4f_volume_for_transport_and_semantic_replay() -> None:
