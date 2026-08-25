@@ -17,7 +17,14 @@ def runner(monkeypatch: pytest.MonkeyPatch) -> Any:
 def _record(state: str, *kinds: str) -> dict[str, Any]:
     attempts = []
     for kind in kinds:
-        item: dict[str, Any] = {"kind": kind}
+        item: dict[str, Any] = {
+            "kind": kind,
+            "status": (
+                "outcome_unknown"
+                if state == "dispatch_armed" and kind == "commit"
+                else "response_retained"
+            ),
+        }
         if kind in {"commit", "query"} and state in {"applied", "rejected"}:
             item["outcome"] = {"disposition": state, "proof": "retained"}
         attempts.append(item)
@@ -108,10 +115,10 @@ def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict
             },
             "relay_teardown": {
                 "relay_container_removed_before_reconciliation": True,
-                "ot_service_alias_restored_before_reconciliation": True,
+                "gateway_direct_ot_route_restored_before_reconciliation": True,
             },
             "gateway_before_reconciliation": _record(
-                "unknown_effect", "prepare", "commit"
+                "dispatch_armed", "prepare", "commit"
             ),
             "ot_before_reconciliation": _record("applied", "prepare", "commit"),
             "fresh_action": {
@@ -317,6 +324,75 @@ def test_scoped_relay_is_closed_and_records_commit_before_one_forward(
     forwarded = code.index("status, content_type, material = forward(", retained)
     assert retained < forwarded
     assert "/fault" not in code
+
+
+def test_scoped_relay_uses_explicit_gateway_route_without_alias_swap(
+    runner: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner._atomic_private_json(
+        tmp_path / "arm.json",
+        {
+            "schema_version": "m4i-scoped-relay-arm-v1",
+            "expected_action_sha256": "a" * 64,
+        },
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def run(*args: str, **_: Any) -> SimpleNamespace:
+        calls.append(args)
+        if args[-3:] == ("ps", "-q", "ot-adapter"):
+            return SimpleNamespace(returncode=0, stdout="ot-container\n", stderr="")
+        if args == ("docker", "inspect", "ot-container"):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=runner.json.dumps(
+                    [
+                        {
+                            "NetworkSettings": {
+                                "Networks": {"m4i-test_control_dmz": {}}
+                            }
+                        }
+                    ]
+                ),
+                stderr="",
+            )
+        if args[:3] == ("docker", "container", "inspect"):
+            return SimpleNamespace(returncode=1, stdout="", stderr="not found")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner.m4d, "_run", run)
+    monkeypatch.setattr(runner, "_await_relay_status", lambda *args, **kwargs: {})
+    monkeypatch.setattr(runner.m4g, "_await_gateway", lambda: None)
+    prefix = ("docker", "compose", "-p", "m4i-test")
+
+    relay = runner._start_relay(
+        prefix=prefix,
+        project_name="m4i-test",
+        image="sha256:" + "b" * 64,
+        directory=tmp_path,
+    )
+
+    override_path = Path(relay["override_path"])
+    override = runner.json.loads(override_path.read_text(encoding="utf-8"))
+    assert override["services"]["segmented-gateway"]["environment"] == {
+        "AEGIS_OT_URL": "http://m4i-test-m4i-commit-relay:8083"
+    }
+    flat = [value for call in calls for value in call]
+    assert "disconnect" not in flat
+    assert "connect" not in flat
+    assert "--network-alias" not in flat
+    assert "AEGIS_M4I_RELAY_TARGET_HOST=ot-adapter" in flat
+    assert any(str(override_path) in call and "up" in call for call in calls)
+
+    teardown = runner._stop_relay(prefix=prefix, relay=relay)
+
+    assert teardown == {
+        "relay_container_removed_before_reconciliation": True,
+        "gateway_direct_ot_route_restored_before_reconciliation": True,
+    }
+    assert not override_path.exists()
 
 
 def test_artifact_restore_attaches_stdin_and_reports_written_digest(

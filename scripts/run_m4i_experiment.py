@@ -988,20 +988,21 @@ def _start_relay(
     m4d._run(*prefix, "stop", "segmented-gateway")
     ot_container = _service_container(prefix, "ot-adapter")
     network = _control_network(ot_container, project_name)
-    m4d._run("docker", "network", "disconnect", network, ot_container)
-    reconnected = False
+    relay_name = _relay_name(project_name)
+    override_path = directory / "compose.relay.json"
+    _atomic_private_json(
+        override_path,
+        {
+            "services": {
+                "segmented-gateway": {
+                    "environment": {
+                        "AEGIS_OT_URL": f"http://{relay_name}:8083",
+                    }
+                }
+            }
+        },
+    )
     try:
-        m4d._run(
-            "docker",
-            "network",
-            "connect",
-            "--alias",
-            "ot-adapter-real",
-            network,
-            ot_container,
-        )
-        reconnected = True
-        relay_name = _relay_name(project_name)
         m4d._run(
             "docker",
             "run",
@@ -1011,8 +1012,6 @@ def _start_relay(
             relay_name,
             "--network",
             network,
-            "--network-alias",
-            "ot-adapter",
             "--read-only",
             "--cap-drop",
             "ALL",
@@ -1025,7 +1024,7 @@ def _start_relay(
             "--mount",
             f"type=bind,source={directory.resolve()},target=/evidence",
             "--env",
-            "AEGIS_M4I_RELAY_TARGET_HOST=ot-adapter-real",
+            "AEGIS_M4I_RELAY_TARGET_HOST=ot-adapter",
             "--env",
             "AEGIS_M4I_RELAY_TARGET_PORT=8083",
             image,
@@ -1036,6 +1035,8 @@ def _start_relay(
         _await_relay_status(directory, predicate=lambda value: not value.get("violations"))
         m4d._run(
             *prefix,
+            "-f",
+            str(override_path),
             "up",
             "-d",
             "--force-recreate",
@@ -1046,7 +1047,7 @@ def _start_relay(
         return {
             "relay_name": relay_name,
             "network": network,
-            "ot_container": ot_container,
+            "override_path": str(override_path),
         }
     except Exception:
         m4d._run(
@@ -1056,25 +1057,7 @@ def _start_relay(
             _relay_name(project_name),
             check=False,
         )
-        if reconnected:
-            m4d._run(
-                "docker",
-                "network",
-                "disconnect",
-                network,
-                ot_container,
-                check=False,
-            )
-        m4d._run(
-            "docker",
-            "network",
-            "connect",
-            "--alias",
-            "ot-adapter",
-            network,
-            ot_container,
-            check=False,
-        )
+        override_path.unlink(missing_ok=True)
         raise
 
 
@@ -1088,29 +1071,9 @@ def _stop_relay(
         m4d._run("docker", "rm", "-f", relay["relay_name"], check=False).returncode
         == 0
     )
-    m4d._run(
-        "docker",
-        "network",
-        "disconnect",
-        relay["network"],
-        relay["ot_container"],
-        check=False,
-    )
-    restored = (
-        m4d._run(
-            "docker",
-            "network",
-            "connect",
-            "--alias",
-            "ot-adapter",
-            relay["network"],
-            relay["ot_container"],
-            check=False,
-        ).returncode
-        == 0
-    )
-    if not relay_removed or not restored:
-        raise m4d.ExperimentError("M4i relay teardown could not be established")
+    override_path = Path(relay["override_path"])
+    override_path.unlink(missing_ok=True)
+    override_removed = not override_path.exists() and not override_path.is_symlink()
     m4d._run(
         *prefix,
         "up",
@@ -1132,9 +1095,11 @@ def _stop_relay(
     )
     if not absent:
         raise m4d.ExperimentError("M4i relay remained present after teardown")
+    if not relay_removed or not override_removed:
+        raise m4d.ExperimentError("M4i relay teardown could not be established")
     return {
         "relay_container_removed_before_reconciliation": True,
-        "ot_service_alias_restored_before_reconciliation": True,
+        "gateway_direct_ot_route_restored_before_reconciliation": True,
     }
 
 
@@ -1178,6 +1143,20 @@ def _attempt_counts(record: dict[str, Any]) -> dict[str, int]:
             raise m4d.ExperimentError("M4i coordination attempt kind was unexpected")
         counts[kind] += 1
     return counts
+
+
+def _commit_attempt_status(record: dict[str, Any]) -> str | None:
+    attempts = record.get("attempts")
+    if not isinstance(attempts, list):
+        raise m4d.ExperimentError("M4i coordination attempts were malformed")
+    matches = [
+        item.get("status")
+        for item in attempts
+        if isinstance(item, dict) and item.get("kind") == "commit"
+    ]
+    if len(matches) != 1 or not isinstance(matches[0], str):
+        return None
+    return matches[0]
 
 
 def _record_state(record: dict[str, Any]) -> str | None:
@@ -1332,7 +1311,9 @@ def _accepted_gates(
         lost_result.get("http_status") == 200
         and _mapping(lost_result.get("response")).get("status") == "unknown_effect"
         and _mapping(lost_result.get("response")).get("dispatch_attempts") == 1
-        and _record_state(gateway_unknown) == "unknown_effect"
+        and _record_state(gateway_unknown) == "dispatch_armed"
+        and _commit_attempt_status(gateway_unknown) == "outcome_unknown"
+        and _record_state(ot_before) == "applied"
         and unknown_gateway_counts == {"prepare": 1, "commit": 1, "query": 0}
         and unknown_ot_counts == {"prepare": 1, "commit": 1, "query": 0}
         and relay.get("armed_action_sha256") == lost.get("action_sha256")
@@ -1356,7 +1337,8 @@ def _accepted_gates(
         and resolved_ot_counts == resolved_gateway_counts
         and relay_counters.get("commit") == 1
         and relay_cleanup.get("relay_container_removed_before_reconciliation") is True
-        and relay_cleanup.get("ot_service_alias_restored_before_reconciliation") is True
+        and relay_cleanup.get("gateway_direct_ot_route_restored_before_reconciliation")
+        is True
     )
     restart_accepted = (
         _mapping(restart.get("gateway_container_before")).get("container_id")
