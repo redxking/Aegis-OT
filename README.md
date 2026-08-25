@@ -189,6 +189,35 @@ and deletes the temporary private-key directory. Evidence retains public-key
 hashes, not private keys. This authenticates bounded messages; it is not
 SPIFFE/SPIRE identity, TLS peer authentication, or durable replay protection.
 
+Run the paired M4f durable-replay experiment from a clean checkout:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/run_m4f_experiment.py \
+  --output results/m4f-durable-transport-replay-evidence.json \
+  --reproduction-output \
+    results/m4f-durable-transport-replay-evidence-reproduction.json
+```
+
+The M4f runner creates fresh keys, Compose projects, and replay/probe volumes
+for both campaigns. It replaces only the OT-adapter container, verifies exact-
+envelope rejection from the retained ledger, verifies a fresh request for
+liveness, corrupts the ledger to exercise fail-closed behavior, and then removes
+the scoped projects, volumes, and temporary key directories. Output paths must
+be new, distinct files. The retained pair supports at-most-once admission under
+that bounded restart condition; it does not establish exactly-once effects,
+power-loss durability, rollback resistance, or multi-replica coordination.
+
+The default `docker compose up` path does not enable durable replay. To inspect
+the M4f service composition deliberately, include both optional overlays:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.auth.yml \
+  -f docker-compose.replay.yml \
+  --profile experiment config --quiet
+```
+
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
 
 ## Public demonstration

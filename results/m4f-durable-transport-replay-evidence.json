@@ -1,0 +1,1190 @@
+{
+  "acceptance": {
+    "adapter_boot_epoch_changed": true,
+    "corrupt_ledger_failed_closed_without_effect": true,
+    "durable_exact_replay_rejected_without_mutation": true,
+    "exact_artifacts_verify_offline": true,
+    "fresh_request_after_restart_preserved_liveness": true,
+    "ledger_snapshot_canonical_and_bound": true,
+    "only_ot_adapter_was_replaced": true,
+    "replay_volume_initialized_closed_and_private": true,
+    "restart_request_prepared_immediately_before_replacement": true,
+    "same_boot_transport_campaign_accepted": true,
+    "signed_agent_campaign_accepted": true
+  },
+  "accepted": true,
+  "agent_probe": {
+    "accepted": true,
+    "agent_hostname": "4e088be60c60",
+    "agent_network_direct_reachability": {
+      "observer": false,
+      "ot-adapter": false,
+      "simulation": false
+    },
+    "final_isolated_assets": [
+      "feeder-1"
+    ],
+    "final_state_version": 2,
+    "initial_state_version": 1,
+    "replay": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "replayed_nonce"
+      ]
+    },
+    "safe": {
+      "decision": "permit",
+      "executed": true,
+      "resulting_state_version": 2
+    },
+    "schema_version": "m4d-segmented-probe-v1",
+    "unsafe": {
+      "decision": "deny",
+      "dispatched": false,
+      "reasons": [
+        "critical_load_below_limit"
+      ]
+    }
+  },
+  "analyst": "Angelis Pseftis",
+  "clean_checkout_end": true,
+  "clean_checkout_start": true,
+  "cleanup": {
+    "compose_project_removed": true,
+    "private_key_directory_removed": true,
+    "probe_volume_removed": true,
+    "replay_volume_removed": true
+  },
+  "corrupt_ledger_probe": {
+    "accepted": true,
+    "mode": "ledger-fault",
+    "probe_hostname": "93580f70e03c",
+    "request": {
+      "http_status": 503,
+      "received_at": "2026-08-25T15:50:30.808259+00:00",
+      "request_sha256": "90d07747b034868738ee63e4426fb6502295124e42b486a99158f15890bba850",
+      "request_signature_verified": true,
+      "response": {
+        "detail": "transport replay ledger unavailable"
+      },
+      "response_within_validity_window": true,
+      "sent_at": "2026-08-25T15:50:30.794471+00:00",
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:51:00.789158Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:30.789158Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:30.789225Z",
+            "decision_id": "aca05edb-6b52-4231-9a30-955418260834",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "93b90c7a-6e89-4d9a-9430-f15fbe423de1",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 5
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "e4378359-5bf2-4675-8483-2c3d39f76424",
+            "observed_at": "2026-08-25T15:50:30.787893Z",
+            "observed_state_version": 5,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "93b90c7a-6e89-4d9a-9430-f15fbe423de1",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:30.789166Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "nWz-0QwoFokQ1k4Z-iTP_rvideJAUlTV6oi_z31Syv8BnqHc4CluZSLsN-SnL3yBjREQ4WAP27baoSlLLEACBQ==",
+        "transport_nonce": "bf05c9ab-1fc6-4649-9d6e-345ec98b8a1b"
+      }
+    },
+    "schema_version": "m4f-transport-probe-v1",
+    "state_after": {
+      "battery_dispatch_mw": 3.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:30.809972Z",
+      "version": 5
+    },
+    "state_before": {
+      "battery_dispatch_mw": 3.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:30.787893Z",
+      "version": 5
+    }
+  },
+  "evidence_boundary": [
+    "Durable at-most-once exact-envelope admission, not exactly-once effects",
+    "A lost response after dispatch remains outcome-unknown until observation reconciliation",
+    "One Uvicorn process and one OT-adapter writer; no multi-replica coordination",
+    "Intact trusted Docker volume; no hostile-host rollback or external monotonic anchor",
+    "Process-exit fsync checks ran on the host filesystem; they are code-path evidence, not Docker-volume or power-loss durability evidence",
+    "Ephemeral Ed25519 message authentication, not SPIFFE, TLS peer identity, or revocation",
+    "Synthetic single-host execution, not production OT or independent external validation"
+  ],
+  "generated_at": "2026-08-25T15:50:31.849138+00:00",
+  "git_commit": "815712aa656905a28a3d4412137ba989506a7c3c",
+  "images": [
+    {
+      "ContainerName": "aegis-ot-m4f-primary-observer-1",
+      "Created": "2026-08-25T15:33:34.532898632Z",
+      "ID": "sha256:1fa9656714588b24ed3af884a495b085243eadf50ded1f5cfeb9b571e0a7e787",
+      "LastTagTime": "2026-08-25T15:50:21.386032042Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4f-primary-observer",
+      "Size": 64182643,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4f-primary-opa-1",
+      "Created": "2026-08-17T12:59:25.488711271Z",
+      "ID": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "LastTagTime": "2026-08-24T14:44:50.847063844Z",
+      "Platform": "linux/arm64",
+      "Repository": "openpolicyagent/opa",
+      "Size": 26229794,
+      "Tag": ""
+    },
+    {
+      "ContainerName": "aegis-ot-m4f-primary-replay-init-1",
+      "Created": "2026-08-25T15:33:34.532898632Z",
+      "ID": "sha256:32a109a3301af2bed164524355349bc27726b0012f2d7c0a951d9e4e69a8b8a7",
+      "LastTagTime": "2026-08-25T15:50:21.386781417Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4f-primary-replay-init",
+      "Size": 64182646,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4f-primary-segmented-gateway-1",
+      "Created": "2026-08-25T15:33:34.532898632Z",
+      "ID": "sha256:29cfb318240a27bdffb56ef0a805e8ee4815c2c483fbd57c63abdef68f99728c",
+      "LastTagTime": "2026-08-25T15:50:21.383531542Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4f-primary-segmented-gateway",
+      "Size": 64182652,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4f-primary-ot-adapter-1",
+      "Created": "2026-08-25T15:33:34.532898632Z",
+      "ID": "sha256:d6d136e4df5b183bfd1619935950b0abf4117189bf2fd5fedace088f7e4850bf",
+      "LastTagTime": "2026-08-25T15:50:21.391318917Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4f-primary-ot-adapter",
+      "Size": 64182645,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "aegis-ot-m4f-primary-simulation-1",
+      "Created": "2026-08-25T15:33:34.532898632Z",
+      "ID": "sha256:3b2c8426eb0b300c94b8535bce84724bccde56f90375bb0ea21f60eb48677e91",
+      "LastTagTime": "2026-08-25T15:50:21.387764208Z",
+      "Platform": "linux/arm64",
+      "Repository": "aegis-ot-m4f-primary-simulation",
+      "Size": 64182645,
+      "Tag": "latest"
+    }
+  ],
+  "ledger_after_fresh_request": {
+    "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om90LWFkYXB0ZXIiLCJnYXRld2F5X2tleV9pZCI6Im00ZS1nYXRld2F5LWtleS12MSIsImdhdGV3YXlfcHVibGljX2tleV9zaGEyNTYiOiIwZjViMDlkNDhkNDNiNGMzMGJhYzQ2NjFkMjNkNWRjYzQ4MWRjZmE0ZDVmNmZlODFkMThhMGUwYjQ0YjI5NTg1IiwicmVzZXJ2YXRpb25zIjpbeyJub25jZSI6IjFhMWUyNDYyLTFmM2ItNGJjOS05OTFlLWUyNzJhMWUxNWQxZCIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6ImYwMjNkYjUzOGQ5ZThiYTQ1OGFjNDc4ODM1YWVjNjU3ZmEwOTkyMzcxMjFiZGVlMGEyNWNiZDk4ODZlYmJhMTAifSx7Im5vbmNlIjoiMjkxYTVhYWUtNjIzMy00MWE0LWI1NzYtZWZmMTk2ZGIyOWIxIiwic2lnbmVkX3JlcXVlc3Rfc2hhMjU2IjoiODczZjdiMjk3M2E2OWE2OGUwMDQ2Zjc5MzYyYmFhNDUzYWYxY2M0ZmVkZGJjYzY1MDYzYWE3Y2ZiMTU3YWE5MyJ9LHsibm9uY2UiOiI2MGUyYmJmZC0zYjdjLTRmNTctYjc3ZS1mMzQ1NzZlYWE4NmUiLCJzaWduZWRfcmVxdWVzdF9zaGEyNTYiOiJmMjVkNjg3NGU0OTJlOGQyNjI4ZTkyOWU3YzhiNzg2YjhlMWQ0OGJjYWM5NzFjYmVkOGEwOTU3ZDViNTdiYWE1In0seyJub25jZSI6IjkzYmZlZmVjLTI5MjYtNDY2OS05NzdlLWQ0ZmIzNDc1Y2EwOCIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6IjFhMzc5MzZiNTZjOTFkMDhlNzdjMTA3Yzc0NThlYzU5Mjc5YmY4MTMxZjBlNmEwODlhN2NkZGQ3YTBiMjNlZjgifSx7Im5vbmNlIjoiZTdmZTk2NTMtZTk0NC00MGZlLWEzOGItNTBhM2YwOWZhNjFiIiwic2lnbmVkX3JlcXVlc3Rfc2hhMjU2IjoiNmM5OGM3NjIzYmJiOTZjMjZhNmJkMzI3NDkxZmM3ZDQ2ZWNjZjVlYjc2M2U5ODBlMjM5ZWY0OTJkODJjODY0NyJ9XSwic2NoZW1hX3ZlcnNpb24iOiJtNGYtdHJhbnNwb3J0LXJlcGxheS1sZWRnZXItdjEifQ==",
+    "canonical": true,
+    "document": {
+      "audience": "aegis-ot:ot-adapter",
+      "gateway_key_id": "m4e-gateway-key-v1",
+      "gateway_public_key_sha256": "0f5b09d48d43b4c30bac4661d23d5dcc481dcfa4d5f6fe81d18a0e0b44b29585",
+      "reservations": [
+        {
+          "nonce": "1a1e2462-1f3b-4bc9-991e-e272a1e15d1d",
+          "signed_request_sha256": "f023db538d9e8ba458ac478835aec657fa099237121bdee0a25cbd9886ebba10"
+        },
+        {
+          "nonce": "291a5aae-6233-41a4-b576-eff196db29b1",
+          "signed_request_sha256": "873f7b2973a69a68e0046f79362baa453af1cc4feddbcc65063aa7cfb157aa93"
+        },
+        {
+          "nonce": "60e2bbfd-3b7c-4f57-b77e-f34576eaa86e",
+          "signed_request_sha256": "f25d6874e492e8d2628e929e7c8b786b8e1d48bcac971cbed8a0957d5b57baa5"
+        },
+        {
+          "nonce": "93bfefec-2926-4669-977e-d4fb3475ca08",
+          "signed_request_sha256": "1a37936b56c91d08e77c107c7458ec59279bf8131f0e6a089a7cddd7a0b23ef8"
+        },
+        {
+          "nonce": "e7fe9653-e944-40fe-a38b-50a3f09fa61b",
+          "signed_request_sha256": "6c98c7623bbb96c26a6bd327491fc7d46eccf5eb763e980e239ef492d82c8647"
+        }
+      ],
+      "schema_version": "m4f-transport-replay-ledger-v1"
+    },
+    "sha256": "229bc2d3ec923b30707affb52714e9175905ad4b55aac10272836ae717c3b35c"
+  },
+  "ledger_before_restart": {
+    "bytes_base64": "eyJhdWRpZW5jZSI6ImFlZ2lzLW90Om90LWFkYXB0ZXIiLCJnYXRld2F5X2tleV9pZCI6Im00ZS1nYXRld2F5LWtleS12MSIsImdhdGV3YXlfcHVibGljX2tleV9zaGEyNTYiOiIwZjViMDlkNDhkNDNiNGMzMGJhYzQ2NjFkMjNkNWRjYzQ4MWRjZmE0ZDVmNmZlODFkMThhMGUwYjQ0YjI5NTg1IiwicmVzZXJ2YXRpb25zIjpbeyJub25jZSI6IjI5MWE1YWFlLTYyMzMtNDFhNC1iNTc2LWVmZjE5NmRiMjliMSIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6Ijg3M2Y3YjI5NzNhNjlhNjhlMDA0NmY3OTM2MmJhYTQ1M2FmMWNjNGZlZGRiY2M2NTA2M2FhN2NmYjE1N2FhOTMifSx7Im5vbmNlIjoiNjBlMmJiZmQtM2I3Yy00ZjU3LWI3N2UtZjM0NTc2ZWFhODZlIiwic2lnbmVkX3JlcXVlc3Rfc2hhMjU2IjoiZjI1ZDY4NzRlNDkyZThkMjYyOGU5MjllN2M4Yjc4NmI4ZTFkNDhiY2FjOTcxY2JlZDhhMDk1N2Q1YjU3YmFhNSJ9LHsibm9uY2UiOiI5M2JmZWZlYy0yOTI2LTQ2NjktOTc3ZS1kNGZiMzQ3NWNhMDgiLCJzaWduZWRfcmVxdWVzdF9zaGEyNTYiOiIxYTM3OTM2YjU2YzkxZDA4ZTc3YzEwN2M3NDU4ZWM1OTI3OWJmODEzMWYwZTZhMDg5YTdjZGRkN2EwYjIzZWY4In0seyJub25jZSI6ImU3ZmU5NjUzLWU5NDQtNDBmZS1hMzhiLTUwYTNmMDlmYTYxYiIsInNpZ25lZF9yZXF1ZXN0X3NoYTI1NiI6IjZjOThjNzYyM2JiYjk2YzI2YTZiZDMyNzQ5MWZjN2Q0NmVjY2Y1ZWI3NjNlOTgwZTIzOWVmNDkyZDgyYzg2NDcifV0sInNjaGVtYV92ZXJzaW9uIjoibTRmLXRyYW5zcG9ydC1yZXBsYXktbGVkZ2VyLXYxIn0=",
+    "canonical": true,
+    "document": {
+      "audience": "aegis-ot:ot-adapter",
+      "gateway_key_id": "m4e-gateway-key-v1",
+      "gateway_public_key_sha256": "0f5b09d48d43b4c30bac4661d23d5dcc481dcfa4d5f6fe81d18a0e0b44b29585",
+      "reservations": [
+        {
+          "nonce": "291a5aae-6233-41a4-b576-eff196db29b1",
+          "signed_request_sha256": "873f7b2973a69a68e0046f79362baa453af1cc4feddbcc65063aa7cfb157aa93"
+        },
+        {
+          "nonce": "60e2bbfd-3b7c-4f57-b77e-f34576eaa86e",
+          "signed_request_sha256": "f25d6874e492e8d2628e929e7c8b786b8e1d48bcac971cbed8a0957d5b57baa5"
+        },
+        {
+          "nonce": "93bfefec-2926-4669-977e-d4fb3475ca08",
+          "signed_request_sha256": "1a37936b56c91d08e77c107c7458ec59279bf8131f0e6a089a7cddd7a0b23ef8"
+        },
+        {
+          "nonce": "e7fe9653-e944-40fe-a38b-50a3f09fa61b",
+          "signed_request_sha256": "6c98c7623bbb96c26a6bd327491fc7d46eccf5eb763e980e239ef492d82c8647"
+        }
+      ],
+      "schema_version": "m4f-transport-replay-ledger-v1"
+    },
+    "sha256": "517e05f96046ebc0abda1b2b7c38d3f3128f46bbffd7ae1db7e05ce291f71bf7"
+  },
+  "network_inventory": {
+    "agent": [
+      "aegis-ot-m4f-primary-segmented-gateway-1"
+    ],
+    "control_dmz": [
+      "aegis-ot-m4f-primary-observer-1",
+      "aegis-ot-m4f-primary-ot-adapter-1",
+      "aegis-ot-m4f-primary-segmented-gateway-1"
+    ],
+    "simulation": [
+      "aegis-ot-m4f-primary-observer-1",
+      "aegis-ot-m4f-primary-ot-adapter-1",
+      "aegis-ot-m4f-primary-simulation-1"
+    ],
+    "trust": [
+      "aegis-ot-m4f-primary-opa-1",
+      "aegis-ot-m4f-primary-segmented-gateway-1"
+    ]
+  },
+  "normalized_compose_sha256": "7eff33811df8a91c259e1f19b9335114df62a32a2435ea2d137d6f0e9e18cc19",
+  "offline_artifact_verification": {
+    "corrupt_fault_request_audience_verified_offline": true,
+    "corrupt_fault_request_key_id_verified_offline": true,
+    "corrupt_fault_request_signature_verified_offline": true,
+    "full_request_audience_verified_offline": true,
+    "full_request_gateway_key_id_verified_offline": true,
+    "full_request_signature_verified_offline": true,
+    "full_response_decision_binding_verified_offline": true,
+    "full_response_ot_key_id_verified_offline": true,
+    "full_response_proposal_binding_verified_offline": true,
+    "full_response_request_binding_verified_offline": true,
+    "full_response_signature_verified_offline": true,
+    "prepared_request_audience_verified_offline": true,
+    "prepared_request_gateway_key_id_verified_offline": true,
+    "prepared_request_signature_verified_offline": true,
+    "prepared_response_decision_binding_verified_offline": true,
+    "prepared_response_ot_key_id_verified_offline": true,
+    "prepared_response_proposal_binding_verified_offline": true,
+    "prepared_response_request_binding_verified_offline": true,
+    "prepared_response_signature_verified_offline": true
+  },
+  "prepare_restart_probe": {
+    "accepted": true,
+    "health_after": {
+      "boot_epoch": "e272ca16-d96a-4c0b-8d34-78ddba4eb9a5",
+      "pid": 1,
+      "replay_ledger_sha256": "517e05f96046ebc0abda1b2b7c38d3f3128f46bbffd7ae1db7e05ce291f71bf7",
+      "replay_mode": "durable",
+      "replay_reservations": 4,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "health_before": {
+      "boot_epoch": "e272ca16-d96a-4c0b-8d34-78ddba4eb9a5",
+      "pid": 1,
+      "replay_ledger_sha256": "0dafdae171e0f55a0961e3c15b9fca7cebc81bd08f275c49412bb1542dfb9af9",
+      "replay_mode": "durable",
+      "replay_reservations": 3,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "mode": "prepare-restart",
+    "prepared_request": {
+      "executed": true,
+      "http_status": 200,
+      "request_sha256": "f25d6874e492e8d2628e929e7c8b786b8e1d48bcac971cbed8a0957d5b57baa5",
+      "response_signature_verified": true,
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:51:26.835531Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:26.835531Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:26.835597Z",
+            "decision_id": "a00cb57e-4912-412d-8218-62a7bbc4e8ab",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "5a57541f-73a7-4bf6-9872-1e1d63ab8bce",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 3
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "f612fa82-d34c-4821-b843-903f3037be85",
+            "observed_at": "2026-08-25T15:50:26.834387Z",
+            "observed_state_version": 3,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "5a57541f-73a7-4bf6-9872-1e1d63ab8bce",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:26.835535Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "bhnnnzOWkrVkeKTl9dgwhExmZ017aZYXE00TNMfhnPJ9BP8JRMUzOCfUAeqYwqkjsHZMgWptd8eY_nWtz3KAAw==",
+        "transport_nonce": "60e2bbfd-3b7c-4f57-b77e-f34576eaa86e"
+      },
+      "signed_response": {
+        "execution": {
+          "acknowledged_at": "2026-08-25T15:50:26.847174Z",
+          "decision_id": "a00cb57e-4912-412d-8218-62a7bbc4e8ab",
+          "executed": true,
+          "proposal_id": "5a57541f-73a7-4bf6-9872-1e1d63ab8bce",
+          "reason": null,
+          "resulting_state": {
+            "battery_dispatch_mw": 2.0,
+            "critical_load_served_pct": 95.0,
+            "isolated_assets": [
+              "feeder-1"
+            ],
+            "maximum_line_loading_pct": 72.0,
+            "maximum_voltage_pu": 1.01,
+            "minimum_voltage_pu": 0.99,
+            "observed_at": "2026-08-25T15:50:26.847161Z",
+            "version": 4
+          }
+        },
+        "ot_key_id": "m4e-ot-key-v1",
+        "request_sha256": "f25d6874e492e8d2628e929e7c8b786b8e1d48bcac971cbed8a0957d5b57baa5",
+        "schema_version": "m4e-signed-execution-response-v1",
+        "signature": "UYehEZ0RvbsWfe4uCh3JDgPdwN-oOG3_isa8oelzQQUa43ym118tv7XdLBLieC9v5JPOilxM-5g6Gt2JMR_RAQ==",
+        "signed_at": "2026-08-25T15:50:26.847758Z"
+      }
+    },
+    "probe_hostname": "ec4f5fd48b4b",
+    "schema_version": "m4f-transport-probe-v1",
+    "state_after": {
+      "battery_dispatch_mw": 2.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:26.852109Z",
+      "version": 4
+    },
+    "state_before": {
+      "battery_dispatch_mw": 1.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:26.834387Z",
+      "version": 3
+    }
+  },
+  "private_key_material_retained": false,
+  "project_name": "aegis-ot-m4f-primary",
+  "public_verification_material": {
+    "gateway_key_id": "m4e-gateway-key-v1",
+    "gateway_public_key_base64": "ZihXSmzvuE1CTAzpDLqBtq5eFfE8WsH+0Cd1SsoYgEI=",
+    "gateway_public_key_sha256": "0f5b09d48d43b4c30bac4661d23d5dcc481dcfa4d5f6fe81d18a0e0b44b29585",
+    "ot_key_id": "m4e-ot-key-v1",
+    "ot_public_key_base64": "Nhnh7c3W64WIiDKtDo9hFh/Ka9RdCoPwwYT38gSVr/M=",
+    "ot_public_key_sha256": "41f4870352e597412ff0e3f2f4809a851cf785327a9ea0c1325dc656832628c0"
+  },
+  "replay_initialization": {
+    "directory_mode": "0700",
+    "gateway_key_id": "m4e-gateway-key-v1",
+    "gateway_public_key_sha256": "0f5b09d48d43b4c30bac4661d23d5dcc481dcfa4d5f6fe81d18a0e0b44b29585",
+    "ledger_mode": "0600",
+    "ledger_reservations": 0,
+    "runtime_gid": 65532,
+    "runtime_uid": 65532,
+    "schema_version": "m4f-replay-volume-initialization-v1"
+  },
+  "replay_volume_name": "aegis-ot-m4f-primary_transport_replay",
+  "reproduction_comparison": {
+    "primary_semantic_outcome_sha256": "447023e0541f7bc44e9f2c35421e19871b86b93e547abb23a779fc917eede1b4",
+    "reproduction_semantic_outcome_sha256": "447023e0541f7bc44e9f2c35421e19871b86b93e547abb23a779fc917eede1b4",
+    "role": "primary",
+    "semantic_outcomes_match": true
+  },
+  "restart_probe": {
+    "accepted": true,
+    "exact_restart_replay": {
+      "http_status": 409,
+      "received_at": "2026-08-25T15:50:28.404235+00:00",
+      "request_sha256": "f25d6874e492e8d2628e929e7c8b786b8e1d48bcac971cbed8a0957d5b57baa5",
+      "response": {
+        "detail": "transport request replayed"
+      },
+      "response_within_original_validity_window": true,
+      "sent_at": "2026-08-25T15:50:28.393342+00:00",
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:51:26.835531Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:26.835531Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:26.835597Z",
+            "decision_id": "a00cb57e-4912-412d-8218-62a7bbc4e8ab",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "5a57541f-73a7-4bf6-9872-1e1d63ab8bce",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 3
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "f612fa82-d34c-4821-b843-903f3037be85",
+            "observed_at": "2026-08-25T15:50:26.834387Z",
+            "observed_state_version": 3,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "5a57541f-73a7-4bf6-9872-1e1d63ab8bce",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:26.835535Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "bhnnnzOWkrVkeKTl9dgwhExmZ017aZYXE00TNMfhnPJ9BP8JRMUzOCfUAeqYwqkjsHZMgWptd8eY_nWtz3KAAw==",
+        "transport_nonce": "60e2bbfd-3b7c-4f57-b77e-f34576eaa86e"
+      },
+      "validity_margin_at_send_seconds": 58.442189
+    },
+    "fresh_after_restart": {
+      "executed": true,
+      "http_status": 200,
+      "response_signature_verified": true,
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:50:58.409138Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:28.409138Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:28.409198Z",
+            "decision_id": "39ced5e2-ad48-4da7-a1d0-b737a644e053",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "c4a8cef6-2c6d-4d72-be3a-8eb95fb1f6db",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 4
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "8e6a947d-f4bf-40d8-a5ae-6cf43f526696",
+            "observed_at": "2026-08-25T15:50:28.405982Z",
+            "observed_state_version": 4,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "c4a8cef6-2c6d-4d72-be3a-8eb95fb1f6db",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:28.409145Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "6TMHKlT8I35vAjKycnTac0z6eVVSbNTsfCZuh7ZxuIPvvDqj1i7dUytJ5SbK-nKvLefd5ZyVna6iUiHfZlq2Aw==",
+        "transport_nonce": "1a1e2462-1f3b-4bc9-991e-e272a1e15d1d"
+      },
+      "signed_response": {
+        "execution": {
+          "acknowledged_at": "2026-08-25T15:50:28.428313Z",
+          "decision_id": "39ced5e2-ad48-4da7-a1d0-b737a644e053",
+          "executed": true,
+          "proposal_id": "c4a8cef6-2c6d-4d72-be3a-8eb95fb1f6db",
+          "reason": null,
+          "resulting_state": {
+            "battery_dispatch_mw": 3.0,
+            "critical_load_served_pct": 95.0,
+            "isolated_assets": [
+              "feeder-1"
+            ],
+            "maximum_line_loading_pct": 72.0,
+            "maximum_voltage_pu": 1.01,
+            "minimum_voltage_pu": 0.99,
+            "observed_at": "2026-08-25T15:50:28.428300Z",
+            "version": 5
+          }
+        },
+        "ot_key_id": "m4e-ot-key-v1",
+        "request_sha256": "f023db538d9e8ba458ac478835aec657fa099237121bdee0a25cbd9886ebba10",
+        "schema_version": "m4e-signed-execution-response-v1",
+        "signature": "FMu-tO05V_m9sKtbxO9HM6Z85RGBjEscx1z35NxU9p0eVEJWRKlE1qF5n2c_jnc3Ky8RSo9zADpoTXkdjA_oCg==",
+        "signed_at": "2026-08-25T15:50:28.429025Z"
+      }
+    },
+    "health_after_fresh": {
+      "boot_epoch": "803c26ad-c46c-4fb4-bf8f-2bbc1a679c0f",
+      "pid": 1,
+      "replay_ledger_sha256": "229bc2d3ec923b30707affb52714e9175905ad4b55aac10272836ae717c3b35c",
+      "replay_mode": "durable",
+      "replay_reservations": 5,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "health_after_replay": {
+      "boot_epoch": "803c26ad-c46c-4fb4-bf8f-2bbc1a679c0f",
+      "pid": 1,
+      "replay_ledger_sha256": "517e05f96046ebc0abda1b2b7c38d3f3128f46bbffd7ae1db7e05ce291f71bf7",
+      "replay_mode": "durable",
+      "replay_reservations": 4,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "health_before": {
+      "boot_epoch": "803c26ad-c46c-4fb4-bf8f-2bbc1a679c0f",
+      "pid": 1,
+      "replay_ledger_sha256": "517e05f96046ebc0abda1b2b7c38d3f3128f46bbffd7ae1db7e05ce291f71bf7",
+      "replay_mode": "durable",
+      "replay_reservations": 4,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "mode": "restart-replay",
+    "probe_hostname": "dd5b1257142c",
+    "schema_version": "m4f-transport-probe-v1",
+    "state_after_fresh": {
+      "battery_dispatch_mw": 3.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:28.432841Z",
+      "version": 5
+    },
+    "state_after_replay": {
+      "battery_dispatch_mw": 2.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:28.405982Z",
+      "version": 4
+    },
+    "state_before": {
+      "battery_dispatch_mw": 2.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:28.392137Z",
+      "version": 4
+    }
+  },
+  "schema_version": "m4f-durable-transport-replay-experiment-v1",
+  "semantic_outcome_sha256": "447023e0541f7bc44e9f2c35421e19871b86b93e547abb23a779fc917eede1b4",
+  "semantic_projection": {
+    "acceptance": {
+      "adapter_boot_epoch_changed": true,
+      "corrupt_ledger_failed_closed_without_effect": true,
+      "durable_exact_replay_rejected_without_mutation": true,
+      "exact_artifacts_verify_offline": true,
+      "fresh_request_after_restart_preserved_liveness": true,
+      "ledger_snapshot_canonical_and_bound": true,
+      "only_ot_adapter_was_replaced": true,
+      "replay_volume_initialized_closed_and_private": true,
+      "restart_request_prepared_immediately_before_replacement": true,
+      "same_boot_transport_campaign_accepted": true,
+      "signed_agent_campaign_accepted": true
+    },
+    "agent_probe": {
+      "accepted": true,
+      "agent_network_direct_reachability": {
+        "observer": false,
+        "ot-adapter": false,
+        "simulation": false
+      },
+      "final_isolated_assets": [
+        "feeder-1"
+      ],
+      "final_state_version": 2,
+      "initial_state_version": 1,
+      "replay": {
+        "decision": "deny",
+        "dispatched": false,
+        "reasons": [
+          "replayed_nonce"
+        ]
+      },
+      "safe": {
+        "decision": "permit",
+        "executed": true,
+        "resulting_state_version": 2
+      },
+      "schema_version": "m4d-segmented-probe-v1",
+      "unsafe": {
+        "decision": "deny",
+        "dispatched": false,
+        "reasons": [
+          "critical_load_below_limit"
+        ]
+      }
+    },
+    "git_commit": "815712aa656905a28a3d4412137ba989506a7c3c",
+    "ledger_fault": {
+      "accepted": true,
+      "http_status": 503,
+      "state_version_delta": 0
+    },
+    "network_inventory": {
+      "agent": [
+        "<compose-project>-segmented-gateway-1"
+      ],
+      "control_dmz": [
+        "<compose-project>-observer-1",
+        "<compose-project>-ot-adapter-1",
+        "<compose-project>-segmented-gateway-1"
+      ],
+      "simulation": [
+        "<compose-project>-observer-1",
+        "<compose-project>-ot-adapter-1",
+        "<compose-project>-simulation-1"
+      ],
+      "trust": [
+        "<compose-project>-opa-1",
+        "<compose-project>-segmented-gateway-1"
+      ]
+    },
+    "normalized_compose_sha256": "7eff33811df8a91c259e1f19b9335114df62a32a2435ea2d137d6f0e9e18cc19",
+    "offline_verification": {
+      "corrupt_fault_request_audience_verified_offline": true,
+      "corrupt_fault_request_key_id_verified_offline": true,
+      "corrupt_fault_request_signature_verified_offline": true,
+      "full_request_audience_verified_offline": true,
+      "full_request_gateway_key_id_verified_offline": true,
+      "full_request_signature_verified_offline": true,
+      "full_response_decision_binding_verified_offline": true,
+      "full_response_ot_key_id_verified_offline": true,
+      "full_response_proposal_binding_verified_offline": true,
+      "full_response_request_binding_verified_offline": true,
+      "full_response_signature_verified_offline": true,
+      "prepared_request_audience_verified_offline": true,
+      "prepared_request_gateway_key_id_verified_offline": true,
+      "prepared_request_signature_verified_offline": true,
+      "prepared_response_decision_binding_verified_offline": true,
+      "prepared_response_ot_key_id_verified_offline": true,
+      "prepared_response_proposal_binding_verified_offline": true,
+      "prepared_response_request_binding_verified_offline": true,
+      "prepared_response_signature_verified_offline": true
+    },
+    "prepare_restart_probe": {
+      "accepted": true,
+      "executed": true,
+      "http_status": 200,
+      "reservation_delta": 1,
+      "response_verified": true,
+      "state_version_delta": 1
+    },
+    "restart_probe": {
+      "accepted": true,
+      "fresh_executed": true,
+      "fresh_reservation_delta": 1,
+      "fresh_response_verified": true,
+      "fresh_state_version_delta": 1,
+      "fresh_status": 200,
+      "replay_reservation_delta": 0,
+      "replay_status": 409,
+      "replay_within_window": true
+    },
+    "source_package_directory": "src/aegis_ot",
+    "transport_probe": {
+      "accepted": true,
+      "forged_status": 403,
+      "replay_mode": "durable",
+      "reservation_delta": 2,
+      "resigned_executed": false,
+      "resigned_reason": "time_of_check_time_of_use_state_change",
+      "resigned_status": 200,
+      "same_boot_replay_status": 409,
+      "state_version_delta": 1,
+      "tamper_status": 403,
+      "unsigned_status": 403,
+      "valid_executed": true,
+      "valid_response_verified": true,
+      "valid_status": 200
+    }
+  },
+  "service_identities_after_replacement": {
+    "observer": {
+      "container_id": "c5df66f6c16db603b096766019da0a2d88b55e650e81bddc81a4af0bf58a5153",
+      "created": "2026-08-25T15:50:22.166512042Z",
+      "image_id": "sha256:1fa9656714588b24ed3af884a495b085243eadf50ded1f5cfeb9b571e0a7e787",
+      "running": true,
+      "service": "observer",
+      "started_at": "2026-08-25T15:50:22.618770709Z",
+      "volume_mounts": []
+    },
+    "opa": {
+      "container_id": "02416eaac284af0321cef761a25f8644cb4a58e145a35f2d224dbba6a30ed13f",
+      "created": "2026-08-25T15:50:22.088918542Z",
+      "image_id": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "running": true,
+      "service": "opa",
+      "started_at": "2026-08-25T15:50:22.460827709Z",
+      "volume_mounts": []
+    },
+    "ot-adapter": {
+      "container_id": "7907d0376df61e193f745a86cb8832e6026c56e7e8b7d2001e6b82bada9348f4",
+      "created": "2026-08-25T15:50:27.294468711Z",
+      "image_id": "sha256:d6d136e4df5b183bfd1619935950b0abf4117189bf2fd5fedace088f7e4850bf",
+      "running": true,
+      "service": "ot-adapter",
+      "started_at": "2026-08-25T15:50:27.76123042Z",
+      "volume_mounts": [
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4f-primary_transport_replay",
+          "rw": true,
+          "type": "volume"
+        }
+      ]
+    },
+    "segmented-gateway": {
+      "container_id": "71982dc5eca64a05ac191266bf9f832c1db67a0f0526d6c4a8aba112ea453c1f",
+      "created": "2026-08-25T15:50:22.327664375Z",
+      "image_id": "sha256:29cfb318240a27bdffb56ef0a805e8ee4815c2c483fbd57c63abdef68f99728c",
+      "running": true,
+      "service": "segmented-gateway",
+      "started_at": "2026-08-25T15:50:23.220465459Z",
+      "volume_mounts": []
+    },
+    "simulation": {
+      "container_id": "71d385239e7bd663754937dc3b92ed13a26300c6b8015c6eeeb5a7b0bccd0a4f",
+      "created": "2026-08-25T15:50:22.052979042Z",
+      "image_id": "sha256:3b2c8426eb0b300c94b8535bce84724bccde56f90375bb0ea21f60eb48677e91",
+      "running": true,
+      "service": "simulation",
+      "started_at": "2026-08-25T15:50:22.458960001Z",
+      "volume_mounts": []
+    }
+  },
+  "service_identities_before_replacement": {
+    "observer": {
+      "container_id": "c5df66f6c16db603b096766019da0a2d88b55e650e81bddc81a4af0bf58a5153",
+      "created": "2026-08-25T15:50:22.166512042Z",
+      "image_id": "sha256:1fa9656714588b24ed3af884a495b085243eadf50ded1f5cfeb9b571e0a7e787",
+      "running": true,
+      "service": "observer",
+      "started_at": "2026-08-25T15:50:22.618770709Z",
+      "volume_mounts": []
+    },
+    "opa": {
+      "container_id": "02416eaac284af0321cef761a25f8644cb4a58e145a35f2d224dbba6a30ed13f",
+      "created": "2026-08-25T15:50:22.088918542Z",
+      "image_id": "sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32",
+      "running": true,
+      "service": "opa",
+      "started_at": "2026-08-25T15:50:22.460827709Z",
+      "volume_mounts": []
+    },
+    "ot-adapter": {
+      "container_id": "918208a51246ad07c2080b55e6e7734b75e489e6a20e5d9a6abce64200263a41",
+      "created": "2026-08-25T15:50:22.166460709Z",
+      "image_id": "sha256:d6d136e4df5b183bfd1619935950b0abf4117189bf2fd5fedace088f7e4850bf",
+      "running": true,
+      "service": "ot-adapter",
+      "started_at": "2026-08-25T15:50:23.122794209Z",
+      "volume_mounts": [
+        {
+          "destination": "/var/lib/aegis-ot",
+          "name": "aegis-ot-m4f-primary_transport_replay",
+          "rw": true,
+          "type": "volume"
+        }
+      ]
+    },
+    "segmented-gateway": {
+      "container_id": "71982dc5eca64a05ac191266bf9f832c1db67a0f0526d6c4a8aba112ea453c1f",
+      "created": "2026-08-25T15:50:22.327664375Z",
+      "image_id": "sha256:29cfb318240a27bdffb56ef0a805e8ee4815c2c483fbd57c63abdef68f99728c",
+      "running": true,
+      "service": "segmented-gateway",
+      "started_at": "2026-08-25T15:50:23.220465459Z",
+      "volume_mounts": []
+    },
+    "simulation": {
+      "container_id": "71d385239e7bd663754937dc3b92ed13a26300c6b8015c6eeeb5a7b0bccd0a4f",
+      "created": "2026-08-25T15:50:22.052979042Z",
+      "image_id": "sha256:3b2c8426eb0b300c94b8535bce84724bccde56f90375bb0ea21f60eb48677e91",
+      "running": true,
+      "service": "simulation",
+      "started_at": "2026-08-25T15:50:22.458960001Z",
+      "volume_mounts": []
+    }
+  },
+  "source_checkout_binding": {
+    "checkout_root": "/private/tmp/aegis-ot-m4b-clean",
+    "package_directory": "src/aegis_ot"
+  },
+  "supplemental_host_replay_ledger_process_exit_checks": {
+    "classification": "Host-filesystem code-path evidence; not Docker-volume or power-loss durability evidence",
+    "results": {
+      "accepted": true,
+      "after_replace": {
+        "exit_code": 92,
+        "ledger_valid": true,
+        "new_reservation_present": true,
+        "old_bytes_preserved": false,
+        "old_reservation_present": true
+      },
+      "before_replace": {
+        "exit_code": 91,
+        "ledger_valid": true,
+        "new_reservation_present": false,
+        "old_bytes_preserved": true,
+        "old_reservation_present": true
+      }
+    }
+  },
+  "transport_probe": {
+    "accepted": true,
+    "exact_same_boot_replay": {
+      "http_status": 409,
+      "response": {
+        "detail": "transport request replayed"
+      }
+    },
+    "forged_signature": {
+      "http_status": 403,
+      "response": {
+        "detail": "gateway signature rejected"
+      }
+    },
+    "health_after": {
+      "boot_epoch": "e272ca16-d96a-4c0b-8d34-78ddba4eb9a5",
+      "pid": 1,
+      "replay_ledger_sha256": "0dafdae171e0f55a0961e3c15b9fca7cebc81bd08f275c49412bb1542dfb9af9",
+      "replay_mode": "durable",
+      "replay_reservations": 3,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "health_before": {
+      "boot_epoch": "e272ca16-d96a-4c0b-8d34-78ddba4eb9a5",
+      "pid": 1,
+      "replay_ledger_sha256": "a15b2013a9047c60e908a114075c2d5bd436e9f81610386d4b1869f0a7bad2d3",
+      "replay_mode": "durable",
+      "replay_reservations": 1,
+      "role": "ot-adapter",
+      "status": "ok"
+    },
+    "mode": "full",
+    "post_signature_tamper": {
+      "http_status": 403,
+      "response": {
+        "detail": "gateway signature rejected"
+      }
+    },
+    "probe_hostname": "6d6d11addafe",
+    "resigned_same_inner_request": {
+      "executed": false,
+      "http_status": 200,
+      "reason": "time_of_check_time_of_use_state_change",
+      "response_signature_verified": true,
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:50:55.616976Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:25.616976Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:25.589559Z",
+            "decision_id": "837d44e7-5733-4a40-97f6-1f0e64a9b875",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 2
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "220e280d-f1d3-4b9f-9ebe-61989ffe8203",
+            "observed_at": "2026-08-25T15:50:25.588123Z",
+            "observed_state_version": 2,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:25.589494Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "co4lLB7zWue-KhpGGqqPXhmJ1Hd3j6YwdxCD9_GWTJ8Vrutu7Q8nyBM6fAvmSjDDtB_kD2kE4sC9LhSugGoRDg==",
+        "transport_nonce": "291a5aae-6233-41a4-b576-eff196db29b1"
+      },
+      "signed_response": {
+        "execution": {
+          "acknowledged_at": "2026-08-25T15:50:25.621380Z",
+          "decision_id": "837d44e7-5733-4a40-97f6-1f0e64a9b875",
+          "executed": false,
+          "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+          "reason": "time_of_check_time_of_use_state_change",
+          "resulting_state": null
+        },
+        "ot_key_id": "m4e-ot-key-v1",
+        "request_sha256": "873f7b2973a69a68e0046f79362baa453af1cc4feddbcc65063aa7cfb157aa93",
+        "schema_version": "m4e-signed-execution-response-v1",
+        "signature": "iV6WbYD83Giswmr2W15gqTOJKG0oJjLwnpR5m5NmkXbQ3FoDvyfrWC1csYn_B1iAigFq0Tmo04NnUKO-RjbwDQ==",
+        "signed_at": "2026-08-25T15:50:25.621980Z"
+      }
+    },
+    "schema_version": "m4f-transport-probe-v1",
+    "state_after_replay": {
+      "battery_dispatch_mw": 1.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:25.613516Z",
+      "version": 3
+    },
+    "state_after_resigned_request": {
+      "battery_dispatch_mw": 1.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:25.625796Z",
+      "version": 3
+    },
+    "state_after_valid": {
+      "battery_dispatch_mw": 1.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:25.608128Z",
+      "version": 3
+    },
+    "state_before": {
+      "battery_dispatch_mw": 0.0,
+      "critical_load_served_pct": 95.0,
+      "isolated_assets": [
+        "feeder-1"
+      ],
+      "maximum_line_loading_pct": 72.0,
+      "maximum_voltage_pu": 1.01,
+      "minimum_voltage_pu": 0.99,
+      "observed_at": "2026-08-25T15:50:25.588123Z",
+      "version": 2
+    },
+    "unsigned": {
+      "http_status": 403,
+      "response": {
+        "detail": "signed gateway request required"
+      }
+    },
+    "valid_key_holder": {
+      "executed": true,
+      "http_status": 200,
+      "request_sha256": "1a37936b56c91d08e77c107c7458ec59279bf8131f0e6a089a7cddd7a0b23ef8",
+      "response_signature_verified": true,
+      "signed_request": {
+        "audience": "aegis-ot:ot-adapter",
+        "expires_at": "2026-08-25T15:50:55.591096Z",
+        "gateway_key_id": "m4e-gateway-key-v1",
+        "issued_at": "2026-08-25T15:50:25.591096Z",
+        "request": {
+          "decision": {
+            "decided_at": "2026-08-25T15:50:25.589559Z",
+            "decision_id": "837d44e7-5733-4a40-97f6-1f0e64a9b875",
+            "evidence_record_hash": null,
+            "outcome": "permit",
+            "policy_version": "controlled-probe",
+            "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+            "reasons": [
+              "controlled_transport_probe"
+            ],
+            "safety_version": "controlled-probe",
+            "state_version": 2
+          },
+          "proposal": {
+            "actor_id": "agent:operator-1",
+            "confidence": 0.9,
+            "delegation_chain": [
+              "grant-root",
+              "grant-leaf"
+            ],
+            "human_approval_id": null,
+            "mission_id": "microgrid-containment",
+            "nonce": "220e280d-f1d3-4b9f-9ebe-61989ffe8203",
+            "observed_at": "2026-08-25T15:50:25.588123Z",
+            "observed_state_version": 2,
+            "operation": "dispatch_battery",
+            "parameters": {
+              "maximum_voltage_delta_pu": 0.0,
+              "minimum_voltage_delta_pu": 0.0,
+              "mw": 1.0
+            },
+            "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+            "resource": "battery-1",
+            "risk_score": 60.0,
+            "submitted_at": "2026-08-25T15:50:25.589494Z"
+          }
+        },
+        "schema_version": "m4e-signed-execution-request-v1",
+        "signature": "MCnMU0xTJfTE1V3Oo8D0rKF_U2LFpwx2BBriF9AqiCdGsjsdIse9QNTsGD7PlCImFC2Feft3ZdpYxg4FI8vHCw==",
+        "transport_nonce": "93bfefec-2926-4669-977e-d4fb3475ca08"
+      },
+      "signed_response": {
+        "execution": {
+          "acknowledged_at": "2026-08-25T15:50:25.603803Z",
+          "decision_id": "837d44e7-5733-4a40-97f6-1f0e64a9b875",
+          "executed": true,
+          "proposal_id": "646ca7ae-d945-4ae6-ab0f-dc1120a51057",
+          "reason": null,
+          "resulting_state": {
+            "battery_dispatch_mw": 1.0,
+            "critical_load_served_pct": 95.0,
+            "isolated_assets": [
+              "feeder-1"
+            ],
+            "maximum_line_loading_pct": 72.0,
+            "maximum_voltage_pu": 1.01,
+            "minimum_voltage_pu": 0.99,
+            "observed_at": "2026-08-25T15:50:25.603788Z",
+            "version": 3
+          }
+        },
+        "ot_key_id": "m4e-ot-key-v1",
+        "request_sha256": "1a37936b56c91d08e77c107c7458ec59279bf8131f0e6a089a7cddd7a0b23ef8",
+        "schema_version": "m4e-signed-execution-response-v1",
+        "signature": "Mgy8a7L47SMz4bJtxPOXr0gGoiqEkUASzzjxmCFyp8S6o8zrQvuTQobgkwJfd3ob6Bp7F0rxndH8mZVX5tbADg==",
+        "signed_at": "2026-08-25T15:50:25.604449Z"
+      }
+    }
+  }
+}

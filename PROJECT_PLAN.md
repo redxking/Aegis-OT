@@ -10,7 +10,7 @@ The original package is unavailable. This repository is a clean reconstruction b
 | WP1 Executable assurance kernel | Initial implementation complete | Exact M4d commit suite: 528 tests pass; strict typing, linting, schema-drift, public-demo-drift, and Compose checks are clean |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | M3/M4b retain bounded physical/capability evidence; M4d adds reproduced Docker segmentation/service loss, and M4e adds reproduced Ed25519 gateway/OT message authentication and transport replay rejection; SPIFFE, TLS peer identity, durable restart replay, HELICS/OpenPLC, hardware, multi-host isolation, and external validation remain open |
+| WP4 Power-system and OT integration | In progress | M3/M4b retain bounded physical/capability evidence; M4d adds reproduced Docker segmentation/service loss; M4e adds reproduced Ed25519 gateway/OT message authentication; M4f adds reproduced exact-envelope replay rejection across one orderly OT-adapter replacement with an intact trusted volume; workload identity and revocation, the full capability contract, hostile-host rollback resistance, HELICS/OpenPLC, hardware, multi-host isolation, and external validation remain open |
 | WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
 | WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
 | WP7 Scale and economics | Planned | No measurements |
@@ -32,10 +32,13 @@ The original package is unavailable. This repository is a clean reconstruction b
    campaign for the capability loop.
 8. M4d: bounded single-host Docker network segmentation and service-loss campaign.
 9. M4e: ephemeral-key signed gateway/OT transport and hostile-peer/replay tests.
-10. M4: SPIFFE/SPIRE identity, durable signed interservice authorization, and six-node deployment.
-11. M5: operate-through-compromise and degraded-mode evaluation.
-12. M6: logical fleet scaling and economic sensitivity model.
-13. M7-M8: independent review, replication package, publication, and release.
+10. M4f: identity-bound durable exact-envelope replay admission across one
+    orderly OT-adapter replacement, with liveness and corrupt-ledger tests.
+11. M4: workload identity and revocation, full capability-contract transport,
+    rollback-resistant coordination, and six-node deployment.
+12. M5: operate-through-compromise and degraded-mode evaluation.
+13. M6: logical fleet scaling and economic sensitivity model.
+14. M7-M8: independent review, replication package, publication, and release.
 
 ## Immediate acceptance gates
 
@@ -414,9 +417,10 @@ Evidence boundary and next hypothesis-critical gate:
 - The controlled valid-key probe demonstrates the authority and replay behavior
   of a gateway-key holder; it is not an untrusted peer. Gateway-key compromise
   remains a trusted-boundary compromise with authority to issue signed permits.
-- The OT transport replay set is process memory. Exact replay after OT restart,
-  crash durability, rollback protection, multi-instance coordination, and key
-  rotation during in-flight transactions remain untested.
+- M4f closes the bounded exact-envelope replay-after-orderly-replacement test by
+  moving the reservation to an identity-bound named-volume ledger. Crash and
+  power-loss durability, rollback protection, multi-instance coordination, and
+  key rotation during in-flight transactions remain untested.
 - The signed envelope wraps the v0.1 `Decision` and synthetic command path. It
   does not yet carry the full M4a/M4b signed observation, candidate assessment,
   capability permit, PLC acknowledgment, or root-signed evidence package across
@@ -424,10 +428,85 @@ Evidence boundary and next hypothesis-critical gate:
 - The retained JSON files are local experiment summaries, not raw signed-message
   packages, independent replication, external validation, production readiness,
   operational effectiveness, or WP4 exit.
-- The next gate is durable transport replay state across OT restart plus
-  workload-bound key/certificate issuance and revocation. The complete M4
-  capability transaction can then be migrated across authenticated channels and
-  retested under stale identity, hostile-peer, partition, and restart conditions.
+- The next gate is workload-bound key/certificate issuance and revocation plus
+  migration of the complete M4 capability transaction across authenticated
+  channels. That path must then be retested under stale identity, hostile-peer,
+  partition, restart, rollback, and outcome-reconciliation conditions.
+
+## Active M4f durable authenticated-transport replay increment
+
+Implemented and locally reproduced from clean detached checkout
+`815712aa656905a28a3d4412137ba989506a7c3c`:
+
+- The optional replay overlay attaches the OT adapter to a private Docker named
+  volume initialized by a one-shot, networkless service. The initializer creates
+  a mode-0700 directory and mode-0600 ledger, assigns them to runtime UID/GID
+  65532, and exits before the unprivileged, read-only-root-filesystem OT adapter
+  starts.
+- The canonical ledger binds schema, OT audience, gateway key ID, and gateway
+  public-key SHA-256. Each accepted transport nonce and complete signed-request
+  SHA-256 is reserved before simulation dispatch through a complete write, file
+  fsync, atomic replacement, and parent-directory fsync. Missing, malformed,
+  noncanonical, oversized, symlinked, incorrectly permissioned, or identity-
+  mismatched state fails closed.
+- The full signed-transport campaign still passes. A separate request is signed,
+  executed, and retained immediately before only the OT-adapter container is
+  replaced. The unchanged OPA, observer, segmented gateway, and simulation
+  container IDs and start times bind the tested fault to that adapter
+  replacement.
+- The exact still-valid retained envelope received HTTP 409 after replacement;
+  the replay ledger and synthetic state remained at four reservations and state
+  version 4. A fresh valid request then executed, advancing the ledger to five
+  reservations and state to version 5. This demonstrates bounded liveness after
+  reload rather than a permanently closed adapter.
+- After deliberate ledger corruption, another fresh, signature-verified request
+  received HTTP 503 and state remained at version 5. The fault therefore tests
+  otherwise admissible work, not only a previously consumed nonce.
+- The retained reports include exact signed messages, public verification keys,
+  raw canonical ledger bytes and hash, request/response bindings, container
+  identities, state transitions, cleanup outcomes, and 19 offline artifact
+  checks. Both reports satisfy all 11 registered acceptance criteria and share
+  semantic outcome SHA-256
+  `447023e0541f7bc44e9f2c35421e19871b86b93e547abb23a779fc917eede1b4`.
+- The primary and reproduction report files were generated with fresh keys,
+  projects, and volumes and then independently rechecked from the exact clean
+  source. Both record removal of their Compose project, replay and probe
+  volumes, and private-key directory, with
+  `private_key_material_retained: false`.
+
+Evidence boundary and next hypothesis-critical gate:
+
+- M4f supports durable at-most-once admission of an exact authenticated
+  envelope only across the registered orderly replacement of one OT-adapter
+  container, with one Uvicorn process, one writer, an intact trusted volume, and
+  unchanged gateway key identity. It does not establish exactly-once effects,
+  semantic transaction deduplication, or a known outcome after a response is
+  lost.
+- The same inner proposal and decision can be signed under a new transport
+  nonce. In the registered adversarial case, transport admitted that new
+  envelope and the synthetic plant rejected it because its state version was
+  stale. Replay safety therefore still depends on the inner state/capability
+  contract; the ledger is not a semantic transaction registry.
+- The host-filesystem process-exit checks exercise the pre-replace and post-
+  replace write branches only. They are supplemental code-path evidence, not
+  Docker-volume, abrupt-container-death, operating-system-crash, filesystem-
+  failure, or power-loss durability evidence.
+- An intact trusted volume does not resist deletion, snapshot rollback, or a
+  hostile host. There is no external monotonic anchor and no coordination among
+  multiple workers or replicas.
+- Ephemeral Ed25519 experiment keys still do not establish SPIFFE/SPIRE
+  workload identity, TLS peer authentication, certificate lifecycle,
+  revocation, or protected key storage. The transport still wraps the v0.1
+  synthetic proposal/decision path rather than the full M4a/M4b signed
+  observation, assessment, permit, PLC acknowledgment, and evidence contracts.
+- M4f is single-host synthetic evidence, not HELICS/OpenPLC or physical-device
+  behavior, multi-host isolation, production readiness, operational
+  effectiveness, independent replication, or external validation. WP4 remains
+  in progress.
+- The next shortest hypothesis-critical path is workload-bound key/certificate
+  issuance and revocation together with migration of the full capability
+  transaction across the segmented path. Rollback-resistant replay coordination
+  and explicit lost-response reconciliation remain separate required gates.
 
 ## Read-only public demonstration increment
 
