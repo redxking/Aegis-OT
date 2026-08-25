@@ -14,9 +14,10 @@ import os
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, Never, TypeVar
 from uuid import uuid4
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -48,6 +49,27 @@ from .capability_plc import (
     OrderlyRestartReplayReservations,
     PlcProcessInfo,
 )
+from .coordination_journal import (
+    CommitAdmissionStatus,
+    CoordinationCollisionError,
+    CoordinationJournalError,
+    CoordinationJournalRecord,
+    DurableEffectCoordinationJournal,
+    EffectCommitAttempt,
+    EffectQueryAttempt,
+    IllegalCoordinationTransition,
+)
+from .coordination_models import (
+    EFFECT_COORDINATOR_AUDIENCE,
+    CoordinationReceipt,
+    CoordinationState,
+    DurableCommitAcceptance,
+    EffectDisposition,
+    SignedEffectCommitRequest,
+    SignedEffectOutcome,
+    SignedEffectPrepareRequest,
+    SignedEffectQueryRequest,
+)
 from .factory import LocalLab, build_local_lab
 from .models import Decision
 from .pandapower_plant import PandapowerCigreMVPlant, PhysicalSimulationError
@@ -59,6 +81,7 @@ from .physical_control import (
 )
 from .physical_models import (
     CandidateAssessment,
+    CommandStatus,
     PhysicalControlCommand,
 )
 from .safety import SafetyKernel, SafetyLimits
@@ -78,6 +101,7 @@ from .segmented_capability_models import (
     PlantSimulationResponsePayload,
     PlantStateResponsePayload,
     SegmentedCapabilityClosedLoopResult,
+    SegmentedCapabilityDispatch,
     SignedPlantCall,
     SignedPlantResponse,
     SignedSegmentedCapabilityDispatch,
@@ -118,12 +142,14 @@ from .transport_replay import (
     TransportReplayLedgerError,
 )
 from .workload_identity import (
+    ResolvedWorkloadIdentity,
     WorkloadCredentialBinding,
     WorkloadCredentialRejected,
     WorkloadIdentityError,
     WorkloadIdentityUnavailable,
     WorkloadIdentityVerifier,
     WorkloadRole,
+    WorkloadSigner,
 )
 from .workload_replay import DurableWorkloadReplayLedger, WorkloadReplayLedgerError
 from .workload_runtime import (
@@ -156,6 +182,23 @@ class CapabilityAdmissionRejected(CapabilityRuntimeError):
 
 class CapabilityRuntimeUnavailable(CapabilityRuntimeError):
     """A required trusted dependency or durable state was unavailable."""
+
+
+class EffectCommitIndeterminate(CapabilityRuntimeError):
+    """A durably accepted commit must be reconciled rather than re-executed."""
+
+
+def effect_coordination_enabled() -> bool:
+    """Return whether the OT consequence path requires M4i coordination."""
+
+    mode = os.getenv("AEGIS_EFFECT_COORDINATION_MODE")
+    if mode == "required":
+        return True
+    if mode == "disabled":
+        return False
+    raise CapabilityRuntimeUnavailable(
+        "effect coordination mode must be required or disabled; configure it explicitly"
+    )
 
 
 class _StrictRequest(BaseModel):
@@ -192,6 +235,15 @@ class CandidateSimulationRequest(_StrictRequest):
 class TrustedPlantCaller:
     key_id: str
     public_key: Ed25519PublicKey
+
+
+@dataclass(frozen=True)
+class _EffectCoordinationContext:
+    journal: DurableEffectCoordinationJournal
+    verifier: WorkloadIdentityVerifier
+    gateway: ResolvedWorkloadIdentity
+    local: ResolvedWorkloadIdentity
+    signer: WorkloadSigner
 
 
 @dataclass(frozen=True)
@@ -678,10 +730,28 @@ class CapabilityOtRuntime:
         semantic_replay: OrderlyRestartReplayReservations,
         gateway_workload_identity: WorkloadCredentialBinding | None = None,
         local_workload_identity: LocalWorkloadIdentity | None = None,
+        coordination_required: bool = False,
+        coordination_journal: DurableEffectCoordinationJournal | None = None,
+        after_coordination_terminal_persist: Callable[[], None] | None = None,
         clock: Clock = utc_now,
     ) -> None:
         if (gateway_workload_identity is None) != (local_workload_identity is None):
             raise ValueError("gateway and OT workload identities must be configured together")
+        if coordination_required and (
+            gateway_workload_identity is None
+            or local_workload_identity is None
+            or coordination_journal is None
+        ):
+            raise ValueError(
+                "required effect coordination needs workload identities and an OT journal"
+            )
+        if not coordination_required and (
+            coordination_journal is not None
+            or after_coordination_terminal_persist is not None
+        ):
+            raise ValueError(
+                "coordination journal and terminal hook require effect coordination"
+            )
         if device.acknowledgment_key_id != key_id or device.plc_id != plc_id:
             raise ValueError("OT runtime identity does not match its virtual PLC")
         if device.boot_epoch != boot_epoch:
@@ -725,9 +795,708 @@ class CapabilityOtRuntime:
         self.semantic_replay = semantic_replay
         self.gateway_workload_identity = gateway_workload_identity
         self.local_workload_identity = local_workload_identity
+        self.coordination_required = coordination_required
+        self.coordination_journal = coordination_journal
+        self._after_coordination_terminal_persist = after_coordination_terminal_persist
+        self._coordination_terminal_hook_armed = (
+            after_coordination_terminal_persist is not None
+        )
         self.clock = clock
         self._lock = RLock()
+        self._coordination_lock = RLock()
         self.execute_requests = 0
+
+    def _coordination_context(
+        self,
+        *,
+        evaluated_at: datetime,
+    ) -> _EffectCoordinationContext:
+        if not self.coordination_required:
+            raise CapabilityAdmissionRejected("effect_coordination_is_disabled")
+        gateway_binding = self.gateway_workload_identity
+        local_identity = self.local_workload_identity
+        journal = self.coordination_journal
+        if gateway_binding is None or local_identity is None or journal is None:
+            raise CapabilityRuntimeUnavailable("effect_coordination_is_unconfigured")
+        try:
+            gateway = gateway_binding.resolve(now=evaluated_at)
+            local = local_identity.resolve(now=evaluated_at)
+        except WorkloadCredentialRejected as exc:
+            raise CapabilityAdmissionRejected(
+                "effect_coordination_workload_identity_rejected"
+            ) from exc
+        except WorkloadIdentityUnavailable as exc:
+            raise CapabilityRuntimeUnavailable(
+                "effect_coordination_workload_trust_unavailable"
+            ) from exc
+        if (
+            local.key_id != self.key_id
+            or local.public_key.public_bytes_raw() != self.public_key.public_bytes_raw()
+        ):
+            raise CapabilityAdmissionRejected(
+                "effect_coordination_workload_identity_rejected"
+            )
+        return _EffectCoordinationContext(
+            journal=journal,
+            verifier=gateway_binding.verifier,
+            gateway=gateway,
+            local=local,
+            signer=WorkloadSigner(
+                credential=local.credential,
+                private_key=local_identity.signer.private_key,
+            ),
+        )
+
+    def _run_coordination_terminal_hook(self) -> None:
+        hook = self._after_coordination_terminal_persist
+        if hook is None or not self._coordination_terminal_hook_armed:
+            return
+        self._coordination_terminal_hook_armed = False
+        hook()
+
+    def _raise_coordination_journal_failure(
+        self,
+        exc: CoordinationJournalError,
+    ) -> Never:
+        if isinstance(
+            exc,
+            (CoordinationCollisionError, IllegalCoordinationTransition),
+        ):
+            raise CapabilityAdmissionRejected(
+                "effect_coordination_state_rejected"
+            ) from exc
+        raise CapabilityRuntimeUnavailable("effect_coordination_journal_unavailable") from exc
+
+    @staticmethod
+    def _latest_retained_effect_outcome(
+        record: CoordinationJournalRecord,
+    ) -> SignedEffectOutcome | None:
+        for attempt in reversed(record.attempts):
+            if (
+                isinstance(attempt, (EffectCommitAttempt, EffectQueryAttempt))
+                and attempt.outcome is not None
+            ):
+                return attempt.outcome
+        return None
+
+    @staticmethod
+    def _retained_commit_outcome(
+        record: CoordinationJournalRecord,
+        request: SignedEffectCommitRequest,
+    ) -> SignedEffectOutcome | None:
+        for attempt in reversed(record.attempts):
+            if (
+                isinstance(attempt, EffectCommitAttempt)
+                and attempt.request_sha256 == request.digest
+            ):
+                return attempt.outcome
+        return None
+
+    def _stored_receipt_complete_for_query(
+        self,
+        receipt: CoordinationReceipt,
+        context: _EffectCoordinationContext,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        prepare = receipt.prepare_request
+        return (
+            receipt.verify_historical_for_request(
+                context.verifier,
+                request=prepare,
+                expected_gateway_subject=context.gateway.subject,
+                expected_coordinator_subject=context.local.subject,
+                evaluated_at=evaluated_at,
+            )
+            and self._dispatch_complete_for_historical_reconciliation(
+                prepare.dispatch,
+                expected_plc_key_id=receipt.coordinator_key_id,
+                evaluated_at=receipt.prepared_at,
+            )
+        )
+
+    def _receipt_complete_for_prepare_response(
+        self,
+        receipt: CoordinationReceipt,
+        request: SignedEffectPrepareRequest,
+        context: _EffectCoordinationContext,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        return (
+            receipt.prepare_request == request
+            and receipt.verify_for_request(
+                context.verifier,
+                request=request,
+                expected_gateway_subject=context.gateway.subject,
+                expected_coordinator_subject=context.local.subject,
+                evaluated_at=evaluated_at,
+            )
+            and self._dispatch_complete_for_ot(
+                request.dispatch,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    def _stored_acceptance_complete(
+        self,
+        acceptance: DurableCommitAcceptance,
+        context: _EffectCoordinationContext,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        dispatch = acceptance.commit_request.receipt.prepare_request.dispatch
+        observation = dispatch.pre_observation
+        permit = dispatch.permit
+        return acceptance.verify_for_commit(
+            context.verifier,
+            request=acceptance.commit_request,
+            expected_gateway_subject=context.gateway.subject,
+            expected_coordinator_subject=context.local.subject,
+            observer_public_key=self.observer_info.public_key,
+            expected_observer_id=self.observer_info.observer_id,
+            expected_observer_key_id=self.observer_info.key_id,
+            expected_observer_boot_epoch=observation.observer_boot_epoch,
+            permit_public_key=self.permit_public_key,
+            expected_permit_key_id=self.permit_key_id,
+            expected_plc_id=self.plc_id,
+            expected_plc_key_id=acceptance.coordinator_credential.credential.key_id,
+            expected_plc_boot_epoch=permit.target_plc_boot_epoch,
+            evaluated_at=evaluated_at,
+        )
+
+    def _stored_acknowledgment_complete(
+        self,
+        acknowledgment: PlcCommandAcknowledgment,
+        acceptance: DurableCommitAcceptance,
+    ) -> bool:
+        dispatch = acceptance.commit_request.receipt.prepare_request.dispatch
+        permit = dispatch.permit
+        return acknowledgment.verify_for_transaction(
+            acceptance.coordinator_credential.credential.public_key,
+            request=dispatch.request,
+            permit=dispatch.permit,
+            pre_observation=dispatch.pre_observation,
+            expected_plc_id=self.plc_id,
+            expected_plc_key_id=acceptance.coordinator_credential.credential.key_id,
+            expected_plc_boot_epoch=permit.target_plc_boot_epoch,
+        )
+
+    def _query_outcome_complete(
+        self,
+        request: SignedEffectQueryRequest,
+        outcome: SignedEffectOutcome,
+        context: _EffectCoordinationContext,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        record = context.journal.get(request.effect)
+        if record is None:
+            return False
+        acceptance = outcome.acceptance
+        if acceptance is None:
+            receipt = record.latest_receipt
+            if (
+                record.latest_acceptance is not None
+                or receipt is None
+                or not self._stored_receipt_complete_for_query(
+                    receipt,
+                    context,
+                    evaluated_at=evaluated_at,
+                )
+            ):
+                return False
+            dispatch = receipt.prepare_request.dispatch
+            expected_plc_key_id = receipt.coordinator_key_id
+        else:
+            if (
+                record.latest_acceptance != acceptance
+                or not self._stored_acceptance_complete(
+                    acceptance,
+                    context,
+                    evaluated_at=evaluated_at,
+                )
+                or (
+                    outcome.acknowledgment is not None
+                    and not self._stored_acknowledgment_complete(
+                        outcome.acknowledgment,
+                        acceptance,
+                    )
+                )
+            ):
+                return False
+            dispatch = acceptance.commit_request.receipt.prepare_request.dispatch
+            expected_plc_key_id = acceptance.coordinator_credential.credential.key_id
+        expected_disposition = {
+            CoordinationState.NOT_DISPATCHED: EffectDisposition.NOT_DISPATCHED,
+            CoordinationState.COMMIT_ACCEPTED: EffectDisposition.UNKNOWN_EFFECT,
+            CoordinationState.UNKNOWN_EFFECT: EffectDisposition.UNKNOWN_EFFECT,
+            CoordinationState.APPLIED: EffectDisposition.APPLIED,
+            CoordinationState.REJECTED: EffectDisposition.REJECTED,
+        }.get(record.state)
+        observation = dispatch.pre_observation
+        permit = dispatch.permit
+        return (
+            expected_disposition is outcome.disposition
+            and outcome.verify_for_request(
+                context.verifier,
+                request=request,
+                expected_gateway_subject=context.gateway.subject,
+                expected_coordinator_subject=context.local.subject,
+                observer_public_key=self.observer_info.public_key,
+                expected_observer_id=self.observer_info.observer_id,
+                expected_observer_key_id=self.observer_info.key_id,
+                expected_observer_boot_epoch=observation.observer_boot_epoch,
+                permit_public_key=self.permit_public_key,
+                expected_permit_key_id=self.permit_key_id,
+                expected_plc_id=self.plc_id,
+                expected_plc_key_id=expected_plc_key_id,
+                expected_plc_boot_epoch=permit.target_plc_boot_epoch,
+                evaluated_at=evaluated_at,
+            )
+        )
+
+    def prepare_effect(
+        self,
+        request: SignedEffectPrepareRequest,
+    ) -> CoordinationReceipt:
+        evaluated_at = self.clock()
+        context = self._coordination_context(evaluated_at=evaluated_at)
+        if (
+            request.sender_credential != context.gateway.credential
+            or not request.verify_complete_for_admission(
+                context.verifier,
+                expected_gateway_subject=context.gateway.subject,
+                observer_public_key=self.observer_info.public_key,
+                expected_observer_id=self.observer_info.observer_id,
+                expected_observer_key_id=self.observer_info.key_id,
+                expected_observer_boot_epoch=self.observer_info.boot_epoch,
+                permit_public_key=self.permit_public_key,
+                expected_permit_key_id=self.permit_key_id,
+                expected_plc_id=self.plc_id,
+                expected_plc_key_id=self.key_id,
+                expected_plc_boot_epoch=self.boot_epoch,
+                evaluated_at=evaluated_at,
+                expected_audience=EFFECT_COORDINATOR_AUDIENCE,
+            )
+            or not self._dispatch_complete_for_ot(
+                request.dispatch,
+                evaluated_at=evaluated_at,
+            )
+        ):
+            raise CapabilityAdmissionRejected("effect_prepare_authentication_rejected")
+        try:
+            with self._coordination_lock:
+                receipt = context.journal.prepare_effect(
+                    request,
+                    lambda exact_request, retained_at: CoordinationReceipt.issue(
+                        request=exact_request,
+                        signer=context.signer,
+                        prepared_at=retained_at,
+                    ),
+                    recorded_at=evaluated_at,
+                )
+                if not self._receipt_complete_for_prepare_response(
+                    receipt,
+                    request,
+                    context,
+                    evaluated_at=evaluated_at,
+                ):
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_prepare_stored_receipt_rejected"
+                    )
+                return receipt
+        except CoordinationJournalError as exc:
+            self._raise_coordination_journal_failure(exc)
+        except (OSError, ValueError) as exc:
+            raise CapabilityRuntimeUnavailable(
+                "effect_prepare_outcome_unavailable"
+            ) from exc
+
+    def _retain_unknown_commit_outcome(
+        self,
+        request: SignedEffectCommitRequest,
+        acceptance: DurableCommitAcceptance,
+        context: _EffectCoordinationContext,
+    ) -> SignedEffectOutcome:
+        signed_at = self.clock()
+        try:
+            outcome = SignedEffectOutcome.issue(
+                request=request,
+                disposition=EffectDisposition.UNKNOWN_EFFECT,
+                reason="device_outcome_unavailable_after_commit_acceptance",
+                signer=context.signer,
+                signed_at=signed_at,
+                acceptance=acceptance,
+            )
+        except (OSError, ValueError) as exc:
+            try:
+                context.journal.mark_commit_unknown(
+                    request,
+                    reason="signed_unknown_outcome_unavailable_after_commit_acceptance",
+                    recorded_at=signed_at,
+                )
+            except CoordinationJournalError:
+                pass
+            raise EffectCommitIndeterminate(
+                "effect_commit_indeterminate_query_required"
+            ) from exc
+        try:
+            context.journal.finish_commit(
+                request,
+                outcome,
+                recorded_at=signed_at,
+            )
+        except (CoordinationJournalError, OSError, ValueError) as exc:
+            raise EffectCommitIndeterminate(
+                "effect_commit_indeterminate_query_required"
+            ) from exc
+        return outcome
+
+    def commit_effect(
+        self,
+        request: SignedEffectCommitRequest,
+    ) -> SignedEffectOutcome:
+        evaluated_at = self.clock()
+        context = self._coordination_context(evaluated_at=evaluated_at)
+        dispatch = request.receipt.prepare_request.dispatch
+        if (
+            request.sender_credential != context.gateway.credential
+            or not request.verify_complete_for_admission(
+                context.verifier,
+                expected_gateway_subject=context.gateway.subject,
+                expected_coordinator_subject=context.local.subject,
+                observer_public_key=self.observer_info.public_key,
+                expected_observer_id=self.observer_info.observer_id,
+                expected_observer_key_id=self.observer_info.key_id,
+                expected_observer_boot_epoch=self.observer_info.boot_epoch,
+                permit_public_key=self.permit_public_key,
+                expected_permit_key_id=self.permit_key_id,
+                expected_plc_id=self.plc_id,
+                expected_plc_key_id=self.key_id,
+                expected_plc_boot_epoch=self.boot_epoch,
+                evaluated_at=evaluated_at,
+                expected_audience=EFFECT_COORDINATOR_AUDIENCE,
+            )
+            or not self._dispatch_complete_for_ot(
+                dispatch,
+                evaluated_at=evaluated_at,
+            )
+        ):
+            raise CapabilityAdmissionRejected("effect_commit_authentication_rejected")
+
+        def issue_acceptance(
+            exact_request: SignedEffectCommitRequest,
+            *,
+            accepted_at: datetime,
+            transition_sequence: Literal[3],
+        ) -> DurableCommitAcceptance:
+            return DurableCommitAcceptance.issue(
+                request=exact_request,
+                signer=context.signer,
+                accepted_at=accepted_at,
+                transition_sequence=transition_sequence,
+            )
+
+        with self._coordination_lock:
+            try:
+                admission = context.journal.begin_commit(
+                    request,
+                    issue_acceptance,
+                    recorded_at=evaluated_at,
+                )
+            except CoordinationJournalError as exc:
+                self._raise_coordination_journal_failure(exc)
+            except (OSError, ValueError) as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "effect_commit_acceptance_unavailable"
+                ) from exc
+
+            acceptance = admission.acceptance
+            if (
+                acceptance is None
+                or acceptance.commit_request != request
+                or not self._stored_acceptance_complete(
+                    acceptance,
+                    context,
+                    evaluated_at=evaluated_at,
+                )
+            ):
+                raise EffectCommitIndeterminate(
+                    "effect_commit_indeterminate_query_required"
+                )
+            if admission.status is CommitAdmissionStatus.TERMINAL:
+                retained = self._retained_commit_outcome(
+                    admission.record,
+                    request,
+                )
+                if (
+                    retained is None
+                    or retained.request_kind != "commit"
+                    or retained.request_sha256 != request.digest
+                    or retained.acceptance != acceptance
+                    or not retained.verify_for_request(
+                        context.verifier,
+                        request=request,
+                        expected_gateway_subject=context.gateway.subject,
+                        expected_coordinator_subject=context.local.subject,
+                        observer_public_key=self.observer_info.public_key,
+                        expected_observer_id=self.observer_info.observer_id,
+                        expected_observer_key_id=self.observer_info.key_id,
+                        expected_observer_boot_epoch=self.observer_info.boot_epoch,
+                        permit_public_key=self.permit_public_key,
+                        expected_permit_key_id=self.permit_key_id,
+                        expected_plc_id=self.plc_id,
+                        expected_plc_key_id=self.key_id,
+                        expected_plc_boot_epoch=self.boot_epoch,
+                        evaluated_at=evaluated_at,
+                    )
+                ):
+                    raise EffectCommitIndeterminate(
+                        "effect_commit_indeterminate_query_required"
+                    )
+                return retained
+            if admission.status is not CommitAdmissionStatus.NEW:
+                raise EffectCommitIndeterminate(
+                    "effect_commit_indeterminate_query_required"
+                )
+
+            with self._lock:
+                self.execute_requests += 1
+            try:
+                acknowledgment = self.device.execute(
+                    request=dispatch.request,
+                    permit=dispatch.permit,
+                    pre_observation=dispatch.pre_observation,
+                    decision=dispatch.decision,
+                    assessment=dispatch.assessment,
+                )
+                disposition = EffectDisposition(acknowledgment.status.value)
+                outcome = SignedEffectOutcome.issue(
+                    request=request,
+                    disposition=disposition,
+                    reason=acknowledgment.reason,
+                    signer=context.signer,
+                    signed_at=self.clock(),
+                    acceptance=acceptance,
+                    acknowledgment=acknowledgment,
+                )
+            except Exception:
+                return self._retain_unknown_commit_outcome(
+                    request,
+                    acceptance,
+                    context,
+                )
+            try:
+                context.journal.finish_commit(
+                    request,
+                    outcome,
+                    recorded_at=outcome.signed_at,
+                )
+            except (CoordinationJournalError, OSError, ValueError) as exc:
+                raise EffectCommitIndeterminate(
+                    "effect_commit_indeterminate_query_required"
+                ) from exc
+            if disposition in {
+                EffectDisposition.APPLIED,
+                EffectDisposition.REJECTED,
+            }:
+                self._run_coordination_terminal_hook()
+            return outcome
+
+    def query_effect(
+        self,
+        request: SignedEffectQueryRequest,
+    ) -> SignedEffectOutcome:
+        evaluated_at = self.clock()
+        context = self._coordination_context(evaluated_at=evaluated_at)
+        if (
+            request.sender_credential != context.gateway.credential
+            or not request.verify_workload_envelope_for_admission(
+                context.verifier,
+                expected_audience=EFFECT_COORDINATOR_AUDIENCE,
+                expected_sender_subject=context.gateway.subject,
+                evaluated_at=evaluated_at,
+            )
+        ):
+            raise CapabilityAdmissionRejected("effect_query_authentication_rejected")
+
+        def issue_outcome(
+            exact_request: SignedEffectQueryRequest,
+            record: CoordinationJournalRecord,
+            retained_at: datetime,
+        ) -> SignedEffectOutcome:
+            acceptance = record.latest_acceptance
+            prior = self._latest_retained_effect_outcome(record)
+            acknowledgment: PlcCommandAcknowledgment | None = None
+            if acceptance is None:
+                receipt = record.latest_receipt
+                if record.state not in {
+                    CoordinationState.DISPATCH_ARMED,
+                    CoordinationState.NOT_DISPATCHED,
+                } or receipt is None or not self._stored_receipt_complete_for_query(
+                    receipt,
+                    context,
+                    evaluated_at=retained_at,
+                ):
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_query_stored_receipt_rejected"
+                    )
+                disposition = EffectDisposition.NOT_DISPATCHED
+                reason = "no_commit_was_durably_accepted"
+            elif not self._stored_acceptance_complete(
+                acceptance,
+                context,
+                evaluated_at=retained_at,
+            ):
+                raise CapabilityRuntimeUnavailable(
+                    "effect_query_stored_acceptance_rejected"
+                )
+            elif record.state is CoordinationState.APPLIED:
+                if (
+                    prior is None
+                    or prior.acknowledgment is None
+                    or prior.acknowledgment.status is not CommandStatus.APPLIED
+                ):
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_query_record_lacks_terminal_acknowledgment"
+                    )
+                disposition = EffectDisposition.APPLIED
+                acknowledgment = prior.acknowledgment
+                reason = "stored_plc_acknowledgment_reports_applied"
+            elif record.state is CoordinationState.REJECTED:
+                if (
+                    prior is None
+                    or prior.acknowledgment is None
+                    or prior.acknowledgment.status is not CommandStatus.REJECTED
+                ):
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_query_record_lacks_terminal_acknowledgment"
+                    )
+                disposition = EffectDisposition.REJECTED
+                acknowledgment = prior.acknowledgment
+                reason = "stored_plc_acknowledgment_reports_rejected"
+            elif record.state in {
+                CoordinationState.COMMIT_ACCEPTED,
+                CoordinationState.UNKNOWN_EFFECT,
+            }:
+                disposition = EffectDisposition.UNKNOWN_EFFECT
+                if (
+                    prior is not None
+                    and prior.acknowledgment is not None
+                    and prior.acknowledgment.status is CommandStatus.UNKNOWN_EFFECT
+                ):
+                    acknowledgment = prior.acknowledgment
+                    reason = "stored_plc_acknowledgment_reports_unknown"
+                else:
+                    reason = "commit_accepted_effect_outcome_unknown"
+            else:
+                raise CapabilityRuntimeUnavailable(
+                    "effect_query_record_state_is_inconsistent"
+                )
+            if acknowledgment is not None and (
+                acceptance is None
+                or not self._stored_acknowledgment_complete(
+                    acknowledgment,
+                    acceptance,
+                )
+            ):
+                raise CapabilityRuntimeUnavailable(
+                    "effect_query_stored_acknowledgment_rejected"
+                )
+            return SignedEffectOutcome.issue(
+                request=exact_request,
+                disposition=disposition,
+                reason=reason,
+                signer=context.signer,
+                signed_at=retained_at,
+                acceptance=acceptance,
+                acknowledgment=acknowledgment,
+            )
+
+        try:
+            with self._coordination_lock:
+                outcome = context.journal.answer_query(
+                    request,
+                    issue_outcome,
+                    recorded_at=evaluated_at,
+                )
+                if not self._query_outcome_complete(
+                    request,
+                    outcome,
+                    context,
+                    evaluated_at=evaluated_at,
+                ):
+                    raise CapabilityRuntimeUnavailable(
+                        "effect_query_stored_outcome_rejected"
+                    )
+                return outcome
+        except CoordinationJournalError as exc:
+            self._raise_coordination_journal_failure(exc)
+        except (OSError, ValueError) as exc:
+            raise CapabilityRuntimeUnavailable("effect_query_outcome_unavailable") from exc
+
+    def _dispatch_complete_for_ot(
+        self,
+        dispatch: SegmentedCapabilityDispatch,
+        *,
+        evaluated_at: datetime,
+    ) -> bool:
+        """Verify every trusted inner artifact before any durable admission."""
+
+        observation = dispatch.pre_observation
+        permit = dispatch.permit
+        base = permit.base_permit
+        return (
+            evaluated_at.tzinfo is not None
+            and evaluated_at.utcoffset() is not None
+            and dispatch.bindings_match()
+            and observation.observer_id == self.observer_info.observer_id
+            and observation.observer_key_id == self.observer_info.key_id
+            and observation.observer_boot_epoch == self.observer_info.boot_epoch
+            and observation.verify(self.observer_info.public_key)
+            and permit.signing_key_id == self.permit_key_id
+            and base.signing_key_id == self.permit_key_id
+            and permit.target_plc_id == self.plc_id
+            and permit.target_plc_key_id == self.key_id
+            and permit.target_plc_boot_epoch == self.boot_epoch
+            and base.audience == self.plc_id
+            and base.issued_at <= evaluated_at < base.expires_at
+            and permit.verify(self.permit_public_key)
+        )
+
+    def _dispatch_complete_for_historical_reconciliation(
+        self,
+        dispatch: SegmentedCapabilityDispatch,
+        *,
+        expected_plc_key_id: str,
+        evaluated_at: datetime,
+    ) -> bool:
+        """Use pinned role trust while preserving historical process/key bindings.
+
+        Observer and permit role IDs remain configured pins. The PLC key ID is
+        supplied by the authority-validated historical coordinator credential;
+        observer and PLC boot epochs remain those signed into the dispatch.
+        """
+
+        observation = dispatch.pre_observation
+        permit = dispatch.permit
+        base = permit.base_permit
+        return (
+            evaluated_at.tzinfo is not None
+            and evaluated_at.utcoffset() is not None
+            and dispatch.bindings_match()
+            and observation.observer_id == self.observer_info.observer_id
+            and observation.observer_key_id == self.observer_info.key_id
+            and observation.verify(self.observer_info.public_key)
+            and permit.signing_key_id == self.permit_key_id
+            and base.signing_key_id == self.permit_key_id
+            and permit.target_plc_id == self.plc_id
+            and permit.target_plc_key_id == expected_plc_key_id
+            and base.audience == self.plc_id
+            and base.issued_at <= evaluated_at < base.expires_at
+            and permit.verify(self.permit_public_key)
+        )
 
     def health(self) -> OtHealthMetadata:
         try:
@@ -781,6 +1550,8 @@ class CapabilityOtRuntime:
         self,
         request: SignedSegmentedCapabilityDispatch | WorkloadSignedCapabilityDispatch,
     ) -> SignedSegmentedCapabilityResponse | WorkloadSignedCapabilityResponse:
+        if self.coordination_required:
+            raise CapabilityAdmissionRejected("effect_coordination_required")
         evaluated_at = self.clock()
         workload_request: WorkloadSignedCapabilityDispatch | None = None
         gateway_public_key = self.gateway_public_key
@@ -818,20 +1589,17 @@ class CapabilityOtRuntime:
             if not isinstance(request, SignedSegmentedCapabilityDispatch):
                 raise CapabilityAdmissionRejected("workload_identity_is_disabled")
             signed_request = request
-        if not signed_request.verify_complete_for_ot(
-            gateway_public_key,
-            expected_audience=OT_CAPABILITY_AUDIENCE,
-            expected_gateway_key_id=expected_gateway_key_id,
-            observer_public_key=self.observer_info.public_key,
-            expected_observer_id=self.observer_info.observer_id,
-            expected_observer_key_id=self.observer_info.key_id,
-            expected_observer_boot_epoch=self.observer_info.boot_epoch,
-            permit_public_key=self.permit_public_key,
-            expected_permit_key_id=self.permit_key_id,
-            expected_plc_id=self.plc_id,
-            expected_plc_key_id=self.key_id,
-            expected_plc_boot_epoch=self.boot_epoch,
-            evaluated_at=evaluated_at,
+        if not (
+            signed_request.verify_for_admission(
+                gateway_public_key,
+                expected_audience=OT_CAPABILITY_AUDIENCE,
+                expected_gateway_key_id=expected_gateway_key_id,
+                evaluated_at=evaluated_at,
+            )
+            and self._dispatch_complete_for_ot(
+                signed_request.dispatch,
+                evaluated_at=evaluated_at,
+            )
         ):
             raise CapabilityAdmissionRejected("capability_dispatch_authentication_rejected")
         try:
@@ -1341,6 +2109,12 @@ def _build_candidate_runtime() -> CapabilityCandidateRuntime:
 
 
 def _build_ot_runtime() -> CapabilityOtRuntime:
+    coordination_required = effect_coordination_enabled()
+    identity_required = workload_identity_enabled()
+    if coordination_required and not identity_required:
+        raise CapabilityRuntimeUnavailable(
+            "required effect coordination needs required workload identity"
+        )
     plant_url = _expected_environment("AEGIS_PLANT_URL")
     observer_url = _expected_environment("AEGIS_OBSERVER_URL")
     exchange = _configured_capability_exchange()
@@ -1364,7 +2138,7 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
     gateway_workload_identity: WorkloadCredentialBinding | None = None
     local_workload_identity: LocalWorkloadIdentity | None = None
     workload_verifier: WorkloadIdentityVerifier | None = None
-    if workload_identity_enabled():
+    if identity_required:
         workload_verifier = verifier_from_environment()
         gateway_workload_identity = credential_binding_from_environment(
             workload_verifier,
@@ -1457,6 +2231,12 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
                 gateway_public.public_bytes_raw()
             ).hexdigest(),
         )
+    coordination_journal: DurableEffectCoordinationJournal | None = None
+    if coordination_required:
+        coordination_journal = DurableEffectCoordinationJournal(
+            Path(_expected_environment("AEGIS_OT_COORDINATION_JOURNAL_FILE")),
+            owner_subject=_expected_environment("AEGIS_OT_WORKLOAD_SUBJECT"),
+        )
     return CapabilityOtRuntime(
         device=device,
         transport_replay=transport_replay,
@@ -1473,6 +2253,8 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
         semantic_replay=semantic_replay,
         gateway_workload_identity=gateway_workload_identity,
         local_workload_identity=local_workload_identity,
+        coordination_required=coordination_required,
+        coordination_journal=coordination_journal,
     )
 
 
@@ -1825,6 +2607,68 @@ def create_ot_app(runtime: Callable[[], CapabilityOtRuntime]) -> FastAPI:
             return _failure_response(status_code, str(exc), status="rejected")
         except Exception:
             return _failure_response(503, "ot_outcome_unavailable", status="error")
+
+    @app.post("/v1/effects/prepare", response_model=CoordinationReceipt)
+    async def prepare_effect(request: Request) -> CoordinationReceipt | JSONResponse:
+        try:
+            parsed = await parse_strict_json_request(
+                request,
+                SignedEffectPrepareRequest,
+            )
+        except StrictJsonRequestError as exc:
+            return _wire_rejection(exc)
+        try:
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
+        try:
+            return instance.prepare_effect(parsed)
+        except CapabilityAdmissionRejected as exc:
+            return _failure_response(403, str(exc), status="rejected")
+        except Exception:
+            return _failure_response(503, "effect_prepare_unavailable", status="error")
+
+    @app.post("/v1/effects/commit", response_model=SignedEffectOutcome)
+    async def commit_effect(request: Request) -> SignedEffectOutcome | JSONResponse:
+        try:
+            parsed = await parse_strict_json_request(
+                request,
+                SignedEffectCommitRequest,
+            )
+        except StrictJsonRequestError as exc:
+            return _wire_rejection(exc)
+        try:
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
+        try:
+            return instance.commit_effect(parsed)
+        except EffectCommitIndeterminate as exc:
+            return _failure_response(409, str(exc), status="error")
+        except CapabilityAdmissionRejected as exc:
+            return _failure_response(403, str(exc), status="rejected")
+        except Exception:
+            return _failure_response(503, "effect_commit_unavailable", status="error")
+
+    @app.post("/v1/effects/query", response_model=SignedEffectOutcome)
+    async def query_effect(request: Request) -> SignedEffectOutcome | JSONResponse:
+        try:
+            parsed = await parse_strict_json_request(
+                request,
+                SignedEffectQueryRequest,
+            )
+        except StrictJsonRequestError as exc:
+            return _wire_rejection(exc)
+        try:
+            instance = runtime()
+        except Exception:
+            return _failure_response(503, "ot_runtime_unavailable", status="error")
+        try:
+            return instance.query_effect(parsed)
+        except CapabilityAdmissionRejected as exc:
+            return _failure_response(403, str(exc), status="rejected")
+        except Exception:
+            return _failure_response(503, "effect_query_unavailable", status="error")
 
     return app
 

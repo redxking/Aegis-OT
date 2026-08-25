@@ -251,6 +251,7 @@ def _configure_runtime_environment(
 ) -> dict[str, Path]:
     monkeypatch.setenv("AEGIS_SPIRE_MTLS_MODE", "disabled")
     monkeypatch.setenv("AEGIS_WORKLOAD_IDENTITY_MODE", "disabled")
+    monkeypatch.setenv("AEGIS_EFFECT_COORDINATION_MODE", "disabled")
     roles = {
         "PLANT": (PLANT_KEY_ID, artifacts.plant_private),
         "OBSERVER": (OBSERVER_KEY_ID, artifacts.observer_private),
