@@ -473,6 +473,103 @@ class PandapowerCigreMVPlant:
             self._observation_sequence += 1
             return self.read_state()
 
+    def restore_state(
+        self,
+        snapshot: PhysicalStateSnapshot,
+    ) -> PhysicalStateSnapshot:
+        """Restore one trusted physical checkpoint onto a fresh model projection.
+
+        Only the physical state is restored.  Observation source, time, and
+        sequence belong to this plant instance, so the returned observation
+        envelope is deliberately fresh even when the physical state digest is
+        identical to the checkpoint.  Every check completes against a
+        candidate network before the authoritative in-memory state is swapped.
+        """
+
+        with self._lock:
+            self._assert_model_integrity()
+            if self._state_version != 0 or self._simulation_time_s != 0.0:
+                raise PhysicalSimulationError("restore_target_not_fresh")
+            if not snapshot.verify_digest():
+                raise PhysicalSimulationError("restore_checkpoint_digest_invalid")
+            if (
+                snapshot.model_id != CIGRE_MV_MODEL_ID
+                or snapshot.simulator_version != self.simulator_version
+                or snapshot.model_digest != self._model_digest
+            ):
+                raise PhysicalSimulationError("restore_model_mismatch")
+            if not snapshot.converged or snapshot.unsafe_state:
+                raise PhysicalSimulationError("restore_checkpoint_not_safe")
+
+            line_bindings = {
+                resource: binding
+                for resource, binding in self.resource_bindings.items()
+                if binding.command_type is PhysicalCommandType.SET_LINE_SERVICE
+            }
+            isolated_resources = tuple(snapshot.isolated_resources)
+            if (
+                isolated_resources != tuple(sorted(set(isolated_resources)))
+                or not set(isolated_resources).issubset(line_bindings)
+            ):
+                raise PhysicalSimulationError("restore_line_state_invalid")
+
+            battery_bindings = {
+                resource: binding
+                for resource, binding in self.resource_bindings.items()
+                if binding.command_type is PhysicalCommandType.SET_BATTERY_INJECTION
+            }
+            if set(snapshot.battery_injection_mw) != set(battery_bindings):
+                raise PhysicalSimulationError("restore_storage_state_invalid")
+            for resource, injection in snapshot.battery_injection_mw.items():
+                binding = battery_bindings[resource]
+                if not binding.minimum_setpoint <= injection <= binding.maximum_setpoint:
+                    raise PhysicalSimulationError("restore_storage_state_invalid")
+
+            candidate_net = pn.create_cigre_network_mv(with_der="all")
+            candidate_model_material = self._model_material()
+            candidate_model_material["network"] = self._static_network_material(
+                candidate_net
+            )
+            if canonical_digest(candidate_model_material) != self._model_digest:
+                raise PhysicalSimulationError("restore_model_mismatch")
+
+            isolated = set(isolated_resources)
+            for resource, binding in line_bindings.items():
+                candidate_net.line.at[binding.target_index, "in_service"] = (
+                    resource not in isolated
+                )
+            for resource, binding in battery_bindings.items():
+                # pandapower storage uses positive p_mw for charging; Aegis
+                # checkpoints use positive values for injection.
+                candidate_net.storage.at[binding.target_index, "p_mw"] = (
+                    -snapshot.battery_injection_mw[resource]
+                )
+
+            if not self._solve(candidate_net):
+                raise PhysicalSimulationError("restore_power_flow_nonconvergent")
+            restored_at = self._observation_clock()
+            restored = self._snapshot(
+                candidate_net,
+                state_version=snapshot.state_version,
+                simulation_time_s=snapshot.simulation_time_s,
+                observed_at=restored_at,
+                observation_sequence=0,
+                converged=True,
+            )
+            if restored.input_digest != snapshot.input_digest:
+                raise PhysicalSimulationError("restore_input_digest_mismatch")
+            if restored.topology_digest != snapshot.topology_digest:
+                raise PhysicalSimulationError("restore_topology_digest_mismatch")
+            if restored.state_digest != snapshot.state_digest:
+                raise PhysicalSimulationError("restore_state_digest_mismatch")
+
+            self._net = candidate_net
+            self._state_version = snapshot.state_version
+            self._simulation_time_s = snapshot.simulation_time_s
+            self._observed_at = restored_at
+            self._observation_sequence = 0
+            return restored
+
     def _validate_command(self, command: PhysicalControlCommand) -> ResourceBinding:
         binding = self.resource_bindings.get(command.resource)
         if binding is None:
