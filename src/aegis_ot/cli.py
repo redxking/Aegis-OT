@@ -217,7 +217,7 @@ def verify_capability_evidence(
 
 @app.command("capability-fault-experiment")
 def capability_fault_experiment(
-    output_path: Path = Path("results/m4c-fault-campaign-v3.json"),
+    output_path: Path = Path("results/m4c-fault-campaign-v4.json"),
     require_clean_checkout: bool = typer.Option(
         True,
         "--require-clean/--allow-dirty",

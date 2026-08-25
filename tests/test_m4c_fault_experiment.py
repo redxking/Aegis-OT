@@ -14,6 +14,12 @@ def test_live_fault_campaign_fails_closed_without_retry() -> None:
     assert report["experiment_criteria_met"] is True
     cases = {item["condition"]: item for item in report["controller_cases"]}
     assert cases["nominal_control"]["actual_status"] == "completed"
+    assert cases["nominal_control"]["independent_missing_post_evaluation"] == {
+        "status": "indeterminate",
+        "reasons": ["post_observation_unavailable"],
+        "report_valid": True,
+        "evaluator_process_separate": True,
+    }
     for name in (
         "plc_response_lost_after_commit",
         "post_observation_unavailable_after_commit",
@@ -69,7 +75,7 @@ def test_fault_campaign_writer_is_exclusive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     report = {
-        "schema_version": "m4c-fault-campaign-v3",
+        "schema_version": "m4c-fault-campaign-v4",
         "experiment_criteria_met": True,
     }
     monkeypatch.setattr(

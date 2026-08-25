@@ -227,6 +227,77 @@ def _evaluate_signed_contradiction(
     }
 
 
+def _evaluate_missing_independent_post(
+    result: CapabilityClosedLoopResult,
+    observer_public_key_b64: str,
+) -> dict[str, JsonValue]:
+    if result.pre_observation is None or result.command is None:
+        raise RuntimeError("nominal control lacks missing-post evaluator inputs")
+    request = IndependentEvaluationRequest(
+        request_id="m4c:missing-post:independent-evaluation",
+        session_index=0,
+        master_seed=20260825,
+        transaction_record_digest=sha256_bytes(canonical_json_bytes(result)),
+        fixture_id="pandapower-cigre-mv-all-neutral-topology-v1",
+        fixture_digest=(
+            "58ed983e507811935c448e6d468e952ff34620958eae893d16d454a89651709f"
+        ),
+        nonce="m4c:missing-post:independent-evaluation-nonce-0001",
+        pre_observation=result.pre_observation,
+        post_observation=None,
+        command=result.command,
+        observer_key_id=result.pre_observation.observer_key_id,
+        observer_public_key_b64=observer_public_key_b64,
+        absolute_tolerance_mw=Decimal("0.000000001"),
+        absolute_tolerance_pct=Decimal("0.000000001"),
+    )
+    with tempfile.TemporaryDirectory(prefix="aegis-ot-m4c-missing-post-") as temporary:
+        directory = Path(temporary)
+        request_path = directory / "request.json"
+        fixture_path = directory / "fixture.json"
+        report_path = directory / "report.json"
+        request_path.write_bytes(canonical_json_bytes(request))
+        fixture_path.write_bytes(FIXTURE_PATH.read_bytes())
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(ROOT / "src")
+        completed = subprocess.run(  # noqa: S603 - fixed interpreter/module, test-owned paths
+            [
+                sys.executable,
+                "-m",
+                "aegis_ot_independent",
+                "--request",
+                str(request_path),
+                "--fixture",
+                str(fixture_path),
+                "--output",
+                str(report_path),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if completed.returncode != 1 or not report_path.is_file():
+            raise RuntimeError("missing independent post did not produce indeterminate report")
+        report = IndependentConsequenceReport.model_validate(
+            strict_json_loads(report_path.read_bytes())
+        )
+    if (
+        report.status is not IndependentEvaluationStatus.INDETERMINATE
+        or report.reasons != ("post_observation_unavailable",)
+        or not report.verify_for_request(request)
+    ):
+        raise RuntimeError("missing independent post failed authenticity or fail-closed status")
+    return {
+        "status": report.status.value,
+        "reasons": list(report.reasons),
+        "report_valid": True,
+        "evaluator_process_separate": report.pid != os.getpid(),
+    }
+
+
 def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue]:
     reference_time = REFERENCE_TIME + timedelta(minutes=index)
     observer_source: Literal["plant", "predecessor"] = (
@@ -309,10 +380,16 @@ def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue
             and result.last_observation.verify(lab.processes.observer_info.public_key)
         )
         contradiction_evaluation: dict[str, JsonValue] | None = None
+        missing_post_evaluation: dict[str, JsonValue] | None = None
         if condition == "signed_post_observation_contradiction":
             contradiction_evaluation = _evaluate_signed_contradiction(
                 result,
                 condition,
+                public_key_base64(lab.processes.observer_info.public_key),
+            )
+        elif condition == "nominal_control":
+            missing_post_evaluation = _evaluate_missing_independent_post(
+                result,
                 public_key_base64(lab.processes.observer_info.public_key),
             )
         return {
@@ -332,6 +409,7 @@ def _run_controller_condition(condition: str, index: int) -> dict[str, JsonValue
             "original_pre_tamper_observation_valid": original_tampered_observation_valid,
             "tampered_observation_rejected": tampered_observation_rejected,
             "independent_contradiction_evaluation": contradiction_evaluation,
+            "independent_missing_post_evaluation": missing_post_evaluation,
             "evidence_chain_valid": True,
         }
 
@@ -572,6 +650,8 @@ def run_fault_campaign(
         "evaluator": evaluator,
         "full_stack_restart_replay": restart_replay,
     }
+    missing_post = cases[0]["independent_missing_post_evaluation"]
+    contradiction = cases[-1]["independent_contradiction_evaluation"]
     criteria_met = all(
         case["actual_status"] == case["expected_status"]
         and case["dispatch_attempts"] == 1
@@ -579,6 +659,13 @@ def run_fault_campaign(
         and case["effect_observed_by_followup_signed_capture"] is True
         and case["evidence_chain_valid"] is True
         for case in cases
+    ) and (
+        isinstance(missing_post, dict)
+        and missing_post.get("status") == "indeterminate"
+        and missing_post.get("report_valid") is True
+        and isinstance(contradiction, dict)
+        and contradiction.get("status") == "contradict"
+        and contradiction.get("report_valid") is True
     ) and restart_replay["criteria_met"] is True and all(
         (
             evaluator["signed_report_status"] == "input_rejected",
@@ -588,7 +675,7 @@ def run_fault_campaign(
         )
     )
     return {
-        "schema_version": "m4c-fault-campaign-v3",
+        "schema_version": "m4c-fault-campaign-v4",
         "started_at_utc": started.isoformat(),
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "git": {
