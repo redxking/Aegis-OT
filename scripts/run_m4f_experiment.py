@@ -394,6 +394,46 @@ def _semantic_restart(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _first_semantic_difference(
+    primary: Any,
+    reproduction: Any,
+    path: str = "$",
+) -> tuple[str, Any, Any] | None:
+    if type(primary) is not type(reproduction):
+        return path, primary, reproduction
+    if isinstance(primary, dict):
+        primary_keys = set(primary)
+        reproduction_keys = set(reproduction)
+        if primary_keys != reproduction_keys:
+            return f"{path}.__keys__", sorted(primary_keys), sorted(reproduction_keys)
+        for key in sorted(primary):
+            difference = _first_semantic_difference(
+                primary[key],
+                reproduction[key],
+                f"{path}.{key}",
+            )
+            if difference is not None:
+                return difference
+        return None
+    if isinstance(primary, list):
+        if len(primary) != len(reproduction):
+            return f"{path}.__length__", len(primary), len(reproduction)
+        for index, (primary_item, reproduction_item) in enumerate(
+            zip(primary, reproduction, strict=True)
+        ):
+            difference = _first_semantic_difference(
+                primary_item,
+                reproduction_item,
+                f"{path}[{index}]",
+            )
+            if difference is not None:
+                return difference
+        return None
+    if primary != reproduction:
+        return path, primary, reproduction
+    return None
+
+
 def _semantic_prepare(value: dict[str, Any]) -> dict[str, Any]:
     prepared = value.get("prepared_request", {})
     return {
@@ -875,6 +915,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             "offline_artifact_verification": offline_verification,
             "acceptance": acceptance,
             "accepted": all(acceptance.values()),
+            "semantic_projection": semantic_material,
             "semantic_outcome_sha256": m4d._canonical_sha256(semantic_material),
             "evidence_boundary": [
                 "Durable at-most-once exact-envelope admission, not exactly-once effects",
@@ -978,7 +1019,13 @@ def run_pair(
         == reproduction["semantic_outcome_sha256"]
     )
     if not hashes_match:
-        raise m4d.ExperimentError("M4f paired semantic outcomes did not reproduce")
+        difference = _first_semantic_difference(
+            primary["semantic_projection"],
+            reproduction["semantic_projection"],
+        )
+        raise m4d.ExperimentError(
+            f"M4f paired semantic outcomes did not reproduce; first difference: {difference}"
+        )
     _assert_checkout(commit)
     comparison = {
         "semantic_outcomes_match": True,

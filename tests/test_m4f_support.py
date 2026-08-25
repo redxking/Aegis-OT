@@ -191,3 +191,18 @@ def test_m4f_compose_normalization_is_checkout_location_independent(
     assert normalized_a["services"]["ot-adapter"]["secrets"] == [
         "<ephemeral-key-dir>/gateway.public"
     ]
+
+
+def test_m4f_semantic_difference_reports_the_first_stable_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    m4f_runner = import_module("run_m4f_experiment")
+
+    difference = m4f_runner._first_semantic_difference(
+        {"a": [1, {"status": 409}], "b": True},
+        {"a": [1, {"status": 503}], "b": True},
+    )
+
+    assert difference == ("$.a[1].status", 409, 503)
