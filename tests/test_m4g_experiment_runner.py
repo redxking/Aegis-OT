@@ -54,6 +54,10 @@ def test_rotation_fixture_prepares_without_predispatching_transaction(
     assert "response_verified" in runner._ROTATION_FIXTURE_CODE
     assert "post_observation_verified" in runner._ROTATION_FIXTURE_CODE
     assert (
+        "WorkloadSignedCapabilityResponse.model_validate_json(material)"
+        in runner._ROTATION_FIXTURE_CODE
+    )
+    assert (
         "from aegis_ot.capability_models import CapabilityActionRequest"
         in runner._ROTATION_FIXTURE_CODE
     )

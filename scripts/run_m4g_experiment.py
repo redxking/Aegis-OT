@@ -735,7 +735,7 @@ ack_reason = None
 post_observation_verified = False
 post_observation_digest = None
 if status == 200:
-    verified = WorkloadSignedCapabilityResponse.model_validate(response_value)
+    verified = WorkloadSignedCapabilityResponse.model_validate_json(material)
     response_verified = (
         verified.sender_credential == target.credential
         and verified.verify_for_request(
