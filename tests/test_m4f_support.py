@@ -4,7 +4,9 @@ import hashlib
 import os
 import stat
 from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -82,3 +84,110 @@ def test_exact_signed_request_probe_file_is_canonical_private_and_exclusive(
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     with pytest.raises(RuntimeError, match="already exists"):
         _write_exact_request(path, request)
+
+
+def test_m4f_pair_removes_both_outputs_when_second_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    m4f_runner = import_module("run_m4f_experiment")
+    output = tmp_path / "primary.json"
+    reproduction_output = tmp_path / "reproduction.json"
+    campaign_result = {
+        "semantic_outcome_sha256": "a" * 64,
+        "accepted": True,
+    }
+    writes = 0
+
+    monkeypatch.setattr(m4f_runner, "_assert_source_checkout", lambda: None)
+    monkeypatch.setattr(m4f_runner, "_assert_checkout", lambda _commit: None)
+    monkeypatch.setattr(
+        m4f_runner.m4d,
+        "_run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            stdout="" if "status" in _args else "f" * 40,
+        ),
+    )
+    monkeypatch.setattr(
+        m4f_runner,
+        "_campaign",
+        lambda _project, _commit: dict(campaign_result),
+    )
+
+    def write_then_fail(path: Path, _value: dict[str, object]) -> None:
+        nonlocal writes
+        writes += 1
+        path.write_text("partial\n", encoding="utf-8")
+        if writes == 2:
+            raise OSError("post-replace fsync failed")
+
+    monkeypatch.setattr(m4f_runner.m4d, "_atomic_write_json", write_then_fail)
+
+    with pytest.raises(OSError, match="post-replace fsync failed"):
+        m4f_runner.run_pair(output, reproduction_output, "primary", "reproduction")
+
+    assert not output.exists()
+    assert not reproduction_output.exists()
+
+
+def test_m4f_compose_normalization_is_checkout_location_independent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    m4f_runner = import_module("run_m4f_experiment")
+    checkout_a = tmp_path / "checkout-a"
+    checkout_b = tmp_path / "checkout-b"
+    key_directory_a = tmp_path / "keys-a"
+    key_directory_b = tmp_path / "keys-b"
+    project_a = "aegis-ot-m4f-a"
+    project_b = "aegis-ot-m4f-b"
+    document_a = {
+        "name": project_a,
+        "services": {
+            "ot-adapter": {
+                "build": {
+                    "context": str(checkout_a),
+                    "dockerfile": str(checkout_a / "Dockerfile"),
+                },
+                "secrets": [str(key_directory_a / "gateway.public")],
+                "volume": f"{project_a}_transport_replay",
+            }
+        },
+    }
+    document_b = {
+        "name": project_b,
+        "services": {
+            "ot-adapter": {
+                "build": {
+                    "context": str(checkout_b),
+                    "dockerfile": str(checkout_b / "Dockerfile"),
+                },
+                "secrets": [str(key_directory_b / "gateway.public")],
+                "volume": f"{project_b}_transport_replay",
+            }
+        },
+    }
+
+    normalized_a = m4f_runner._normalize(
+        document_a,
+        key_directory_a,
+        project_a,
+        checkout_a,
+    )
+    normalized_b = m4f_runner._normalize(
+        document_b,
+        key_directory_b,
+        project_b,
+        checkout_b,
+    )
+
+    assert normalized_a == normalized_b
+    assert normalized_a["services"]["ot-adapter"]["build"] == {
+        "context": "<checkout-root>",
+        "dockerfile": "<checkout-root>/Dockerfile",
+    }
+    assert normalized_a["services"]["ot-adapter"]["secrets"] == [
+        "<ephemeral-key-dir>/gateway.public"
+    ]

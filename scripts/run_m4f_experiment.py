@@ -70,16 +70,38 @@ def _raw_public(key: Ed25519PrivateKey) -> bytes:
     )
 
 
-def _normalize(value: Any, key_directory: Path, project_name: str) -> Any:
+def _replace_path_prefix(value: str, path: Path, marker: str) -> str:
+    prefix = str(path.resolve())
+    if value == prefix:
+        return marker
+    if value.startswith(f"{prefix}{os.sep}"):
+        return f"{marker}{value[len(prefix):]}"
+    return value
+
+
+def _normalize(
+    value: Any,
+    key_directory: Path,
+    project_name: str,
+    checkout_root: Path = ROOT,
+) -> Any:
     if isinstance(value, dict):
         return {
-            key: _normalize(item, key_directory, project_name)
+            key: _normalize(item, key_directory, project_name, checkout_root)
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [_normalize(item, key_directory, project_name) for item in value]
+        return [
+            _normalize(item, key_directory, project_name, checkout_root)
+            for item in value
+        ]
     if isinstance(value, str):
-        normalized = value.replace(str(key_directory), "<ephemeral-key-dir>")
+        normalized = _replace_path_prefix(
+            value,
+            key_directory,
+            "<ephemeral-key-dir>",
+        )
+        normalized = _replace_path_prefix(normalized, checkout_root, "<checkout-root>")
         return normalized.replace(project_name, "<compose-project>")
     return value
 
@@ -969,11 +991,12 @@ def run_pair(
     reproduction["clean_checkout_end"] = True
     primary["reproduction_comparison"] = {**comparison, "role": "primary"}
     reproduction["reproduction_comparison"] = {**comparison, "role": "reproduction"}
-    m4d._atomic_write_json(output, primary)
     try:
+        m4d._atomic_write_json(output, primary)
         m4d._atomic_write_json(reproduction_output, reproduction)
     except Exception:
         output.unlink(missing_ok=True)
+        reproduction_output.unlink(missing_ok=True)
         raise
     return primary, reproduction
 
