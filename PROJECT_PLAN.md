@@ -215,15 +215,14 @@ Evidence boundary and next hypothesis-critical gate:
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
 - The next shortest claim-critical increment after M4c is abrupt process-crash
-  consistency for the replay ledger plus missing-post handling at the
-  independent-evaluator boundary. After that, identity/policy/control separation
-  must move across an actual segmented deployment before the central system
-  claim can be tested beyond a single-host process-capability boundary.
+  consistency for the replay ledger. After that, identity/policy/control
+  separation must move across an actual segmented deployment before the central
+  system claim can be tested beyond a single-host process-capability boundary.
 
 ## Active M4c fault and adversarial increment
 
-Implemented and locally reproduced in its stronger v3 form from clean detached
-checkout `1a282b0467506368bd37246a33da0418c018ecfb`:
+Implemented and locally reproduced in its stronger v4 form from clean detached
+checkout `6f49c2a176f3b4db4540c45827f7ac4749e86d68`:
 
 - A five-condition live-process campaign, with a fresh capability-separated
   plant, observer, virtual PLC, and controller stack for every condition.
@@ -251,16 +250,20 @@ checkout `1a282b0467506368bd37246a33da0418c018ecfb`:
 - A separate evaluator process received strict-JSON duplicate-key input,
   returned exit code 2 with a self-verifying signed `input_rejected` report, and
   rejected a post-signature alteration of that report.
+- A valid, signed, fixture-bound evaluator request containing the nominal pre-
+  observation and command but no post-observation returned a valid signed
+  `indeterminate` report with reason `post_observation_unavailable`; it did not
+  infer agreement or contradiction from incomplete consequence evidence.
 - A sixth lifecycle condition closed the complete plant/observer/PLC/controller
   stack, retained an externally owned replay ledger, started a fresh stack with
   new process identities and observer/PLC boot epochs, and submitted the exact
   prior request, permit, observation, decision, and assessment. The new PLC
   returned a validly signed `transaction_replayed` rejection before dispatch;
   the fresh plant state and ledger contents were unchanged.
-- The v1 and v2 reports remain retained as historical increments. Two separately
-  retained read-only v3 reports both met all six criteria and reproduced
+- The v1-v3 reports remain retained as historical increments. Two separately
+  retained read-only v4 reports both met all registered criteria and reproduced
   deterministic projection hash
-  `52f2cd25760589041ad4d8391a1ca9ba0669b06c128d6ea8a7fa2a841a0179de`.
+  `c21e1aeae1e3a0772abbd797cddd3cf25e7af7df2dfce47a1b10c1f4b8727499`.
 - The clean checkout passed 520 tests; ruff, strict mypy across 44 source files,
   schema drift, and topology-fixture drift checks were clean.
 
@@ -281,10 +284,9 @@ Evidence boundary and remaining critical tests:
   shutdown and restart when the ledger directory remains available. It does not
   establish atomic durability under process kill during write, OS crash, power
   loss, filesystem corruption, rollback, deletion, or hostile-host tampering.
-- Missing independent post-observation, concurrent state transition, process
-  crash during dispatch or ledger persistence, hostile coordinator/host,
-  segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
-  retained experimental evidence.
+- Concurrent state transition, process crash during dispatch or ledger
+  persistence, hostile coordinator/host, segmentation, HELICS/OpenPLC, and
+  hardware conditions remain untested or lack retained experimental evidence.
 
 ## Read-only public demonstration increment
 
