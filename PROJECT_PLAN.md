@@ -214,16 +214,15 @@ Evidence boundary and next hypothesis-critical gate:
 - M4b is not external custody, independent replication, segmented or multi-host
   deployment, HELICS/OpenPLC integration, hardware-in-the-loop, field evidence,
   production readiness, operational effectiveness, or WP4 completion.
-- The next shortest local claim-critical increment after M4c is a competing
-  stale-state transaction against the live PLC compare-and-swap boundary.
-  Identity/policy/control separation must then move across an actual segmented
+- The highest-value local claim-critical conditions are now covered by M4c.
+  Identity/policy/control separation must next move across an actual segmented
   deployment before the central system claim can be tested beyond a single-host
   process-capability boundary.
 
 ## Active M4c fault and adversarial increment
 
-Implemented and locally reproduced in its stronger v5 form from clean detached
-checkout `2d1ee1e5c5102f8e3d181a1e9a8bc845b12f7196`:
+Implemented and locally reproduced in its stronger v6 form from clean detached
+checkout `b93f199ec8bff529dd58d145bbd56f90e0c3a233`:
 
 - A five-condition live-process campaign, with a fresh capability-separated
   plant, observer, virtual PLC, and controller stack for every condition.
@@ -269,10 +268,17 @@ checkout `2d1ee1e5c5102f8e3d181a1e9a8bc845b12f7196`:
   the reloaded ledger was valid and contained both reservations. The loader also
   rejects symlinks, oversize files, duplicate keys, extra/missing fields, and
   duplicate or noncanonical reservation sets.
-- The v1-v4 reports remain retained as historical increments. Two separately
-  retained read-only v5 reports both met all registered criteria and reproduced
+- A final local TOCTOU condition prepared two distinct authorized transactions
+  against the exact same signed pre-observation before either dispatch. The
+  first applied and returned a valid committed acknowledgment. The second
+  reached the PLC but returned a valid signed pre-dispatch
+  `topology_digest_changed` rejection. The PLC observed two execute requests,
+  retained one replay reservation, and the second transaction produced no state
+  effect.
+- The v1-v5 reports remain retained as historical increments. Two separately
+  retained read-only v6 reports both met all registered criteria and reproduced
   deterministic projection hash
-  `27661b46593292a8deb76895f3217d2984489ac37b77d4a2816af09e377a2571`.
+  `baeef9dfd25d945001244cdce5f13b43c14e0ea675ea5fdb2f5d2bcf0a1d8011`.
 - The clean checkout passed 522 tests; ruff, strict mypy across 44 source files,
   schema drift, and topology-fixture drift checks were clean.
 
@@ -295,9 +301,11 @@ Evidence boundary and remaining critical tests:
   loss, filesystem corruption, rollback, deletion, or hostile-host tampering.
 - The crash workers test the two registered write boundaries, not arbitrary
   instruction-level termination, kernel/filesystem defects, or whole-host power
-  loss. Concurrent state transition, process crash during command dispatch,
-  hostile coordinator/host, segmentation, HELICS/OpenPLC, and hardware
-  conditions remain untested or lack retained experimental evidence.
+  loss. The competing-permit condition is controlled sequential dispatch of two
+  pre-prepared transactions, not a scheduler-distributed multi-controller rate
+  test. Process crash during command dispatch, hostile coordinator/host,
+  segmentation, HELICS/OpenPLC, and hardware conditions remain untested or lack
+  retained experimental evidence.
 
 ## Read-only public demonstration increment
 
