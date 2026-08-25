@@ -238,8 +238,11 @@ def _prepare_empty_identity_directory(path: Path) -> None:
 
 
 def _assign_runtime_file(path: Path, *, target_uid: int, target_gid: int) -> None:
-    os.chown(path, target_uid, target_gid)
+    # Tighten mode while the initializer still owns the inode. The container
+    # intentionally retains CAP_CHOWN but not CAP_FOWNER, so chmod after
+    # transferring ownership would fail closed in the real Compose boundary.
     path.chmod(0o600)
+    os.chown(path, target_uid, target_gid)
     file_stat = path.stat()
     if file_stat.st_uid != target_uid or file_stat.st_gid != target_gid:
         raise RuntimeError(f"M4g identity artifact ownership was not assigned: {path}")
@@ -248,8 +251,10 @@ def _assign_runtime_file(path: Path, *, target_uid: int, target_gid: int) -> Non
 
 
 def _assign_runtime_directory(path: Path, *, target_uid: int, target_gid: int) -> None:
-    os.chown(path, target_uid, target_gid)
+    # As with files, set the final mode before ownership transfer so the
+    # initializer does not require CAP_FOWNER.
     path.chmod(0o700)
+    os.chown(path, target_uid, target_gid)
     directory_stat = path.stat()
     if directory_stat.st_uid != target_uid or directory_stat.st_gid != target_gid:
         raise RuntimeError("M4g identity directory ownership was not assigned to the runtime")

@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 import aegis_ot.m4g_identity_admin as identity_admin
+import aegis_ot.m4g_identity_init as identity_init
 from aegis_ot.m4g_identity_admin import revoke_credential, rotate_credential
 from aegis_ot.m4g_identity_init import initialize
 from aegis_ot.segmented_capability_models import (
@@ -30,6 +31,46 @@ from aegis_ot.workload_identity import (
 
 NOW = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
 TRUST_DOMAIN = "research.aegis-ot.test"
+
+
+@pytest.mark.parametrize(("is_directory", "mode"), [(False, 0o600), (True, 0o700)])
+def test_runtime_assignment_sets_mode_before_transferring_ownership(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    is_directory: bool,
+    mode: int,
+) -> None:
+    target = tmp_path / "runtime-artifact"
+    if is_directory:
+        target.mkdir()
+    else:
+        target.write_bytes(b"artifact")
+    ownership_transferred = False
+    original_chmod = Path.chmod
+
+    def guarded_chmod(path: Path, requested_mode: int) -> None:
+        assert not ownership_transferred
+        original_chmod(path, requested_mode)
+
+    def transfer_ownership(path: str | bytes | int, uid: int, gid: int) -> None:
+        nonlocal ownership_transferred
+        assert Path(path) == target
+        assert stat.S_IMODE(target.stat().st_mode) == mode
+        assert uid == os.getuid()
+        assert gid == os.getgid()
+        ownership_transferred = True
+
+    monkeypatch.setattr(Path, "chmod", guarded_chmod)
+    monkeypatch.setattr(identity_init.os, "chown", transfer_ownership)
+    assign = (
+        identity_init._assign_runtime_directory
+        if is_directory
+        else identity_init._assign_runtime_file
+    )
+    assign(target, target_uid=os.getuid(), target_gid=os.getgid())
+
+    assert ownership_transferred
+    assert stat.S_IMODE(target.stat().st_mode) == mode
 
 
 def _raw_private(key: Ed25519PrivateKey) -> bytes:
