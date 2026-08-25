@@ -300,6 +300,11 @@ def test_nominal_action_uses_one_exact_prepare_and_submit(
 def test_scoped_relay_is_closed_and_records_commit_before_one_forward(
     runner: Any,
 ) -> None:
+    agent_code = runner._AGENT_EXCHANGE_CODE
+    assert "WorkloadAuthenticatedCapabilityAction.model_validate_json(" in agent_code
+    assert "CapabilityActionRequest.model_validate_json(" in agent_code
+    assert ".model_validate(material[" not in agent_code
+
     code = runner._COMMIT_RESPONSE_RELAY_CODE
     compile(code, "<m4i-scoped-relay>", "exec")
     assert "self.path == '/v1/effects/query'" in code

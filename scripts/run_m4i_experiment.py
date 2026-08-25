@@ -438,7 +438,9 @@ if mode == 'prepare_action':
         'agent_subject': agent.signer.credential.credential.subject,
     }
 elif mode == 'submit_action':
-    wire = WorkloadAuthenticatedCapabilityAction.model_validate(material['wire_request'])
+    wire = WorkloadAuthenticatedCapabilityAction.model_validate_json(
+        json.dumps(material['wire_request'], sort_keys=True, separators=(',', ':'))
+    )
     output = {
         'mode': mode,
         'action': wire.request.model_dump(mode='json'),
@@ -447,7 +449,9 @@ elif mode == 'submit_action':
         **exchange('/v1/capability/actions', wire.model_dump(mode='json')),
     }
 elif mode == 'reconcile':
-    action = CapabilityActionRequest.model_validate(material['action'])
+    action = CapabilityActionRequest.model_validate_json(
+        json.dumps(material['action'], sort_keys=True, separators=(',', ':'))
+    )
     issued_at = datetime.now(UTC)
     request_nonce = secrets.token_urlsafe(24)
     wire = WorkloadAuthenticatedEffectReconciliation.issue(
