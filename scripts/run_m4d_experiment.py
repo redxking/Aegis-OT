@@ -35,7 +35,18 @@ def _run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return completed
 
 
-def _json_lines(raw: str) -> list[dict[str, Any]]:
+def _json_records(raw: str) -> list[dict[str, Any]]:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, list):
+        if not all(isinstance(value, dict) for value in parsed):
+            raise ExperimentError("Docker JSON array contained a non-object record")
+        return parsed
+    if isinstance(parsed, dict):
+        return [parsed]
+
     records: list[dict[str, Any]] = []
     for line in raw.splitlines():
         if line.strip():
@@ -43,6 +54,8 @@ def _json_lines(raw: str) -> list[dict[str, Any]]:
             if not isinstance(value, dict):
                 raise ExperimentError("Docker JSON output contained a non-object record")
             records.append(value)
+    if not records:
+        raise ExperimentError("Docker JSON output was empty")
     return records
 
 
@@ -114,7 +127,7 @@ def run_experiment(output: Path, project_name: str) -> dict[str, Any]:
 
     expected_networks = ["agent", "trust", "control_dmz", "simulation"]
     networks = _network_inventory(project_name, expected_networks)
-    images = _json_lines(_run(*compose_prefix, "images", "--format", "json").stdout)
+    images = _json_records(_run(*compose_prefix, "images", "--format", "json").stdout)
     docker_version = json.loads(_run("docker", "version", "--format", "{{json .}}").stdout)
     evidence: dict[str, Any] = {
         "schema_version": "m4d-segmented-experiment-v1",
