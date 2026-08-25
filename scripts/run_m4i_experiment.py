@@ -1239,6 +1239,8 @@ def _accepted_gates(
 ) -> dict[str, bool]:
     health = _mapping(observations.get("health_initial"))
     gateway_health = _mapping(health.get("segmented-gateway"))
+    ot_health = _mapping(health.get("ot-adapter"))
+    initial_ot_recovery = _mapping(ot_health.get("coordination_recovery"))
     initialization = _mapping(observations.get("coordination_initialization"))
     nominal = _mapping(observations.get("nominal"))
     nominal_result = _mapping(nominal.get("result"))
@@ -1257,7 +1259,16 @@ def _accepted_gates(
     fresh = _mapping(lost.get("fresh_action"))
     relay_cleanup = _mapping(lost.get("relay_teardown"))
     restart = _mapping(observations.get("gateway_ot_restart"))
+    restart_ot_health = _mapping(restart.get("ot_health_after"))
+    restart_ot_recovery = _mapping(
+        restart_ot_health.get("coordination_recovery")
+    )
     plant_restart = _mapping(observations.get("plant_restart"))
+    plant_stack_health = _mapping(plant_restart.get("stack_health_after"))
+    plant_restart_ot_health = _mapping(plant_stack_health.get("ot-adapter"))
+    plant_restart_ot_recovery = _mapping(
+        plant_restart_ot_health.get("coordination_recovery")
+    )
     storage = _mapping(observations.get("storage"))
     storage_snapshots = _mapping(storage.get("snapshots"))
     corruption = _mapping(observations.get("corruption"))
@@ -1283,6 +1294,17 @@ def _accepted_gates(
         and gateway_health.get("effect_coordination_mode") == "required"
         and gateway_health.get("coordination_backend")
         == "durable-prepare-commit-query-http-v1"
+        and initial_ot_recovery.get("schema_version")
+        == "m4i-ot-coordination-recovery-v1"
+        and initial_ot_recovery.get("status") == "aligned"
+        and initial_ot_recovery.get("reason") == "aligned_empty_baseline"
+        and initial_ot_recovery.get("record_count") == 0
+        and initial_ot_recovery.get("applied_effect_count") == 0
+        and initial_ot_recovery.get("pending_effect_count") == 0
+        and initial_ot_recovery.get("plant_state_version") == 0
+        and initial_ot_recovery.get("live_commit_armed") is False
+        and initial_ot_recovery.get("limitation")
+        == "ordinary_single_volume_alignment_only"
         and initialization.get("schema_version")
         == "m4i-coordination-volume-initialization-v2"
         and initialization.get("state_artifact_count") == 3
@@ -1334,6 +1356,13 @@ def _accepted_gates(
         == restart.get("gateway_terminal_after")
         and restart.get("ot_terminal_before") == restart.get("ot_terminal_after")
         and _mapping(restart.get("health_after")).get("status") == "ready"
+        and restart_ot_health.get("status") == "ready"
+        and restart_ot_recovery.get("status") == "aligned"
+        and restart_ot_recovery.get("reason") == "aligned_applied_chain"
+        and restart_ot_recovery.get("record_count") == 2
+        and restart_ot_recovery.get("applied_effect_count") == 2
+        and restart_ot_recovery.get("pending_effect_count") == 0
+        and restart_ot_recovery.get("live_commit_armed") is False
     )
     plant_before = _mapping(plant_restart.get("health_before"))
     plant_after = _mapping(plant_restart.get("health_after"))
@@ -1351,6 +1380,14 @@ def _accepted_gates(
             _mapping(checkpoint_after.get("document")).get("checkpoint")
         ).get("state_digest")
         == plant_after.get("state_digest")
+        and plant_restart_ot_health.get("status") == "ready"
+        and plant_restart_ot_recovery.get("status") == "aligned"
+        and plant_restart_ot_recovery.get("reason") == "aligned_applied_chain"
+        and plant_restart_ot_recovery.get("plant_state_version")
+        == plant_after.get("state_version")
+        and plant_restart_ot_recovery.get("plant_state_digest")
+        == plant_after.get("state_digest")
+        and plant_restart_ot_recovery.get("live_commit_armed") is False
     )
     fresh_blocked = (
         fresh.get("http_status") == 409
@@ -1579,7 +1616,7 @@ def _restart_gateway_and_ot(prefix: tuple[str, ...]) -> dict[str, Any]:
         "--no-build",
         "ot-adapter",
     )
-    _await_service_ready(prefix, service="ot-adapter", port=8083)
+    ot_health = _await_service_ready(prefix, service="ot-adapter", port=8083)
     m4d._run(
         *prefix,
         "up",
@@ -1600,6 +1637,7 @@ def _restart_gateway_and_ot(prefix: tuple[str, ...]) -> dict[str, Any]:
         "gateway_container_after": _container_identity(prefix, "segmented-gateway"),
         "ot_container_after": _container_identity(prefix, "ot-adapter"),
         "health_after": gateway_health,
+        "ot_health_after": ot_health,
     }
 
 

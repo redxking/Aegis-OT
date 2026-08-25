@@ -38,6 +38,21 @@ def _private_snapshot(*, checkpoint: bool = False) -> dict[str, Any]:
     }
 
 
+def _aligned_recovery(*, applied: int, state_version: int) -> dict[str, Any]:
+    return {
+        "schema_version": "m4i-ot-coordination-recovery-v1",
+        "status": "aligned",
+        "reason": "aligned_empty_baseline" if applied == 0 else "aligned_applied_chain",
+        "record_count": applied,
+        "applied_effect_count": applied,
+        "pending_effect_count": 0,
+        "plant_state_version": state_version,
+        "plant_state_digest": "d" * 64,
+        "live_commit_armed": False,
+        "limitation": "ordinary_single_volume_alignment_only",
+    }
+
+
 def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, bool]]:
     health = {
         service: {"status": "ready"} for service in runner.m4g.AEGIS_HEALTH_PORTS
@@ -47,6 +62,10 @@ def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict
             "effect_coordination_mode": "required",
             "coordination_backend": "durable-prepare-commit-query-http-v1",
         }
+    )
+    health["ot-adapter"]["coordination_recovery"] = _aligned_recovery(
+        applied=0,
+        state_version=0,
     )
     terminal = {
         "bytes_base64": "dGVybWluYWw=",
@@ -133,6 +152,13 @@ def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict
             "ot_terminal_before": terminal,
             "ot_terminal_after": terminal,
             "health_after": {"status": "ready"},
+            "ot_health_after": {
+                "status": "ready",
+                "coordination_recovery": _aligned_recovery(
+                    applied=2,
+                    state_version=2,
+                ),
+            },
         },
         "plant_restart": {
             "health_before": {
@@ -149,6 +175,15 @@ def _accepted_fixture(runner: Any) -> tuple[dict[str, Any], dict[str, Any], dict
             },
             "checkpoint_before": _private_snapshot(checkpoint=True),
             "checkpoint_after": _private_snapshot(checkpoint=True),
+            "stack_health_after": {
+                "ot-adapter": {
+                    "status": "ready",
+                    "coordination_recovery": _aligned_recovery(
+                        applied=2,
+                        state_version=2,
+                    ),
+                }
+            },
         },
         "storage": {
             "snapshots": {
@@ -203,6 +238,25 @@ def test_acceptance_evaluator_closes_all_gates_and_rejects_commit_retry(
     rejected = runner._accepted_gates(observations, configuration, cleanup)
     assert rejected["lost_commit_response_remains_unknown"] is False
     assert rejected["agent_reconciliation_one_query_zero_commit_retries"] is False
+
+
+def test_acceptance_requires_live_ot_recovery_alignment(runner: Any) -> None:
+    observations, configuration, cleanup = _accepted_fixture(runner)
+    observations["health_initial"]["ot-adapter"].pop("coordination_recovery")
+
+    rejected = runner._accepted_gates(observations, configuration, cleanup)
+
+    assert rejected["required_coordination_health"] is False
+
+    observations, configuration, cleanup = _accepted_fixture(runner)
+    observations["gateway_ot_restart"]["ot_health_after"][
+        "coordination_recovery"
+    ]["status"] = "recovery_required"
+    rejected = runner._accepted_gates(observations, configuration, cleanup)
+    assert (
+        rejected["gateway_ot_restart_preserves_byte_equivalent_resolution"]
+        is False
+    )
 
 
 def test_scoped_relay_is_closed_and_records_commit_before_one_forward(
