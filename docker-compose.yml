@@ -6,11 +6,10 @@ services:
     cap_drop: ["ALL"]
     volumes:
       - ./policy:/policy:ro
-    ports:
-      - "127.0.0.1:8181:8181"
+    networks: [trust]
 
   gateway:
-    build:
+    build: &aegis-build
       context: .
       args:
         PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
@@ -19,3 +18,66 @@ services:
     cap_drop: ["ALL"]
     ports:
       - "127.0.0.1:8080:8080"
+    networks: [demo]
+
+  segmented-gateway:
+    build: *aegis-build
+    command: ["uvicorn", "aegis_ot.segmented_runtime:segmented_gateway_app", "--host", "0.0.0.0", "--port", "8081"]
+    read_only: true
+    cap_drop: ["ALL"]
+    environment:
+      AEGIS_OBSERVER_URL: http://observer:8082
+      AEGIS_OPA_URL: http://opa:8181
+      AEGIS_OT_URL: http://ot-adapter:8083
+    depends_on: [opa, observer, ot-adapter]
+    ports:
+      - "127.0.0.1:8081:8081"
+    networks: [agent, trust, control_dmz]
+
+  observer:
+    build: *aegis-build
+    command: ["uvicorn", "aegis_ot.segmented_runtime:observer_app", "--host", "0.0.0.0", "--port", "8082"]
+    read_only: true
+    cap_drop: ["ALL"]
+    environment:
+      AEGIS_SIMULATION_URL: http://simulation:8084
+    depends_on: [simulation]
+    networks: [control_dmz, simulation]
+
+  ot-adapter:
+    build: *aegis-build
+    command: ["uvicorn", "aegis_ot.segmented_runtime:ot_adapter_app", "--host", "0.0.0.0", "--port", "8083"]
+    read_only: true
+    cap_drop: ["ALL"]
+    environment:
+      AEGIS_SIMULATION_URL: http://simulation:8084
+    depends_on: [simulation]
+    networks: [control_dmz, simulation]
+
+  simulation:
+    build: *aegis-build
+    command: ["uvicorn", "aegis_ot.segmented_runtime:simulation_app", "--host", "0.0.0.0", "--port", "8084"]
+    read_only: true
+    cap_drop: ["ALL"]
+    networks: [simulation]
+
+  agent-probe:
+    profiles: ["experiment"]
+    build: *aegis-build
+    command: ["python", "-m", "aegis_ot.segmented_probe"]
+    read_only: true
+    cap_drop: ["ALL"]
+    environment:
+      AEGIS_GATEWAY_URL: http://segmented-gateway:8081
+    depends_on: [segmented-gateway]
+    networks: [agent]
+
+networks:
+  demo: {}
+  agent: {}
+  trust:
+    internal: true
+  control_dmz:
+    internal: true
+  simulation:
+    internal: true

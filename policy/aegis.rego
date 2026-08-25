@@ -2,6 +2,13 @@ package aegis.authz
 
 default permit := false
 
+default policy_permit := false
+
+policy_permit if {
+  input.proposal.confidence >= data.limits.minimum_action_confidence
+  input.proposal.risk_score < data.limits.human_approval_risk_threshold
+}
+
 permit if {
   input.identity.verified
   input.delegation.valid

@@ -1,0 +1,6 @@
+{
+  "limits": {
+    "human_approval_risk_threshold": 75,
+    "minimum_action_confidence": 0.7
+  }
+}
