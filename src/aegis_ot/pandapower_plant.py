@@ -642,6 +642,9 @@ class PandapowerCigreMVPlant:
         expected_post_topology_digest: str | None = None,
         effect_deadline: datetime | None = None,
         effect_clock: Callable[[], datetime] | None = None,
+        durable_commit: (
+            Callable[[PhysicalStateSnapshot, PhysicalStateSnapshot], None] | None
+        ) = None,
     ) -> PhysicalStateSnapshot:
         """Apply atomically: a failed solver leaves the authoritative plant unchanged."""
 
@@ -703,6 +706,20 @@ class PandapowerCigreMVPlant:
                 and effect_clock() >= effect_deadline
             ):
                 raise PhysicalSimulationError("authorization_expired_before_effect")
+            if durable_commit is not None:
+                # The durable callback is the persistence boundary for the
+                # synthetic effect.  It runs only after every authorization,
+                # candidate, safety, digest, and deadline check, but before the
+                # authoritative in-memory projection is swapped.  Its errors
+                # deliberately propagate without being relabeled as physical
+                # known-no-effect rejections.
+                try:
+                    durable_commit(current, snapshot)
+                except PhysicalSimulationError as exc:
+                    # A persistence callback is outside the physical solver's
+                    # known-no-effect error domain, even if an implementation
+                    # accidentally raises the same exception type.
+                    raise RuntimeError("durable_pre_swap_commit_failed") from exc
             self._net = candidate_net
             self._simulation_time_s = next_time
             self._state_version = next_version
