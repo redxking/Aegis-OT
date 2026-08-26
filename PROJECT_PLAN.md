@@ -1,20 +1,20 @@
 # Aegis-OT Project Plan
 
-## State as of 2026-08-25
+## State as of 2026-08-26
 
 The original package is unavailable. This repository is a clean reconstruction based on the controlled handoff. No earlier implementation, test, experiment, or document artifact is treated as recovered or independently verified.
 
 | Work package | State | Current exit evidence |
 |---|---|---|
 | WP0 Governance and reproducibility | In progress | Canonical study revision 0.7, revision log, experiment and formal manifests, and reproducible outcome hashes established |
-| WP1 Executable assurance kernel | Initial implementation complete | Current clean suite: 708 tests pass at 91.61 percent branch-aware coverage; strict typing across 50 source files, linting, schema drift, public-demo drift, topology-fixture drift, and base/M4f-overlay Compose checks are clean |
+| WP1 Executable assurance kernel | Implementation complete; checkpoint verification pending | The capability, identity, coordination, compromise, fleet, release, and traceability implementation is present; exact M4j checkpoint verification replaces the stale historical test count |
 | WP2 Formal specification | Bounded M1 complete | Intended model: 167,193 generated and 55,512 distinct states, depth 20, no reported violation; 16 weakened cases produced expected counterexamples; runtime gaps remain explicit |
 | WP3 Single-host simulation | Bounded M2 complete | 8,640-record, 30-seed, eight-baseline run reproduced by outcome hash; independent physical evaluation remains open |
-| WP4 Power-system and OT integration | In progress | M3/M4b retain bounded physical/capability evidence; M4d adds reproduced Docker segmentation/service loss; M4e adds reproduced Ed25519 gateway/OT message authentication; M4f adds reproduced exact-envelope replay rejection across one orderly OT-adapter replacement with an intact trusted volume; workload identity and revocation, the full capability contract, hostile-host rollback resistance, HELICS/OpenPLC, hardware, multi-host isolation, and external validation remain open |
-| WP5 Multi-VM trust boundaries | Planned | Infrastructure scaffold only |
-| WP6 Operate-through-compromise | Planned | Scenario definitions not yet executed |
-| WP7 Scale and economics | Planned | No measurements |
-| WP8 Independent validation | Planned | No independent review |
+| WP4 Power-system and OT integration | In progress | M3/M4b-M4g retain bounded local evidence; M4i coordination and M4j exact-source six-host deployment code are implemented, while HELICS/OpenPLC, hardware, retained M4i/M4j campaigns, and external validation remain open |
+| WP5 Multi-VM trust boundaries | Implemented; live acceptance pending | Six-role Vagrant/VirtualBox topology, exact package agreement, locked SSH transport, source-bound Ansible, SPIRE bootstrap, workload deployment, signed two-phase probe, and network acceptance runner are present; no live six-host result is retained |
+| WP6 Operate-through-compromise | Implemented at deterministic model boundary | Fail-closed compromise, quarantine, recovery, and bounded degraded-operation code and campaign runners are present; operational mission-continuity evidence remains open |
+| WP7 Scale and economics | Implemented at logical-model boundary | Deterministic fleet coordination and economic sensitivity code with offline verification is present; empirical fleet and cost validation remain open |
+| WP8 Replication and traceability | Implementation complete; external gates open | Signed replication-bundle and release-security code are present; all 223 requirements and 35 TBRs are tracked, but independent replication, publication, approval, and closure of open requirements remain external gates |
 
 ## Milestone sequence
 

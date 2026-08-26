@@ -1,0 +1,485 @@
+schema_version: aegis-ot-m4j-workloads-v1
+deployment_status: configuration_only
+claim_boundary: no_live_deployment_or_multi_host_isolation_evidence
+
+orchestration:
+  engine: ansible-core
+  version: 2.19.12
+  distribution: ansible_core-2.19.12-py3-none-any.whl
+  distribution_sha256: b6bbdf05952852ad908861d652a9009c8474f1fe9c63a77ec202979a329d7d99
+  configuration: infra/ansible/ansible.cfg
+  inventory: infra/ansible/inventory.ini
+  playbook: infra/ansible/workloads.yml
+  transport: ssh_over_management
+
+topology_binding:
+  path: infra/m4j/topology.yml
+  schema_version: aegis-ot-m4j-topology-v1
+  canonical_sha256: 8dc931a741b7df304e9c36862a747bee9254d09716a9b7d11fc5c03c3a146f1e
+
+deployment_binding:
+  path: infra/m4j/deployment.yml
+  schema_version: aegis-ot-m4j-deployment-v2
+  canonical_sha256: 80e54323d5e764c31edbeed2741bbe20432bd533d6e3ed91ba83e5e1ee6501f6
+
+bundle_contract:
+  schema_version: m4j-exact-source-application-image-bundle-v2
+  accepted_deploy_bundle_required: true
+  trusted_builder_public_key: out_of_band_required
+  source_archive: source.tar
+  application_image_archive: application-image.tar
+  manifest: manifest.json
+  mutable_worktree_allowed: false
+
+runtime_image_bundle_contract:
+  schema_version: aegis-ot-m4j-runtime-images-v1
+  manifest: runtime-images-manifest.json
+  target_platform: linux/amd64
+  registry_acquisition: authenticated_https_by_exact_digest
+  mutable_tags_allowed: false
+  archives:
+    spire-server: spire-server-image.tar
+    spire-agent: spire-agent-image.tar
+    opa: opa-image.tar
+
+live_probe_contract:
+  schema_version: aegis-ot-m4j-live-workload-probe-v1
+  runner: scripts/run_m4j_workload_probe.py
+  playbook: infra/ansible/probe.yml
+  execution_mode: apply_then_probe_only
+  phases: [initial, after_bounded_restart]
+  restart_order: [plant, observer, candidate, ot-adapter, segmented-gateway]
+  result_handling: private_controller_output_and_remote_cleanup
+  evidence_signature: controller_ed25519_with_explicit_external_trust_anchor
+  verification_result: canonical_record_consistency_not_independent_execution_provenance
+  claim_boundary: bounded_local_live_probe_not_production_or_independent_validation
+
+trust_domain: aegis-ot.m4g.local
+
+runtime_images:
+  spire-server: ghcr.io/spiffe/spire-server:1.15.2@sha256:aa74ef1be86bc8e0684007d84a4d9859d294384d842c30425048d73429f3216e
+  spire-agent: ghcr.io/spiffe/spire-agent:1.15.2@sha256:1d042e4040466686e0ee46f74981ff2167c86adfadca19b3835946f4d6047536
+  opa: openpolicyagent/opa:1.19.1-static@sha256:32bf41d914b1505fea13303f60587cc57bdd2902262177585fb208f5dde76d32
+
+node_bootstrap:
+  attestor: join_token
+  token_ttl_seconds: 300
+  workload_svid_ttl_seconds: 300
+  delivery_path: ansible_ssh_over_management
+  delivery_logging: suppressed
+  token_cleanup: always_local_delete_server_revoke_and_conditional_exact_auto_alias_cleanup
+  agent_state_sharing_allowed: false
+  join_material_sharing_allowed: false
+  agents:
+    trust:
+      spiffe_id: spiffe://aegis-ot.m4g.local/agent/trust
+      data_directory: /var/lib/aegis-ot/spire/agent/trust
+      socket_directory: /run/aegis-ot/spire/agent/trust
+      bootstrap_directory: /run/aegis-ot/spire/bootstrap/trust
+    agents:
+      spiffe_id: spiffe://aegis-ot.m4g.local/agent/agents
+      data_directory: /var/lib/aegis-ot/spire/agent/agents
+      socket_directory: /run/aegis-ot/spire/agent/agents
+      bootstrap_directory: /run/aegis-ot/spire/bootstrap/agents
+    gateway:
+      spiffe_id: spiffe://aegis-ot.m4g.local/agent/gateway
+      data_directory: /var/lib/aegis-ot/spire/agent/gateway
+      socket_directory: /run/aegis-ot/spire/agent/gateway
+      bootstrap_directory: /run/aegis-ot/spire/bootstrap/gateway
+    ot:
+      spiffe_id: spiffe://aegis-ot.m4g.local/agent/ot
+      data_directory: /var/lib/aegis-ot/spire/agent/ot
+      socket_directory: /run/aegis-ot/spire/agent/ot
+      bootstrap_directory: /run/aegis-ot/spire/bootstrap/ot
+    simulation:
+      spiffe_id: spiffe://aegis-ot.m4g.local/agent/simulation
+      data_directory: /var/lib/aegis-ot/spire/agent/simulation
+      socket_directory: /run/aegis-ot/spire/agent/simulation
+      bootstrap_directory: /run/aegis-ot/spire/bootstrap/simulation
+
+registrations:
+  policy-relay:
+    role: trust
+    entry_id: m4j-trust-policy-relay-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/trust
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/policy-relay
+    uid: 65532
+    gid: 65537
+  observer:
+    role: trust
+    entry_id: m4j-trust-observer-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/trust
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/observer
+    uid: 65532
+    gid: 65533
+  candidate:
+    role: trust
+    entry_id: m4j-trust-candidate-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/trust
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/candidate
+    uid: 65532
+    gid: 65534
+  agent-probe:
+    role: agents
+    entry_id: m4j-agents-agent-probe-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/agents
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/agent-probe
+    uid: 65532
+    gid: 65538
+  segmented-gateway:
+    role: gateway
+    entry_id: m4j-gateway-segmented-gateway-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/gateway
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/gateway
+    uid: 65532
+    gid: 65532
+  ot-adapter:
+    role: ot
+    entry_id: m4j-ot-ot-adapter-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/ot
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/ot-adapter
+    uid: 65532
+    gid: 65535
+  plant:
+    role: simulation
+    entry_id: m4j-simulation-plant-v1
+    parent_id: spiffe://aegis-ot.m4g.local/agent/simulation
+    spiffe_id: spiffe://aegis-ot.m4g.local/workload/plant
+    uid: 65532
+    gid: 65536
+
+services:
+  policy-relay:
+    role: trust
+    activation: continuous
+    image: application
+    listener: policy-relay-api
+    registration: policy-relay
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.policy_relay:policy_relay_app
+      - --host
+      - 192.168.59.11
+      - --port
+      - "8181"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/policy-relay
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/policy-relay
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_OPA_BACKEND_URL: http://127.0.0.1:8182
+    host_aliases: {}
+    secret_files: []
+    identity_files: []
+    state_mounts: []
+  opa:
+    role: trust
+    activation: continuous
+    image: opa
+    listener: opa-loopback
+    registration: null
+    command: [run, --server, --addr=127.0.0.1:8182, /policy]
+    environment: {}
+    host_aliases: {}
+    secret_files: []
+    identity_files: []
+    state_mounts: []
+  observer:
+    role: trust
+    activation: continuous
+    image: application
+    listener: observer-api
+    registration: observer
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_observer_app
+      - --host
+      - 192.168.59.11
+      - --port
+      - "8082"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/observer
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/observer
+      AEGIS_SPIFFE_PEER_IDS: '{"plant.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PRIVATE_KEY_FILE: /run/secrets/observer.private
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant.public
+      AEGIS_PLANT_URL: https://plant.m4j.internal:8084
+    host_aliases:
+      plant.m4j.internal: 192.168.60.15
+    secret_files: [observer.private, plant.public]
+    identity_files: []
+    state_mounts: []
+  candidate:
+    role: trust
+    activation: continuous
+    image: application
+    listener: candidate-api
+    registration: candidate
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_candidate_app
+      - --host
+      - 192.168.59.11
+      - --port
+      - "8085"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/candidate
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/candidate
+      AEGIS_SPIFFE_PEER_IDS: '{"plant.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PRIVATE_KEY_FILE: /run/secrets/candidate.private
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant.public
+      AEGIS_PLANT_URL: https://plant.m4j.internal:8084
+    host_aliases:
+      plant.m4j.internal: 192.168.60.15
+    secret_files: [candidate.private, plant.public]
+    identity_files: []
+    state_mounts: []
+  agent-probe:
+    role: agents
+    activation: manual_probe
+    image: application
+    listener: null
+    registration: agent-probe
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_workload_identity
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/agent-probe
+      - --
+      - python
+      - -m
+      - aegis_ot.m4g_probe
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_GATEWAY_URL: https://segmented-gateway.m4j.internal:8081
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/agent-probe
+      AEGIS_SPIFFE_PEER_IDS: '{"segmented-gateway.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/gateway"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_WORKLOAD_IDENTITY_MODE: required
+      AEGIS_WORKLOAD_TRUST_DOMAIN: aegis-ot.m4g.local
+      AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
+      AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
+      AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_AGENT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:agent-probe
+      AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/agent.credential.json
+      AEGIS_AGENT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/agent.private
+    host_aliases:
+      segmented-gateway.m4j.internal: 192.168.58.13
+      observer: 192.168.59.11
+      candidate: 192.168.59.11
+      ot-adapter: 192.168.59.14
+      simulation: 192.168.60.15
+    secret_files: [agent.private]
+    identity_files: [authority.public, trust-bundle.json, agent.credential.json]
+    state_mounts: []
+  segmented-gateway:
+    role: gateway
+    activation: continuous
+    image: application
+    listener: segmented-gateway-api
+    registration: segmented-gateway
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_workload_identity
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+      - --
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_gateway_app
+      - --host
+      - 192.168.58.13
+      - --port
+      - "8081"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/agent-probe
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/gateway
+      AEGIS_SPIFFE_PEER_IDS: '{"candidate.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/candidate","observer.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/observer","ot-adapter.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/ot-adapter","policy-relay.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/policy-relay"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_WORKLOAD_IDENTITY_MODE: required
+      AEGIS_WORKLOAD_TRUST_DOMAIN: aegis-ot.m4g.local
+      AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
+      AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
+      AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_GATEWAY_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:gateway
+      AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
+      AEGIS_GATEWAY_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/gateway.private
+      AEGIS_OT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:ot-adapter
+      AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
+      AEGIS_OPA_URL: https://policy-relay.m4j.internal:8181
+      AEGIS_CANDIDATE_URL: https://candidate.m4j.internal:8085
+      AEGIS_OBSERVER_URL: https://observer.m4j.internal:8082
+      AEGIS_OT_URL: https://ot-adapter.m4j.internal:8083
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate.public
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer.public
+      AEGIS_PERMIT_KEY_ID: m4g-permit-key-v1
+      AEGIS_PERMIT_PRIVATE_KEY_FILE: /run/secrets/permit.private
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant.public
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_GATEWAY_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/gateway-coordination/gateway-coordination.json
+    host_aliases:
+      policy-relay.m4j.internal: 192.168.59.11
+      observer.m4j.internal: 192.168.59.11
+      candidate.m4j.internal: 192.168.59.11
+      ot-adapter.m4j.internal: 192.168.59.14
+    secret_files: [gateway.private, permit.private, observer.public, candidate.public, plant.public]
+    identity_files: [authority.public, trust-bundle.json, gateway.credential.json, ot.credential.json]
+    state_mounts:
+      - host: gateway-coordination
+        container: /var/lib/aegis-ot/gateway-coordination
+  ot-adapter:
+    role: ot
+    activation: continuous
+    image: application
+    listener: ot-adapter-api
+    registration: ot-adapter
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_ot_app
+      - --host
+      - 192.168.59.14
+      - --port
+      - "8083"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/gateway
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/ot-adapter
+      AEGIS_SPIFFE_PEER_IDS: '{"observer.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/observer","plant.m4j.internal":"spiffe://aegis-ot.m4g.local/workload/plant"}'
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_WORKLOAD_IDENTITY_MODE: required
+      AEGIS_WORKLOAD_TRUST_DOMAIN: aegis-ot.m4g.local
+      AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
+      AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
+      AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_GATEWAY_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:gateway
+      AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
+      AEGIS_OT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:ot-adapter
+      AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
+      AEGIS_OT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/ot.private
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer.public
+      AEGIS_OBSERVER_URL: https://observer.m4j.internal:8082
+      AEGIS_PERMIT_KEY_ID: m4g-permit-key-v1
+      AEGIS_PERMIT_PUBLIC_KEY_FILE: /run/secrets/permit.public
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PUBLIC_KEY_FILE: /run/secrets/plant.public
+      AEGIS_PLANT_URL: https://plant.m4j.internal:8084
+      AEGIS_SEMANTIC_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/semantic-replay/semantic-replay.json
+      AEGIS_WORKLOAD_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/workload-replay/workload-replay.json
+      AEGIS_TRANSPORT_AUDIENCE: aegis-ot:m4g:ot-adapter
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_OT_COORDINATION_JOURNAL_FILE: /var/lib/aegis-ot/ot-coordination/ot-coordination.json
+    host_aliases:
+      observer.m4j.internal: 192.168.59.11
+      plant.m4j.internal: 192.168.60.15
+    secret_files: [ot.private, permit.public, observer.public, plant.public]
+    identity_files: [authority.public, trust-bundle.json, gateway.credential.json, ot.credential.json]
+    state_mounts:
+      - host: semantic-replay
+        container: /var/lib/aegis-ot/semantic-replay
+      - host: workload-replay
+        container: /var/lib/aegis-ot/workload-replay
+      - host: ot-coordination
+        container: /var/lib/aegis-ot/ot-coordination
+  plant:
+    role: simulation
+    activation: continuous
+    image: application
+    listener: plant-api
+    registration: plant
+    command:
+      - python
+      - -m
+      - aegis_ot.spire_mtls
+      - serve
+      - --app
+      - aegis_ot.segmented_capability_runtime:capability_plant_app
+      - --host
+      - 192.168.60.15
+      - --port
+      - "8084"
+      - --expected-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/plant
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/observer
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/candidate
+      - --allowed-client-spiffe-id
+      - spiffe://aegis-ot.m4g.local/workload/ot-adapter
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      AEGIS_SPIFFE_ID: spiffe://aegis-ot.m4g.local/workload/plant
+      AEGIS_SPIRE_MTLS_MODE: required
+      AEGIS_SPIRE_MTLS_TMPDIR: /run/aegis-spire-mtls
+      AEGIS_CANDIDATE_KEY_ID: m4g-candidate-key-v1
+      AEGIS_CANDIDATE_PUBLIC_KEY_FILE: /run/secrets/candidate.public
+      AEGIS_OBSERVER_KEY_ID: m4g-observer-key-v1
+      AEGIS_OBSERVER_PUBLIC_KEY_FILE: /run/secrets/observer.public
+      AEGIS_OT_KEY_ID: ${secrets.key_ids.ot}
+      AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot.public
+      AEGIS_PLANT_KEY_ID: m4g-plant-key-v1
+      AEGIS_PLANT_PRIVATE_KEY_FILE: /run/secrets/plant.private
+      AEGIS_EFFECT_COORDINATION_MODE: required
+      AEGIS_PLANT_CHECKPOINT_FILE: /var/lib/aegis-ot/plant-checkpoint/plant-checkpoint.json
+    host_aliases: {}
+    secret_files: [candidate.public, observer.public, ot.public, plant.private]
+    identity_files: []
+    state_mounts:
+      - host: plant-checkpoint
+        container: /var/lib/aegis-ot/plant-checkpoint

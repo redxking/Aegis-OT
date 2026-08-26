@@ -1,0 +1,25 @@
+[Unit]
+Description=Aegis-OT M4j {{ item.name }} workload
+After=docker.service network-online.target{% if item.requires_spire %} aegis-m4j-spire-agent.service{% endif %}{% if item.name == 'policy-relay' %} aegis-m4j-opa.service{% endif %}
+Requires=docker.service{% if item.requires_spire %} aegis-m4j-spire-agent.service{% endif %}{% if item.name == 'policy-relay' %} aegis-m4j-opa.service{% endif %}
+Wants=network-online.target
+
+[Service]
+Type={% if item.activation == 'manual_probe' %}oneshot{% else %}simple{% endif %}
+{% if item.activation == 'manual_probe' %}UMask=0077
+StandardOutput=file:/run/aegis-ot/m4j-probe/result.json
+StandardError=journal
+{% endif %}
+{% if item.activation == 'continuous' %}Restart=on-failure
+RestartSec=2s
+{% endif %}TimeoutStartSec=90s
+TimeoutStopSec=20s
+ExecStartPre=-/usr/bin/docker rm -f {{ item.container_name }}
+ExecStart=/usr/bin/docker run --rm --name {{ item.container_name }} --network host --read-only --cap-drop=ALL --security-opt=no-new-privileges --user {{ item.uid }}:{{ item.gid }} --env-file /etc/aegis-ot/runtime/{{ item.name }}.env{% for hostname, address in item.host_aliases | dictsort %} --add-host={{ hostname }}:{{ address }}{% endfor %}{% if item.requires_spire %} --mount type=bind,src={{ m4j_workload_plan.node_agent.socket_directory }},dst=/run/spire/agent/public,readonly{% endif %}{% for filename in item.secret_files %} --mount type=bind,src=/etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.name }}/{{ filename | basename }},dst=/run/secrets/{{ filename | basename }},readonly{% endfor %}{% for filename in item.identity_files %} --mount type=bind,src=/etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.name }}/{{ filename | basename }},dst=/run/aegis-identity/{{ filename | basename }},readonly{% endfor %}{% for mount in item.state_mounts %} --mount type=bind,src=/var/lib/aegis-ot/state/{{ inventory_hostname }}/{{ mount.host }},dst={{ mount.container }}{% endfor %}{% if item.name == 'opa' %} --mount type=bind,src=/etc/aegis-ot/opa/policy,dst=/policy,readonly{% endif %} --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1m,mode=1777{% if item.requires_spire %} --tmpfs /run/aegis-spire-mtls:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid={{ item.uid }},gid={{ item.gid }}{% endif %} {{ item.image }}{% for argument in item.command %} {{ argument }}{% endfor %}
+{% if item.activation == 'continuous' %}ExecStop=-/usr/bin/docker stop --time 10 {{ item.container_name }}
+KillMode=none
+{% endif %}NoNewPrivileges=true
+
+{% if item.activation == 'continuous' %}[Install]
+WantedBy=multi-user.target
+{% endif %}

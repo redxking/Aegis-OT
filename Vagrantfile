@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "base64"
+require "digest"
 require "ipaddr"
 require "yaml"
 
@@ -57,7 +59,8 @@ module M4jTopology
   ADDRESSING_KEYS = %w[ipv4_prefix_length first_node_host_offset].freeze
   NETWORK_KEYS = %w[cidr kind purpose gateway internal_name members].freeze
   NODE_KEYS = %w[hostname cpus memory_mb interfaces].freeze
-  COMMUNICATOR_MARKER_SCHEMA = "aegis-ot-m4j-management-communicator-v1".freeze
+  COMMUNICATOR_MARKER_SCHEMA = "aegis-ot-m4j-management-communicator-v2".freeze
+  HOST_KEY_EVIDENCE_NAME = "m4j-ssh-host-ed25519.pub".freeze
 
   module_function
 
@@ -301,8 +304,32 @@ module M4jTopology
   def management_communicator_ready!(path, role, address)
     return false unless File.exist?(path) || File.symlink?(path)
 
+    host_key_path = File.join(File.dirname(path), HOST_KEY_EVIDENCE_NAME)
+    host_key_stat = File.lstat(host_key_path)
+    unless host_key_stat.file? && !host_key_stat.symlink? &&
+           host_key_stat.uid == Process.euid &&
+           (host_key_stat.mode & 0o777) == 0o600 &&
+           host_key_stat.size.positive? && host_key_stat.size <= 1024
+      raise Error, "M4j SSH host-key evidence is unsafe"
+    end
+    host_key = File.binread(host_key_path, 1025)
+    match = /\Assh-ed25519 ([A-Za-z0-9+\/]{68})\n\z/.match(host_key)
+    raise Error, "M4j SSH host-key evidence is malformed" unless match
+
+    decoded = Base64.strict_decode64(match[1])
+    algorithm = "ssh-ed25519".b
+    prefix = [algorithm.bytesize].pack("N") + algorithm + [32].pack("N")
+    unless decoded.bytesize == prefix.bytesize + 32 && decoded.start_with?(prefix)
+      raise Error, "M4j SSH host-key evidence is not canonical Ed25519"
+    end
+
     stat = File.lstat(path)
-    expected = "#{COMMUNICATOR_MARKER_SCHEMA}\nrole=#{role}\naddress=#{address}\n"
+    expected = (
+      "#{COMMUNICATOR_MARKER_SCHEMA}\n" \
+      "role=#{role}\n" \
+      "address=#{address}\n" \
+      "host_key_sha256=#{Digest::SHA256.hexdigest(host_key)}\n"
+    )
     unless stat.file? && !stat.symlink? && stat.uid == Process.euid &&
            (stat.mode & 0o777) == 0o600 && stat.size == expected.bytesize
       raise Error, "M4j management communicator marker is unsafe"
@@ -312,7 +339,7 @@ module M4jTopology
     end
 
     true
-  rescue Errno::EACCES, Errno::ENOENT => e
+  rescue ArgumentError, Errno::EACCES, Errno::ENOENT => e
     raise Error, "M4j management communicator marker could not be verified: #{e.message}"
   end
 end

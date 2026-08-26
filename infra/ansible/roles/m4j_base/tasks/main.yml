@@ -354,6 +354,192 @@
     m4j_management_interface: >-
       {{ m4j_management_interface_result.stdout_lines[0].split()[1] }}
 
+- name: Inspect the guest Ed25519 SSH host public key
+  ansible.builtin.stat:
+    path: /etc/ssh/ssh_host_ed25519_key.pub
+    follow: false
+    get_checksum: false
+  register: m4j_guest_ssh_host_key_stat
+
+- name: Reject an unsafe guest Ed25519 SSH host public key file
+  ansible.builtin.assert:
+    that:
+      - m4j_guest_ssh_host_key_stat.stat.exists
+      - m4j_guest_ssh_host_key_stat.stat.isreg
+      - not m4j_guest_ssh_host_key_stat.stat.islnk
+      - m4j_guest_ssh_host_key_stat.stat.uid == 0
+      - m4j_guest_ssh_host_key_stat.stat.nlink == 1
+      - m4j_guest_ssh_host_key_stat.stat.mode == "0644"
+    fail_msg: "The guest Ed25519 SSH host public key file is absent or unsafe."
+
+- name: Read the guest Ed25519 SSH host public key through the provisioning channel
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  register: m4j_guest_ssh_host_key
+
+- name: Select the guest Ed25519 SSH host public key fields
+  ansible.builtin.set_fact:
+    m4j_guest_ssh_host_key_lines: >-
+      {{ (m4j_guest_ssh_host_key.content | b64decode).splitlines() }}
+    m4j_guest_ssh_host_key_fields: >-
+      {{ (m4j_guest_ssh_host_key.content | b64decode).split() }}
+
+- name: Reject malformed guest Ed25519 SSH host public key material
+  ansible.builtin.assert:
+    that:
+      - m4j_guest_ssh_host_key_lines | length == 1
+      - m4j_guest_ssh_host_key_fields | length >= 2
+      - m4j_guest_ssh_host_key_fields[0] == "ssh-ed25519"
+      - m4j_guest_ssh_host_key_fields[1] is match("^[A-Za-z0-9+/]{68}$")
+    fail_msg: "The guest SSH host key is not one canonical Ed25519 public key."
+
+- name: Construct the canonical controller SSH host-key record
+  ansible.builtin.set_fact:
+    m4j_controller_ssh_host_key_material: >-
+      {{ m4j_guest_ssh_host_key_fields[0] ~ " " ~
+         m4j_guest_ssh_host_key_fields[1] ~ "\n" }}
+    m4j_controller_ssh_host_key_sha256: >-
+      {{ (m4j_guest_ssh_host_key_fields[0] ~ " " ~
+          m4j_guest_ssh_host_key_fields[1] ~ "\n") | hash("sha256") }}
+
+- name: Read the invoking controller user identifier
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/id
+      - -u
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: m4j_controller_uid
+
+- name: Reject a malformed invoking controller user identifier
+  ansible.builtin.assert:
+    that:
+      - m4j_controller_uid.stdout is match("^[0-9]+$")
+    fail_msg: "The invoking controller user identifier could not be established."
+
+- name: Inspect existing controller SSH host-key evidence
+  ansible.builtin.stat:
+    path: "{{ m4j_vagrant_host_key_evidence_path }}"
+    follow: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: m4j_controller_ssh_host_key_stat
+
+- name: Reject unsafe existing controller SSH host-key evidence
+  ansible.builtin.assert:
+    that:
+      - m4j_controller_ssh_host_key_stat.stat.isreg
+      - not m4j_controller_ssh_host_key_stat.stat.islnk
+      - m4j_controller_ssh_host_key_stat.stat.uid == m4j_controller_uid.stdout | int
+      - m4j_controller_ssh_host_key_stat.stat.nlink == 1
+      - m4j_controller_ssh_host_key_stat.stat.mode == "0600"
+    fail_msg: "Existing controller SSH host-key evidence is unsafe; refusing overwrite."
+  when: m4j_controller_ssh_host_key_stat.stat.exists
+
+- name: Read existing controller SSH host-key evidence without mutation
+  ansible.builtin.slurp:
+    src: "{{ m4j_vagrant_host_key_evidence_path }}"
+  delegate_to: localhost
+  become: false
+  register: m4j_existing_controller_ssh_host_key
+  when: m4j_controller_ssh_host_key_stat.stat.exists
+
+- name: Reject stale existing controller SSH host-key evidence
+  ansible.builtin.assert:
+    that:
+      - >-
+        m4j_existing_controller_ssh_host_key.content | b64decode ==
+        m4j_controller_ssh_host_key_material
+    fail_msg: "Existing controller SSH host-key evidence is stale; refusing overwrite."
+  when: m4j_controller_ssh_host_key_stat.stat.exists
+
+- name: Export the guest SSH host key to a new private controller file
+  ansible.builtin.copy:
+    dest: "{{ m4j_vagrant_host_key_evidence_path }}"
+    content: "{{ m4j_controller_ssh_host_key_material }}"
+    mode: "0600"
+    force: false
+    follow: false
+  delegate_to: localhost
+  become: false
+  when: not m4j_controller_ssh_host_key_stat.stat.exists
+
+- name: Inspect the exported controller SSH host-key evidence
+  ansible.builtin.stat:
+    path: "{{ m4j_vagrant_host_key_evidence_path }}"
+    follow: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: m4j_exported_controller_ssh_host_key_stat
+
+- name: Read the exported controller SSH host-key evidence
+  ansible.builtin.slurp:
+    src: "{{ m4j_vagrant_host_key_evidence_path }}"
+  delegate_to: localhost
+  become: false
+  register: m4j_exported_controller_ssh_host_key
+
+- name: Reject controller SSH host-key export drift
+  ansible.builtin.assert:
+    that:
+      - m4j_exported_controller_ssh_host_key_stat.stat.isreg
+      - not m4j_exported_controller_ssh_host_key_stat.stat.islnk
+      - m4j_exported_controller_ssh_host_key_stat.stat.uid == m4j_controller_uid.stdout | int
+      - m4j_exported_controller_ssh_host_key_stat.stat.nlink == 1
+      - m4j_exported_controller_ssh_host_key_stat.stat.mode == "0600"
+      - >-
+        m4j_exported_controller_ssh_host_key.content | b64decode ==
+        m4j_controller_ssh_host_key_material
+    fail_msg: "The controller SSH host-key export changed or is unsafe."
+
+- name: Construct the host-key-bound management communicator marker
+  ansible.builtin.set_fact:
+    m4j_controller_communicator_marker_material: |
+      aegis-ot-m4j-management-communicator-v2
+      role={{ m4j_vagrant_machine }}
+      address={{ ansible_host }}
+      host_key_sha256={{ m4j_controller_ssh_host_key_sha256 }}
+
+- name: Inspect an existing management communicator marker
+  ansible.builtin.stat:
+    path: "{{ m4j_vagrant_communicator_marker_path }}"
+    follow: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: m4j_existing_communicator_marker_stat
+
+- name: Reject an unsafe existing management communicator marker
+  ansible.builtin.assert:
+    that:
+      - m4j_existing_communicator_marker_stat.stat.isreg
+      - not m4j_existing_communicator_marker_stat.stat.islnk
+      - m4j_existing_communicator_marker_stat.stat.uid == m4j_controller_uid.stdout | int
+      - m4j_existing_communicator_marker_stat.stat.nlink == 1
+      - m4j_existing_communicator_marker_stat.stat.mode == "0600"
+    fail_msg: "Existing management communicator marker is unsafe; refusing overwrite."
+  when: m4j_existing_communicator_marker_stat.stat.exists
+
+- name: Read an existing management communicator marker without mutation
+  ansible.builtin.slurp:
+    src: "{{ m4j_vagrant_communicator_marker_path }}"
+  delegate_to: localhost
+  become: false
+  register: m4j_existing_communicator_marker
+  when: m4j_existing_communicator_marker_stat.stat.exists
+
+- name: Reject a stale existing management communicator marker
+  ansible.builtin.assert:
+    that:
+      - >-
+        m4j_existing_communicator_marker.content | b64decode ==
+        m4j_controller_communicator_marker_material
+    fail_msg: "Existing management communicator marker is stale; refusing overwrite."
+  when: m4j_existing_communicator_marker_stat.stat.exists
+
 - name: Converge UFW with an emergency default-deny recovery path
   block:
     - name: Reset UFW to a deterministic empty user policy
@@ -474,11 +660,10 @@
     - name: Record the emergency management communicator path
       ansible.builtin.copy:
         dest: "{{ m4j_vagrant_communicator_marker_path }}"
-        content: |
-          aegis-ot-m4j-management-communicator-v1
-          role={{ m4j_vagrant_machine }}
-          address={{ ansible_host }}
+        content: "{{ m4j_controller_communicator_marker_material }}"
         mode: "0600"
+        force: false
+        follow: false
       delegate_to: localhost
       become: false
 
@@ -544,10 +729,38 @@
 - name: Record the validated management communicator path
   ansible.builtin.copy:
     dest: "{{ m4j_vagrant_communicator_marker_path }}"
-    content: |
-      aegis-ot-m4j-management-communicator-v1
-      role={{ m4j_vagrant_machine }}
-      address={{ ansible_host }}
+    content: "{{ m4j_controller_communicator_marker_material }}"
     mode: "0600"
+    force: false
+    follow: false
   delegate_to: localhost
   become: false
+
+- name: Inspect the validated management communicator marker
+  ansible.builtin.stat:
+    path: "{{ m4j_vagrant_communicator_marker_path }}"
+    follow: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: m4j_validated_communicator_marker_stat
+
+- name: Read the validated management communicator marker
+  ansible.builtin.slurp:
+    src: "{{ m4j_vagrant_communicator_marker_path }}"
+  delegate_to: localhost
+  become: false
+  register: m4j_validated_communicator_marker
+
+- name: Reject validated management communicator marker drift
+  ansible.builtin.assert:
+    that:
+      - m4j_validated_communicator_marker_stat.stat.isreg
+      - not m4j_validated_communicator_marker_stat.stat.islnk
+      - m4j_validated_communicator_marker_stat.stat.uid == m4j_controller_uid.stdout | int
+      - m4j_validated_communicator_marker_stat.stat.nlink == 1
+      - m4j_validated_communicator_marker_stat.stat.mode == "0600"
+      - >-
+        m4j_validated_communicator_marker.content | b64decode ==
+        m4j_controller_communicator_marker_material
+    fail_msg: "The validated management communicator marker changed or is unsafe."

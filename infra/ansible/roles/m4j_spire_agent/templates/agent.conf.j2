@@ -1,0 +1,29 @@
+agent {
+    trust_domain = "{{ m4j_workload_plan.trust_domain }}"
+    data_dir = "/var/lib/spire/agent"
+    log_level = "INFO"
+    server_address = "{{ m4j_topology.nodes.trust.interfaces.trust_enrollment }}"
+    server_port = "8081"
+    socket_path = "/run/spire/agent/public/api.sock"
+    trust_bundle_path = "/run/spire/bootstrap/bundle.pem"
+    rebootstrap_mode = "never"
+}
+
+plugins {
+    NodeAttestor "join_token" {
+        plugin_data {}
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "/var/lib/spire/agent"
+        }
+    }
+
+    WorkloadAttestor "unix" {
+        plugin_data {
+            discover_workload_path = false
+            workload_size_limit = -1
+        }
+    }
+}

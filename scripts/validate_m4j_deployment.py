@@ -759,8 +759,8 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "agent-probe",
             "segmented-gateway-api",
             "agent_lane",
-            "http",
-            "signed_workload_capability",
+            "https",
+            "spiffe_mtls_plus_signed_workload_capability",
         ),
         _edge(
             "segmented-gateway-to-policy-relay",
@@ -845,7 +845,7 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
         ),
     ]
     return {
-        "schema_version": "aegis-ot-m4j-deployment-v1",
+        "schema_version": "aegis-ot-m4j-deployment-v2",
         "deployment_status": "configuration_only",
         "claim_boundary": "no_live_deployment_or_multi_host_isolation_evidence",
         "topology_binding": {
@@ -888,18 +888,29 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             }
         },
         "peer_edges": edges,
-        "unresolved_gates": [
+        "implementation_gates": [
             {
                 "gate_id": "multi_host_spire_bootstrap",
-                "status": "unresolved",
+                "status": "implemented_live_validation_pending",
                 "blocks": "live_multi_host_deployment_evidence",
-                "current_limitation": (
-                    "current_single_host_bootstrap_uses_one_shared_agent_identity_and_"
-                    "shared_bootstrap_material"
-                ),
-                "required_resolution": (
-                    "issue_distinct_node_attestation_identity_and_non_shared_bootstrap_"
-                    "material_per_host_then_bind_and_validate_each_workload_registration_parent"
+                "implementation_contracts": [
+                    "infra/m4j/workloads.yml",
+                    "infra/ansible/workloads.yml",
+                    "scripts/deploy_m4j_workloads.py",
+                    "scripts/reconcile_m4j_spire_entries.py",
+                    "scripts/revoke_m4j_spire_join_token.py",
+                ],
+                "implemented_controls": [
+                    "distinct_node_attestation_identity_per_host",
+                    "one_time_non_shared_join_material_per_host",
+                    "exact_workload_registration_parent_binding",
+                    "bounded_managed_registration_pruning_and_readback",
+                    "join_token_cleanup_and_absence_verification",
+                ],
+                "live_evidence_status": "not_run",
+                "required_validation": (
+                    "apply_exact_source_bundle_then_run_signed_two_phase_live_workload_"
+                    "probe_on_all_six_hosts"
                 ),
             }
         ],
@@ -1119,8 +1130,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     **result,
                     "claim_boundary": "no_live_deployment_or_multi_host_isolation_evidence",
                     "deployment_status": "configuration_only",
-                    "schema_version": "aegis-ot-m4j-deployment-v1",
-                    "unresolved_gates": ["multi_host_spire_bootstrap"],
+                    "schema_version": "aegis-ot-m4j-deployment-v2",
+                    "implementation_gates": {
+                        "multi_host_spire_bootstrap": (
+                            "implemented_live_validation_pending"
+                        )
+                    },
                     "valid": True,
                 },
                 separators=(",", ":"),

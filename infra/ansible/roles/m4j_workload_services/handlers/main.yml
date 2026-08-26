@@ -1,0 +1,13 @@
+---
+- name: Reload M4j workload units
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart changed M4j workloads
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - try-restart
+      - "aegis-m4j-{{ item.name }}.service"
+  changed_when: true
+  loop: "{{ m4j_workload_plan.services }}"

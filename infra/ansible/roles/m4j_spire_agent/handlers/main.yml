@@ -1,0 +1,23 @@
+---
+- name: Reload M4j SPIRE agent unit
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Inspect whether the M4j SPIRE agent unit is active
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - is-active
+      - --quiet
+      - aegis-m4j-spire-agent.service
+  changed_when: false
+  failed_when: false
+  register: m4j_spire_agent_active
+  listen: Restart an already active M4j SPIRE agent
+
+- name: Restart the M4j SPIRE agent only after an established activation
+  ansible.builtin.systemd:
+    name: aegis-m4j-spire-agent.service
+    state: restarted
+  when: m4j_spire_agent_active.rc == 0
+  listen: Restart an already active M4j SPIRE agent

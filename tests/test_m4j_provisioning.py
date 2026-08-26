@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import shutil
 import subprocess
@@ -33,6 +35,24 @@ EXPECTED_PACKAGE_ENV = {
     "ufw": "AEGIS_M4J_PKG_UFW",
     "docker.io": "AEGIS_M4J_PKG_DOCKER_IO",
 }
+
+_SSH_ALGORITHM = b"ssh-ed25519"
+_TEST_HOST_KEY = (
+    b"ssh-ed25519 "
+    + base64.b64encode(
+        len(_SSH_ALGORITHM).to_bytes(4, "big")
+        + _SSH_ALGORITHM
+        + (32).to_bytes(4, "big")
+        + b"\x01" * 32
+    )
+    + b"\n"
+)
+VALID_MANAGEMENT_MARKER = (
+    "aegis-ot-m4j-management-communicator-v2\n"
+    "role=management\n"
+    "address=192.168.56.10\n"
+    f"host_key_sha256={hashlib.sha256(_TEST_HOST_KEY).hexdigest()}\n"
+)
 
 RUBY_VAGRANT_STUB = r"""
 class VagrantStub
@@ -135,15 +155,18 @@ def _run_vagrant_with_marker(
     shutil.copyfile(VAGRANTFILE, fixture_root / "Vagrantfile")
     shutil.copyfile(TOPOLOGY_PATH, fixture_topology)
     if marker is not None:
-        marker_path = (
+        machine_path = (
             fixture_root
             / ".vagrant"
             / "machines"
             / "management"
             / "virtualbox"
-            / "m4j-management-communicator"
         )
+        marker_path = machine_path / "m4j-management-communicator"
         marker_path.parent.mkdir(parents=True)
+        host_key_path = machine_path / "m4j-ssh-host-ed25519.pub"
+        host_key_path.write_bytes(_TEST_HOST_KEY)
+        host_key_path.chmod(0o600)
         if symlink:
             target = fixture_root / "marker-target"
             target.write_text(marker, encoding="utf-8")
@@ -201,11 +224,7 @@ def test_vagrant_uses_only_the_bounded_ansible_provisioner() -> None:
 def test_valid_communicator_marker_switches_vagrant_to_management_ssh(tmp_path: Path) -> None:
     completed = _run_vagrant_with_marker(
         tmp_path,
-        marker=(
-            "aegis-ot-m4j-management-communicator-v1\n"
-            "role=management\n"
-            "address=192.168.56.10\n"
-        ),
+        marker=VALID_MANAGEMENT_MARKER,
     )
     assert completed.returncode == 0, completed.stderr
     assert "management_ssh=192.168.56.10:22" in completed.stdout
@@ -215,20 +234,8 @@ def test_valid_communicator_marker_switches_vagrant_to_management_ssh(tmp_path: 
     ("marker", "mode", "symlink"),
     [
         ("malformed\n", 0o600, False),
-        (
-            "aegis-ot-m4j-management-communicator-v1\n"
-            "role=management\n"
-            "address=192.168.56.10\n",
-            0o644,
-            False,
-        ),
-        (
-            "aegis-ot-m4j-management-communicator-v1\n"
-            "role=management\n"
-            "address=192.168.56.10\n",
-            0o600,
-            True,
-        ),
+        (VALID_MANAGEMENT_MARKER, 0o644, False),
+        (VALID_MANAGEMENT_MARKER, 0o600, True),
     ],
 )
 def test_unsafe_communicator_marker_fails_closed(
@@ -389,6 +396,8 @@ def test_service_identity_and_role_directories_are_least_privilege() -> None:
 
     marker_path = variables["m4j_vagrant_communicator_marker_path"]
     assert 'm4j_vagrant_machine ~ "/virtualbox/m4j-management-communicator"' in marker_path
+    host_key_path = variables["m4j_vagrant_host_key_evidence_path"]
+    assert 'm4j_vagrant_machine ~ "/virtualbox/m4j-ssh-host-ed25519.pub"' in host_key_path
     marker = _task(tasks, "Record the validated management communicator path")
     assert marker["ansible.builtin.copy"]["dest"] == (
         "{{ m4j_vagrant_communicator_marker_path }}"

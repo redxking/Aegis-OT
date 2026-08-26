@@ -1,0 +1,21 @@
+[Unit]
+Description=Aegis-OT M4j role-distinct SPIRE agent ({{ inventory_hostname }})
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-{{ m4j_workload_plan.node_agent.bootstrap_directory }}/agent-bootstrap.env
+Restart=on-failure
+RestartSec=2s
+TimeoutStartSec=60s
+TimeoutStopSec=20s
+ExecStartPre=-/usr/bin/docker rm -f aegis-m4j-spire-agent
+ExecStart=/usr/bin/docker run --rm --name aegis-m4j-spire-agent --network host --pid host --read-only --cap-drop=ALL --cap-add=DAC_READ_SEARCH --cap-add=SYS_PTRACE --security-opt=no-new-privileges --user 0:0 --mount type=bind,src=/etc/aegis-ot/spire/agent/agent.conf,dst=/etc/spire/agent/agent.conf,readonly --mount type=bind,src={{ m4j_workload_plan.node_agent.data_directory }},dst=/var/lib/spire/agent --mount type=bind,src={{ m4j_workload_plan.node_agent.socket_directory }},dst=/run/spire/agent/public --mount type=bind,src={{ m4j_workload_plan.node_agent.bootstrap_directory }},dst=/run/spire/bootstrap,readonly --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1m,mode=1777 {{ m4j_workload_plan.runtime_images['spire-agent'].image_id }} $SPIRE_JOIN_TOKEN_ARGUMENT -config /etc/spire/agent/agent.conf
+ExecStop=-/usr/bin/docker stop --time 10 aegis-m4j-spire-agent
+KillMode=none
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -56,3 +56,6 @@ m4j_service_account:
 m4j_vagrant_communicator_marker_path: >-
   {{ (playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
      m4j_vagrant_machine ~ "/virtualbox/m4j-management-communicator" }}
+m4j_vagrant_host_key_evidence_path: >-
+  {{ (playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
+     m4j_vagrant_machine ~ "/virtualbox/m4j-ssh-host-ed25519.pub" }}

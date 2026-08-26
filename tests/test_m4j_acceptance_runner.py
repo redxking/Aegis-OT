@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import ast
+import base64
 import copy
 import json
 import re
 import shutil
 import stat
 import subprocess
+import zlib
 from collections.abc import Callable
 from importlib import import_module
 from pathlib import Path
@@ -21,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def runner(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
-    return import_module("run_m4j_acceptance")
+    module = import_module("run_m4j_acceptance")
+    monkeypatch.setattr(module, "_PARTITION_RECONCILIATION_INTERVAL_SECONDS", 0)
+    return module
 
 
 def _topology() -> dict[str, Any]:
@@ -53,10 +57,12 @@ def _repository(tmp_path: Path) -> Path:
     shutil.copy2(ROOT / "scripts" / "run_m4j_acceptance.py", repository / "scripts")
     shutil.copy2(ROOT / "infra" / "m4j" / "topology.yml", repository / "infra" / "m4j")
     shutil.copy2(ROOT / "infra" / "m4j" / "deployment.yml", repository / "infra" / "m4j")
+    shutil.copy2(ROOT / "infra" / "m4j" / "workloads.yml", repository / "infra" / "m4j")
     _run_git(repository, "init", "-q")
     _run_git(repository, "add", "scripts/run_m4j_acceptance.py")
     _run_git(repository, "add", "infra/m4j/topology.yml")
     _run_git(repository, "add", "infra/m4j/deployment.yml")
+    _run_git(repository, "add", "infra/m4j/workloads.yml")
     _run_git(
         repository,
         "-c",
@@ -69,6 +75,46 @@ def _repository(tmp_path: Path) -> Path:
         "fixture",
     )
     return repository
+
+
+def _ssh_transport_inputs(tmp_path: Path) -> tuple[Path, Path]:
+    identities = tmp_path / "identities"
+    identities.mkdir(mode=0o700, exist_ok=True)
+    config_lines: list[str] = []
+    algorithm = b"ssh-ed25519"
+    host_key_prefix = (
+        len(algorithm).to_bytes(4, "big")
+        + algorithm
+        + (32).to_bytes(4, "big")
+    )
+    known_host_lines: list[str] = []
+    for index, role in enumerate(
+        ("management", "trust", "agents", "gateway", "ot", "simulation"),
+        start=1,
+    ):
+        address = f"192.168.56.{index + 9}"
+        identity = identities / f"{role}.key"
+        identity.write_bytes(f"synthetic-private-identity-{role}\n".encode("ascii"))
+        identity.chmod(0o600)
+        config_lines.extend(
+            (
+                f"Host {role}",
+                f"  HostName {address}",
+                "  User vagrant",
+                f"  IdentityFile {identity}",
+            )
+        )
+        encoded = base64.b64encode(host_key_prefix + bytes([index]) * 32).decode(
+            "ascii"
+        )
+        known_host_lines.append(f"{role},{address} ssh-ed25519 {encoded}")
+    config = tmp_path / "ssh-config"
+    config.write_text("\n".join(config_lines) + "\n", encoding="utf-8")
+    config.chmod(0o600)
+    known_hosts = tmp_path / "known_hosts"
+    known_hosts.write_text("\n".join(known_host_lines) + "\n", encoding="ascii")
+    known_hosts.chmod(0o600)
+    return config, known_hosts
 
 
 def _interfaces(role: str, topology: dict[str, Any]) -> dict[str, str]:
@@ -226,7 +272,7 @@ def _fake_executor(
         check["check_id"]: bool(check["expected_connected"])
         for check in runner._connectivity_contract(topology, deployment)
     }
-    state: dict[str, Any] = {"partitioned": False, "fact_calls": {}}
+    state: dict[str, Any] = {"partitioned": False, "fact_calls": {}, "ssh_configs": set()}
 
     def execute(
         _ssh_config: Path,
@@ -235,6 +281,7 @@ def _fake_executor(
         stdin_bytes: bytes,
         _timeout: float,
     ) -> Any:
+        state["ssh_configs"].add(_ssh_config)
         if remote_argv[-2:] == ("/usr/bin/python3", "-"):
             payload = _payload(stdin_bytes)
             if b"aegis-m4j-remote-probe-v1:facts" in stdin_bytes:
@@ -312,14 +359,21 @@ def test_plan_is_exact_source_bound_and_does_not_execute_ssh(
     }
     assert before == after
     assert plan["mode"] == "plan_only"
-    assert plan["accepted"] is False
+    assert plan["network_acceptance_passed"] is False
     assert plan["source_binding"]["clean_checkout"] is True
     assert {entry["path"] for entry in plan["source_binding"]["files"]} == {
         "scripts/run_m4j_acceptance.py",
         "infra/m4j/topology.yml",
         "infra/m4j/deployment.yml",
+        "infra/m4j/workloads.yml",
     }
-    assert plan["unresolved_gates"][0]["gate_id"] == "multi_host_spire_bootstrap"
+    assert plan["implementation_gates"][0]["status"] == (
+        "implemented_live_validation_pending"
+    )
+    assert plan["workload_live_probe"] == {
+        "evidence_supplied": False,
+        "status": "not_run",
+    }
     assert plan["packet_metadata_contract"]["payload_capture"] is False
     assert plan["firewall_contract"]["management"] == [
         {
@@ -348,7 +402,110 @@ def test_source_binding_rejects_any_worktree_drift(
     else:
         (repository / "untracked.txt").write_text("drift\n", encoding="utf-8")
 
-    with pytest.raises(runner.AcceptanceError, match="clean checkout"):
+    with pytest.raises(runner.AcceptanceError, match="differs from HEAD|clean checkout"):
+        runner._source_binding(repository)
+
+
+@pytest.mark.parametrize("mask", ["--assume-unchanged", "--skip-worktree"])
+def test_source_binding_rejects_index_masked_tracked_drift(
+    runner: Any, tmp_path: Path, mask: str
+) -> None:
+    repository = _repository(tmp_path)
+    path = repository / "infra" / "m4j" / "topology.yml"
+    _run_git(repository, "update-index", mask, "infra/m4j/topology.yml")
+    path.write_bytes(path.read_bytes() + b"\nmasked-drift: true\n")
+    assert _run_git(repository, "status", "--porcelain=v1") == ""
+
+    with pytest.raises(runner.AcceptanceError, match="differs from HEAD"):
+        runner._source_binding(repository)
+
+
+def test_source_binding_rejects_index_masked_drift_outside_fingerprint_files(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    extra = repository / "tracked-support.txt"
+    extra.write_text("committed\n", encoding="utf-8")
+    _run_git(repository, "add", "tracked-support.txt")
+    _run_git(
+        repository,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        "support fixture",
+    )
+    _run_git(repository, "update-index", "--assume-unchanged", "tracked-support.txt")
+    extra.write_text("masked\n", encoding="utf-8")
+    assert _run_git(repository, "status", "--porcelain=v1") == ""
+
+    with pytest.raises(runner.AcceptanceError, match="tracked-support.txt"):
+        runner._source_binding(repository)
+
+
+def test_source_binding_rejects_corrupted_head_blob_with_matching_worktree(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    relative = "infra/m4j/topology.yml"
+    path = repository / relative
+    object_id = _run_git(repository, "rev-parse", f"HEAD:{relative}").strip()
+    object_path = repository / ".git" / "objects" / object_id[:2] / object_id[2:]
+    assert object_path.is_file()
+    _run_git(repository, "update-index", "--assume-unchanged", relative)
+    malicious = path.read_bytes() + b"\nmasked-object-corruption: true\n"
+    path.write_bytes(malicious)
+    object_path.chmod(0o600)
+    object_path.write_bytes(
+        zlib.compress(f"blob {len(malicious)}\x00".encode("ascii") + malicious)
+    )
+
+    with pytest.raises(runner.AcceptanceError, match="exact M4j source binding"):
+        runner._source_binding(repository)
+
+
+def test_source_binding_disables_configured_fsmonitor_execution(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    marker = tmp_path / "fsmonitor-executed"
+    monitor = tmp_path / "fsmonitor"
+    monitor.write_text(f"#!/bin/sh\n/usr/bin/touch {marker}\n", encoding="utf-8")
+    monitor.chmod(0o700)
+    _run_git(repository, "config", "core.fsmonitor", str(monitor))
+
+    binding = runner._source_binding(repository)
+
+    assert binding["clean_checkout"] is True
+    assert not marker.exists()
+
+
+def test_source_binding_rejects_external_git_config_and_object_sources(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    external = tmp_path / "external.gitconfig"
+    external.write_text("[core]\n\tfsmonitor = /bin/false\n", encoding="utf-8")
+    config = repository / ".git" / "config"
+    config.write_text(
+        config.read_text(encoding="utf-8")
+        + f"\n[include]\n\tpath = {external}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(runner.AcceptanceError, match="includes are forbidden"):
+        runner._source_binding(repository)
+
+    config.write_text(
+        config.read_text(encoding="utf-8").split("\n[include]", maxsplit=1)[0] + "\n",
+        encoding="utf-8",
+    )
+    alternate = repository / ".git" / "objects" / "info" / "alternates"
+    alternate.write_text(str(tmp_path / "objects") + "\n", encoding="utf-8")
+    with pytest.raises(runner.AcceptanceError, match="alternate"):
         runner._source_binding(repository)
 
 
@@ -577,28 +734,89 @@ def test_recorded_ssh_retains_only_hashes_and_bounded_result_metadata(
     assert runner._command_hashes_complete(command_records) is True
 
 
+def test_ssh_transport_rejects_ambient_directives_and_reused_host_keys(
+    runner: Any, tmp_path: Path
+) -> None:
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
+    ssh_config.write_text(
+        ssh_config.read_text(encoding="utf-8") + "  ProxyCommand /bin/true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(runner.AcceptanceError, match="forbidden directive"):
+        with runner._stable_ssh_transport(ssh_config, known_hosts):
+            pass
+
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
+    lines = known_hosts.read_text(encoding="ascii").splitlines()
+    first_key = lines[0].split(" ", maxsplit=2)[2]
+    role_address, algorithm, _last_key = lines[-1].split(" ")
+    lines[-1] = f"{role_address} {algorithm} {first_key}"
+    known_hosts.write_text("\n".join(lines) + "\n", encoding="ascii")
+    with pytest.raises(runner.AcceptanceError, match="distinct host key"):
+        with runner._stable_ssh_transport(ssh_config, known_hosts):
+            pass
+
+
+def test_execute_ssh_forces_pinned_closed_transport(
+    runner: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+    stable = tmp_path / "stable"
+    stable.mkdir(mode=0o700)
+    config = stable / "config"
+    config.write_text("closed\n", encoding="utf-8")
+    config.chmod(0o600)
+
+    def run(command: tuple[str, ...], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        captured["command"] = command
+        captured["environment"] = kwargs["env"]
+        return subprocess.CompletedProcess(command, 0, stdout=b"ok", stderr=b"")
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    outcome = runner._execute_ssh(config, "management", ("/bin/true",), b"", 1.0)
+
+    command = captured["command"]
+    assert command[0] == "/usr/bin/ssh"
+    assert ("-F", str(config)) == command[1:3]
+    assert "StrictHostKeyChecking=yes" in command
+    assert f"UserKnownHostsFile={stable / 'known_hosts'}" in command
+    assert "GlobalKnownHostsFile=/dev/null" in command
+    assert "ProxyCommand=none" in command
+    assert "ProxyJump=none" in command
+    assert captured["environment"] == {
+        "HOME": "/dev/null",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+    }
+    assert outcome.returncode == 0
+
+
 def test_mocked_live_campaign_publishes_private_closed_evidence(
     runner: Any, tmp_path: Path
 ) -> None:
     repository = _repository(tmp_path)
     topology = _topology()
     deployment = _deployment()
-    ssh_config = tmp_path / "ssh-config"
-    ssh_config.write_text("Host *\n  BatchMode yes\n", encoding="utf-8")
-    ssh_config.chmod(0o600)
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
     output = tmp_path / "m4j-evidence.json"
     executor, state = _fake_executor(runner, topology, deployment)
 
     evidence = runner.run_live(
         output,
         ssh_config,
+        known_hosts,
         root=repository,
         executor=executor,
     )
 
-    assert evidence["accepted"] is True
+    assert evidence["network_acceptance_passed"] is True
     assert all(evidence["acceptance"].values())
     assert state["partitioned"] is False
+    assert len(state["ssh_configs"]) == 1
+    stable_config = next(iter(state["ssh_configs"]))
+    assert stable_config != ssh_config
+    assert not stable_config.exists()
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert json.loads(output.read_text(encoding="utf-8")) == evidence
     assert evidence["gateway_partition"] == {
@@ -619,17 +837,19 @@ def test_mocked_live_campaign_publishes_private_closed_evidence(
     assert all(
         item["payload_captured"] is False for item in evidence["packet_metadata"].values()
     )
-    assert len(evidence["commands"]) == 25
+    assert len(evidence["commands"]) == 32
     assert "ssh-config" not in json.dumps(evidence)
+    assert evidence["ssh_transport"]["known_hosts"]["distinct_host_key_count"] == 6
+    assert evidence["semantic_projection"]["ssh_transport"][
+        "known_hosts_sha256"
+    ] == evidence["ssh_transport"]["known_hosts"]["sha256"]
 
 
 def test_partition_failure_removes_only_its_exact_rule_and_does_not_publish(
     runner: Any, tmp_path: Path
 ) -> None:
     repository = _repository(tmp_path)
-    ssh_config = tmp_path / "ssh-config"
-    ssh_config.write_text("Host *\n", encoding="utf-8")
-    ssh_config.chmod(0o600)
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
     output = tmp_path / "rejected.json"
     executor, state = _fake_executor(
         runner,
@@ -639,9 +859,77 @@ def test_partition_failure_removes_only_its_exact_rule_and_does_not_publish(
     )
 
     with pytest.raises(runner.AcceptanceError, match="partitioned"):
-        runner.run_live(output, ssh_config, root=repository, executor=executor)
+        runner.run_live(
+            output,
+            ssh_config,
+            known_hosts,
+            root=repository,
+            executor=executor,
+        )
 
     assert state["partitioned"] is False
+    assert not output.exists()
+
+
+def test_partition_insert_lost_response_still_reconciles_exact_rule_absent(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
+    output = tmp_path / "lost-response.json"
+    execute, state = _fake_executor(runner, _topology(), _deployment())
+    insert_response_lost = False
+
+    def lost_response_executor(*args: Any) -> Any:
+        nonlocal insert_response_lost
+        remote_argv = args[2]
+        if "-I" in remote_argv and not insert_response_lost:
+            insert_response_lost = True
+            state["partitioned"] = True
+            raise runner.AcceptanceError("synthetic lost insert response")
+        return execute(*args)
+
+    with pytest.raises(runner.AcceptanceError, match="lost insert response"):
+        runner.run_live(
+            output,
+            ssh_config,
+            known_hosts,
+            root=repository,
+            executor=lost_response_executor,
+        )
+
+    assert insert_response_lost is True
+    assert state["partitioned"] is False
+    assert not output.exists()
+
+
+def test_stable_ssh_transport_drift_rejects_and_removes_evidence(
+    runner: Any, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
+    output = tmp_path / "transport-drift.json"
+    execute, _state = _fake_executor(runner, _topology(), _deployment())
+    mutated = False
+
+    def mutating_executor(*args: Any) -> Any:
+        nonlocal mutated
+        stable_config = args[0]
+        if not mutated:
+            stable_config.write_bytes(stable_config.read_bytes() + b"# drift\n")
+            mutated = True
+        return execute(*args)
+
+    with pytest.raises(runner.AcceptanceError, match="stable SSH transport input"):
+        runner.run_live(
+            output,
+            ssh_config,
+            known_hosts,
+            root=repository,
+            executor=mutating_executor,
+        )
+
+    assert mutated is True
     assert not output.exists()
 
 
@@ -649,29 +937,31 @@ def test_live_output_and_ssh_configuration_are_fail_closed(
     runner: Any, tmp_path: Path
 ) -> None:
     repository = _repository(tmp_path)
-    ssh_config = tmp_path / "ssh-config"
-    ssh_config.write_text("Host *\n", encoding="utf-8")
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
     ssh_config.chmod(0o644)
     output = tmp_path / "existing.json"
     output.write_text("retain\n", encoding="utf-8")
 
-    with pytest.raises(runner.AcceptanceError, match="group or others"):
-        runner.run_live(output, ssh_config, root=repository)
+    with pytest.raises(runner.AcceptanceError, match="mode must"):
+        runner.run_live(output, ssh_config, known_hosts, root=repository)
 
     ssh_config.chmod(0o600)
     with pytest.raises(runner.AcceptanceError, match="overwrite"):
-        runner.run_live(output, ssh_config, root=repository)
+        runner.run_live(output, ssh_config, known_hosts, root=repository)
     assert output.read_text(encoding="utf-8") == "retain\n"
 
 
 def test_live_output_must_be_outside_source_checkout(runner: Any, tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    ssh_config = tmp_path / "ssh-config"
-    ssh_config.write_text("Host *\n", encoding="utf-8")
-    ssh_config.chmod(0o600)
+    ssh_config, known_hosts = _ssh_transport_inputs(tmp_path)
 
     with pytest.raises(runner.AcceptanceError, match="outside"):
-        runner.run_live(repository / "evidence.json", ssh_config, root=repository)
+        runner.run_live(
+            repository / "evidence.json",
+            ssh_config,
+            known_hosts,
+            root=repository,
+        )
 
 
 def test_plan_parser_rejects_live_arguments(runner: Any) -> None:
@@ -680,7 +970,9 @@ def test_plan_parser_rejects_live_arguments(runner: Any) -> None:
     assert arguments.plan is True
     assert arguments.output == Path("evidence.json")
     # main performs the cross-option rejection before any source or SSH action.
-    assert "does not accept" in "--plan does not accept --output or --ssh-config"
+    assert "does not accept" in (
+        "--plan does not accept --output, --ssh-config, or --known-hosts"
+    )
 
 
 def test_runner_source_has_no_shell_execution_or_packet_capture(runner: Any) -> None:

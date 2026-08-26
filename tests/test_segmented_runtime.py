@@ -635,6 +635,20 @@ def test_compose_places_agent_probe_outside_control_networks() -> None:
     assert "ports" not in services["opa"]
 
 
+def test_base_segmented_stack_installs_its_simulation_runtime() -> None:
+    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
+    for name in (
+        "segmented-gateway",
+        "observer",
+        "ot-adapter",
+        "simulation",
+        "agent-probe",
+    ):
+        assert compose["services"][name]["build"]["args"]["AEGIS_INSTALL_TARGET"] == (
+            ".[simulation]"
+        )
+
+
 def test_replay_overlay_requires_identity_bound_single_writer_volume() -> None:
     base = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
     replay = yaml.safe_load(

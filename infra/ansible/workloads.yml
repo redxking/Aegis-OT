@@ -1,0 +1,950 @@
+---
+- name: Load the controller-compiled exact-source M4j host plans
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    m4j_source_commit: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_SOURCE_COMMIT') }}
+    m4j_bundle_directory: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_BUNDLE_DIRECTORY') }}
+    m4j_runtime_image_directory: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_RUNTIME_IMAGE_DIRECTORY') }}
+    m4j_secret_directory: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_SECRET_DIRECTORY') }}
+    m4j_plan_file: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PLAN_FILE') }}
+    m4j_plan_file_sha256: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PLAN_FILE_SHA256') }}
+    m4j_host_plan_semantic_sha256: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_HOST_PLAN_SEMANTIC_SHA256') }}
+    m4j_roles: [management, trust, agents, gateway, ot, simulation]
+  tasks:
+    - name: Load the authoritative M4j topology for workload orchestration
+      ansible.builtin.include_vars:
+        file: ../m4j/topology.yml
+        name: m4j_topology
+
+    - name: Load the source-bound M4j workload orchestration contract
+      ansible.builtin.include_vars:
+        file: ../m4j/workloads.yml
+        name: m4j_workload_contract
+
+    - name: Reject absent controller inputs or Ansible version drift
+      ansible.builtin.assert:
+        that:
+          - m4j_source_commit is match("^[0-9a-f]{40}([0-9a-f]{24})?$")
+          - m4j_bundle_directory | length > 0
+          - m4j_runtime_image_directory | length > 0
+          - m4j_secret_directory | length > 0
+          - m4j_plan_file | length > 0
+          - m4j_plan_file_sha256 is match("^[0-9a-f]{64}$")
+          - m4j_host_plan_semantic_sha256 is match("^[0-9a-f]{64}$")
+          - m4j_workload_contract.orchestration.engine == "ansible-core"
+          - m4j_workload_contract.orchestration.version == "2.19.12"
+          - >-
+            ansible_version.full == m4j_workload_contract.orchestration.version
+        fail_msg: "M4j workload deployment requires exact source, private inputs, and Ansible pin."
+
+    - name: Reject inventory drift from exact management-plane destinations
+      ansible.builtin.assert:
+        that:
+          - >-
+            groups['all'] | reject('equalto', 'localhost') | list | sort ==
+            m4j_roles | sort
+          - groups[item] == [item]
+          - hostvars[item].aegis_role == item
+          - >-
+            hostvars[item].ansible_host ==
+            m4j_topology.nodes[item].interfaces.management
+        fail_msg: "M4j inventory differs from the source-bound management topology."
+      loop: "{{ m4j_roles }}"
+
+    - name: Inspect every validated Vagrant management communicator marker
+      ansible.builtin.stat:
+        path: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/m4j-management-communicator' }}
+        follow: false
+      loop: "{{ m4j_roles }}"
+      register: m4j_communicator_markers
+
+    - name: Reject any absent, linked, or non-private management communicator marker
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - not item.stat.islnk
+          - item.stat.mode == "0600"
+        fail_msg: "Every host must first complete defensive base provisioning."
+      loop: "{{ m4j_communicator_markers.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read every management communicator marker
+      ansible.builtin.slurp:
+        path: "{{ item.stat.path }}"
+      loop: "{{ m4j_communicator_markers.results }}"
+      register: m4j_communicator_contents
+
+    - name: Inspect every role-specific Vagrant management private key
+      ansible.builtin.stat:
+        path: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/private_key' }}
+        follow: false
+      loop: "{{ m4j_roles }}"
+      register: m4j_management_private_keys
+
+    - name: Reject an absent, linked, or non-private management key
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - not item.stat.islnk
+          - item.stat.mode == "0600"
+        fail_msg: "Each host requires its role-specific private Vagrant SSH key."
+      loop: "{{ m4j_management_private_keys.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      no_log: true
+
+    - name: Reject a communicator marker not bound to its exact role and address
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.content | b64decode ==
+            "aegis-ot-m4j-management-communicator-v1\nrole=" + item.item.item +
+            "\naddress=" + m4j_topology.nodes[item.item.item].interfaces.management + "\n"
+        fail_msg: "A Vagrant communicator marker differs from the topology contract."
+      loop: "{{ m4j_communicator_contents.results }}"
+      loop_control:
+        label: "{{ item.item.item }}"
+
+    - name: Inspect the private immutable controller plan set
+      ansible.builtin.stat:
+        path: "{{ m4j_plan_file }}"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: m4j_controller_plan_stat
+      no_log: true
+
+    - name: Reject a changed, linked, or non-private controller plan set
+      ansible.builtin.assert:
+        that:
+          - m4j_controller_plan_stat.stat.exists
+          - m4j_controller_plan_stat.stat.isreg
+          - not m4j_controller_plan_stat.stat.islnk
+          - m4j_controller_plan_stat.stat.mode == "0600"
+          - m4j_controller_plan_stat.stat.checksum == m4j_plan_file_sha256
+        fail_msg: "Controller host plans differ from the precompiled exact plan set."
+      no_log: true
+
+    - name: Read the private immutable controller plan set
+      ansible.builtin.slurp:
+        path: "{{ m4j_plan_file }}"
+      register: m4j_controller_plan_content
+      no_log: true
+
+    - name: Decode the private immutable controller plan set
+      ansible.builtin.set_fact:
+        m4j_controller_plan_set: >-
+          {{ m4j_controller_plan_content.content | b64decode | from_json }}
+      no_log: true
+
+    - name: Reject a controller plan set outside the exact signed contract
+      ansible.builtin.assert:
+        that:
+          - >-
+            m4j_controller_plan_content.content | b64decode | hash('sha256') ==
+            m4j_plan_file_sha256
+          - >-
+            m4j_controller_plan_set.keys() | list | sort ==
+            ['host_plan_semantic_sha256', 'plans', 'schema_version', 'source_git_commit']
+          - >-
+            m4j_controller_plan_set.schema_version ==
+            'aegis-ot-m4j-controller-plan-set-v1'
+          - m4j_controller_plan_set.source_git_commit == m4j_source_commit
+          - >-
+            m4j_controller_plan_set.host_plan_semantic_sha256 ==
+            m4j_host_plan_semantic_sha256
+          - >-
+            m4j_controller_plan_set.plans |
+            to_json(sort_keys=True, separators=[',', ':'], ensure_ascii=True,
+                    allow_nan=False) | hash('sha256') ==
+            m4j_host_plan_semantic_sha256
+          - >-
+            m4j_controller_plan_set.plans.keys() | list | sort ==
+            m4j_roles | sort
+        fail_msg: "Controller host plans are not bound to the exact deployment request."
+      no_log: true
+
+    - name: Attach only the immutable plans and private input roots to inventory hosts
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        m4j_workload_plan: "{{ m4j_controller_plan_set.plans[item] }}"
+        m4j_source_commit: "{{ m4j_source_commit }}"
+        m4j_bundle_directory: "{{ m4j_bundle_directory }}"
+        m4j_secret_directory: "{{ m4j_secret_directory }}"
+        m4j_runtime_image_directory: "{{ m4j_runtime_image_directory }}"
+        m4j_topology: "{{ m4j_topology }}"
+        ansible_ssh_private_key_file: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/private_key' }}
+      loop: "{{ m4j_roles }}"
+      changed_when: false
+      no_log: true
+
+- name: Distribute and verify exact-source application artifacts
+  hosts: trust:agents:gateway:ot:simulation
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_artifacts
+
+- name: Converge exact default-deny host firewall policy before identity or workload activation
+  hosts: management:trust:agents:gateway:ot:simulation
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_firewall
+
+- name: Establish the trust-host SPIRE server before issuing node material
+  hosts: trust
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_spire_server
+
+- name: Configure and attest each SPIRE agent with distinct one-time material
+  hosts: trust:agents:gateway:ot:simulation
+  become: true
+  gather_facts: false
+  serial: 1
+  roles:
+    - role: m4j_spire_agent
+  tasks:
+    - name: Bootstrap only an agent without a current healthy local identity
+      when: m4j_spire_agent_initial_health.rc != 0
+      no_log: true
+      block:
+        - name: Initialize this bootstrap attempt as unverified
+          ansible.builtin.set_fact:
+            m4j_spire_bootstrap_verified: false
+
+        - name: Arm one server-side role-bound bootstrap attempt before token mutation
+          ansible.builtin.command:
+            argv:
+              - /usr/local/libexec/aegis-m4j-revoke-spire-join-token
+              - --operation
+              - arm
+              - --alias-spiffe-id
+              - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+          delegate_to: trust
+          become: true
+          changed_when: true
+          register: m4j_join_token_attempt_arm
+
+        - name: Generate and escrow one role-bound short-lived SPIRE join token on trust
+          ansible.builtin.command:
+            argv:
+              - /usr/local/libexec/aegis-m4j-revoke-spire-join-token
+              - --operation
+              - generate
+              - --alias-spiffe-id
+              - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+              - --token-ttl-seconds
+              - "{{ m4j_workload_plan.node_bootstrap.token_ttl_seconds | string }}"
+          delegate_to: trust
+          become: true
+          changed_when: true
+          register: m4j_join_token_response
+
+        - name: Select the one-time token without retaining it in output
+          ansible.builtin.set_fact:
+            m4j_join_token: "{{ (m4j_join_token_response.stdout | from_json).value }}"
+
+        - name: Reject an empty or unbounded SPIRE join token
+          ansible.builtin.assert:
+            that:
+              - >-
+                (m4j_join_token_response.stdout | from_json).keys() | list | sort ==
+                ['escrowed', 'schema_version', 'value']
+              - >-
+                (m4j_join_token_response.stdout | from_json).schema_version ==
+                'aegis-ot-m4j-spire-escrowed-token-generation-v1'
+              - (m4j_join_token_response.stdout | from_json).escrowed is sameas true
+              - m4j_join_token is string
+              - >-
+                m4j_join_token is match(
+                  "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                )
+
+        - name: Derive only the actual token-attested node ID for this attempt
+          ansible.builtin.set_fact:
+            m4j_join_token_agent_spiffe_id: >-
+              {{ 'spiffe://' ~ m4j_workload_plan.trust_domain ~
+                 '/spire/agent/join_token/' ~ m4j_join_token }}
+
+        - name: Deliver this token directly over the authorized management SSH path
+          ansible.builtin.copy:
+            content: "{{ m4j_join_token }}\n"
+            dest: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/join-token"
+            owner: root
+            group: root
+            mode: "0400"
+
+        - name: Enable the join-token file argument only for this bootstrap start
+          ansible.builtin.copy:
+            content: "SPIRE_JOIN_TOKEN_ARGUMENT=-joinTokenFile=/run/spire/bootstrap/join-token\n"
+            dest: >-
+              {{ m4j_workload_plan.node_agent.bootstrap_directory }}/agent-bootstrap.env
+            owner: root
+            group: root
+            mode: "0400"
+
+        - name: Start or restart this role-distinct SPIRE agent for one-time attestation
+          ansible.builtin.systemd:
+            name: aegis-m4j-spire-agent.service
+            enabled: true
+            state: restarted
+
+        - name: Wait for this role-distinct SPIRE agent to become healthy
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/docker
+              - exec
+              - aegis-m4j-spire-agent
+              - /opt/spire/bin/spire-agent
+              - healthcheck
+              - -socketPath
+              - /run/spire/agent/public/api.sock
+          changed_when: false
+          register: m4j_spire_agent_bootstrap_health
+          retries: 30
+          delay: 2
+          until: m4j_spire_agent_bootstrap_health.rc == 0
+
+        - name: Read the bounded join-token agent inventory before token clearing
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/docker
+              - exec
+              - aegis-m4j-spire-server
+              - /opt/spire/bin/spire-server
+              - agent
+              - list
+              - -attestationType
+              - join_token
+              - -output
+              - json
+              - -socketPath
+              - /run/spire/server/private/api.sock
+          delegate_to: trust
+          become: true
+          changed_when: false
+          register: m4j_join_token_agent_inventory_response
+
+        - name: Select the actual token-derived agent without exposing its ID
+          ansible.builtin.set_fact:
+            m4j_join_token_agent_inventory: >-
+              {{ m4j_join_token_agent_inventory_response.stdout | from_json }}
+            m4j_join_token_agent_matches: >-
+              {{ (m4j_join_token_agent_inventory_response.stdout | from_json).agents |
+                 selectattr('id.trust_domain', 'equalto', m4j_workload_plan.trust_domain) |
+                 selectattr('id.path', 'equalto',
+                   '/spire/agent/join_token/' ~ m4j_join_token) | list }}
+
+        - name: Reject an absent, ambiguous, or inexact token-derived agent
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_join_token_agent_inventory.keys() | list | sort ==
+                ['agents', 'next_page_token']
+              - m4j_join_token_agent_inventory.next_page_token == ""
+              - m4j_join_token_agent_inventory.agents | length <= 64
+              - m4j_join_token_agent_matches | length == 1
+              - m4j_join_token_agent_matches[0].attestation_type == "join_token"
+              - >-
+                m4j_join_token_agent_matches[0].selectors ==
+                [{'type': 'spiffe_id', 'value': m4j_join_token_agent_spiffe_id}]
+              - m4j_join_token_agent_matches[0].banned is sameas false
+              - m4j_join_token_agent_matches[0].can_reattest is sameas false
+              - >-
+                m4j_join_token_agent_matches[0].x509_svid_serial_number is string
+              - >-
+                m4j_join_token_agent_matches[0].x509_svid_serial_number | length > 0
+              - m4j_join_token_agent_matches[0].x509_svid_expires_at is string
+              - >-
+                m4j_join_token_agent_matches[0].x509_svid_expires_at is
+                match("^[1-9][0-9]*$")
+            fail_msg: "SPIRE did not attest exactly the token-derived join-token agent."
+
+        - name: Read the configured role alias as a registration entry
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/docker
+              - exec
+              - aegis-m4j-spire-server
+              - /opt/spire/bin/spire-server
+              - entry
+              - show
+              - -spiffeID
+              - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+              - -output
+              - json
+              - -socketPath
+              - /run/spire/server/private/api.sock
+          delegate_to: trust
+          become: true
+          changed_when: false
+          register: m4j_join_token_alias_inventory_response
+
+        - name: Select the single auto-created role alias entry
+          ansible.builtin.set_fact:
+            m4j_join_token_alias_inventory: >-
+              {{ m4j_join_token_alias_inventory_response.stdout | from_json }}
+
+        - name: Reject an absent or ambiguous role alias entry
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_join_token_alias_inventory.keys() | list | sort ==
+                ['entries', 'next_page_token']
+              - m4j_join_token_alias_inventory.next_page_token == ""
+              - m4j_join_token_alias_inventory.entries | length == 1
+            fail_msg: "SPIRE did not return one exact join-token role alias entry."
+
+        - name: Select the exact role alias mapping for semantic audit
+          ansible.builtin.set_fact:
+            m4j_join_token_alias_entry: >-
+              {{ m4j_join_token_alias_inventory.entries | first }}
+
+        - name: Reject any unexpected auto-created role alias semantics
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_join_token_alias_entry.id is match(
+                  "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                )
+              - >-
+                m4j_join_token_alias_entry.parent_id ==
+                {'trust_domain': m4j_workload_plan.trust_domain,
+                 'path': '/spire/agent/join_token/' ~ m4j_join_token}
+              - >-
+                m4j_join_token_alias_entry.spiffe_id ==
+                {'trust_domain': m4j_workload_plan.trust_domain,
+                 'path': '/agent/' ~ inventory_hostname}
+              - >-
+                m4j_join_token_alias_entry.selectors ==
+                [{'type': 'spiffe_id', 'value': m4j_join_token_agent_spiffe_id}]
+              - m4j_join_token_alias_entry.x509_svid_ttl | type_debug == "int"
+              - m4j_join_token_alias_entry.x509_svid_ttl == 0
+              - m4j_join_token_alias_entry.jwt_svid_ttl | type_debug == "int"
+              - m4j_join_token_alias_entry.jwt_svid_ttl == 0
+              - m4j_join_token_alias_entry.expires_at | type_debug == "str"
+              - m4j_join_token_alias_entry.expires_at == "0"
+              - m4j_join_token_alias_entry.federates_with == []
+              - m4j_join_token_alias_entry.dns_names == []
+              - m4j_join_token_alias_entry.admin is sameas false
+              - m4j_join_token_alias_entry.downstream is sameas false
+              - m4j_join_token_alias_entry.store_svid is sameas false
+              - m4j_join_token_alias_entry.hint | default('') == ''
+            fail_msg: "SPIRE role alias does not exactly map to the token-derived node."
+
+        - name: Mark only the fully audited bootstrap attempt as verified
+          ansible.builtin.set_fact:
+            m4j_spire_bootstrap_verified: true
+      always:
+        - name: Quiesce any bootstrap attempt that did not complete exact identity audit
+          ansible.builtin.systemd:
+            name: aegis-m4j-spire-agent.service
+            state: stopped
+          when: not (m4j_spire_bootstrap_verified | default(false) | bool)
+          register: m4j_spire_bootstrap_quiesce
+          failed_when: false
+
+        - name: Revoke any unconsumed server-side join token and verify absence
+          ansible.builtin.command:
+            argv:
+              - /usr/local/libexec/aegis-m4j-revoke-spire-join-token
+              - --operation
+              - cleanup-escrow
+              - --database
+              - /var/lib/aegis-ot/spire/server/datastore.sqlite3
+              - --alias-spiffe-id
+              - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+              - --bootstrap-outcome
+              - >-
+                {{ 'verified' if
+                   (m4j_spire_bootstrap_verified | default(false) | bool)
+                   else 'unverified' }}
+              - --trust-domain
+              - "{{ m4j_workload_plan.trust_domain }}"
+          delegate_to: trust
+          become: true
+          no_log: true
+          register: m4j_join_token_revocation
+          changed_when: false
+          failed_when: false
+
+        - name: Delete the one-time join-token file after each host attempt
+          ansible.builtin.file:
+            path: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/join-token"
+            state: absent
+          register: m4j_join_token_file_deletion
+          failed_when: false
+
+        - name: Delete the one-time bootstrap argument after each host attempt
+          ansible.builtin.file:
+            path: >-
+              {{ m4j_workload_plan.node_agent.bootstrap_directory }}/agent-bootstrap.env
+            state: absent
+          register: m4j_bootstrap_argument_deletion
+          failed_when: false
+
+        - name: Clear the in-memory join-token fact after every host attempt
+          ansible.builtin.set_fact:
+            m4j_join_token: ""
+            m4j_join_token_agent_spiffe_id: ""
+            m4j_join_token_attempt_arm: {}
+            m4j_join_token_response: {}
+            m4j_join_token_agent_inventory_response: {}
+            m4j_join_token_agent_inventory: {}
+            m4j_join_token_agent_matches: []
+            m4j_join_token_alias_inventory_response: {}
+            m4j_join_token_alias_inventory: {}
+            m4j_join_token_alias_entry: {}
+            m4j_spire_bootstrap_verified: false
+          register: m4j_join_token_fact_clear
+          failed_when: false
+
+        - name: Require every server, host, and in-memory cleanup outcome
+          ansible.builtin.assert:
+            that:
+              - >-
+                (m4j_spire_bootstrap_quiesce.skipped | default(false)) or
+                ((m4j_spire_bootstrap_quiesce.status | default({})).get(
+                  'ActiveState', ''
+                ) == 'inactive')
+              - >-
+                (m4j_join_token_revocation.skipped | default(false)) or
+                ((m4j_join_token_revocation.rc | default(1)) == 0 and
+                 not (m4j_join_token_revocation.stdout | from_json).get(
+                   'attempt_file_present_after', true) and
+                 ((((m4j_join_token_revocation.stdout | from_json).get(
+                     'attempt_outcome', '') in
+                     ['no_attempt', 'no_token_generated']) and
+                    (m4j_join_token_revocation.stdout | from_json).get(
+                      'bootstrap_outcome', '') ==
+                    'unverified' and
+                    (m4j_join_token_revocation.stdout | from_json).get(
+                      'prior_identity_action', '') ==
+                    'preserved') or
+                   ((m4j_join_token_revocation.stdout | from_json).get(
+                      'attempt_outcome', '') ==
+                    'generated_token_reconciled' and
+                    not (m4j_join_token_revocation.stdout | from_json).get(
+                      'token_present_after', true) and
+                    (m4j_join_token_revocation.stdout | from_json).get(
+                      'token_outcome', '') in
+                    ['revoked', 'consumed_or_not_found'] and
+                    (((m4j_join_token_revocation.stdout | from_json).get(
+                       'bootstrap_outcome', '') ==
+                       'verified' and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'agent_action', '') ==
+                       'preserved' and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'alias_action', '') ==
+                       'preserved' and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'actual_agent_present_after', false) and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'alias_present_after', false)) or
+                     ((m4j_join_token_revocation.stdout | from_json).get(
+                       'bootstrap_outcome', '') ==
+                       'unverified' and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'agent_action', '') in
+                       ['evicted', 'already_absent'] and
+                       (m4j_join_token_revocation.stdout | from_json).get(
+                         'alias_action', '') in
+                       ['deleted', 'already_absent'] and
+                       not (m4j_join_token_revocation.stdout | from_json).get(
+                         'actual_agent_present_after', true) and
+                       not (m4j_join_token_revocation.stdout | from_json).get(
+                         'alias_present_after', true))))))
+              - m4j_join_token_file_deletion.state | default('') == 'absent'
+              - m4j_bootstrap_argument_deletion.state | default('') == 'absent'
+              - not (m4j_join_token_fact_clear.failed | default(false))
+              - m4j_join_token == ""
+              - m4j_join_token_agent_spiffe_id == ""
+              - m4j_join_token_attempt_arm == {}
+              - m4j_join_token_response == {}
+              - m4j_join_token_agent_inventory_response == {}
+              - m4j_join_token_agent_inventory == {}
+              - m4j_join_token_agent_matches == []
+              - m4j_join_token_alias_inventory_response == {}
+              - m4j_join_token_alias_inventory == {}
+              - m4j_join_token_alias_entry == {}
+              - >-
+                not (m4j_spire_bootstrap_verified | bool)
+            fail_msg: "One or more bounded SPIRE bootstrap cleanup outcomes failed."
+          no_log: true
+
+    - name: Reconcile retained server escrow for an already healthy exact agent
+      ansible.builtin.command:
+        argv:
+          - /usr/local/libexec/aegis-m4j-revoke-spire-join-token
+          - --operation
+          - cleanup-escrow
+          - --database
+          - /var/lib/aegis-ot/spire/server/datastore.sqlite3
+          - --alias-spiffe-id
+          - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+          - --bootstrap-outcome
+          - verified
+          - --trust-domain
+          - "{{ m4j_workload_plan.trust_domain }}"
+      delegate_to: trust
+      become: true
+      when: m4j_spire_agent_initial_health.rc == 0
+      register: m4j_healthy_agent_escrow_cleanup
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Require retained escrow absence without changing a healthy identity
+      ansible.builtin.assert:
+        that:
+          - (m4j_healthy_agent_escrow_cleanup.rc | default(1)) == 0
+          - >-
+            not (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+              'attempt_file_present_after', true)
+          - >-
+            (((m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+                'attempt_outcome', '') in ['no_attempt', 'no_token_generated']) and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'prior_identity_action', '') == 'preserved') or
+            ((m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+                'attempt_outcome', '') == 'generated_token_reconciled' and
+             not (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'token_present_after', true) and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'bootstrap_outcome', '') == 'verified' and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'agent_action', '') == 'preserved' and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'alias_action', '') == 'preserved' and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'actual_agent_present_after', false) and
+             (m4j_healthy_agent_escrow_cleanup.stdout | from_json).get(
+               'alias_present_after', false))
+        fail_msg: "A retained token escrow could not be reconciled without identity drift."
+      when: m4j_spire_agent_initial_health.rc == 0
+      no_log: true
+
+    - name: Restart a newly attested agent without any bootstrap argument
+      ansible.builtin.systemd:
+        name: aegis-m4j-spire-agent.service
+        state: restarted
+      when: m4j_spire_agent_initial_health.rc != 0
+
+    - name: Verify a newly attested agent restarts from only its role-distinct state
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/docker
+          - exec
+          - aegis-m4j-spire-agent
+          - /opt/spire/bin/spire-agent
+          - healthcheck
+          - -socketPath
+          - /run/spire/agent/public/api.sock
+      changed_when: false
+      register: m4j_spire_agent_post_cleanup_health
+      retries: 30
+      delay: 2
+      until: m4j_spire_agent_post_cleanup_health.rc == 0
+      when: m4j_spire_agent_initial_health.rc != 0
+
+    - name: Exact-audit the role alias and its actual token-derived agent
+      no_log: true
+      block:
+        - name: Read this role's SPIRE auto-alias registration
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/docker
+              - exec
+              - aegis-m4j-spire-server
+              - /opt/spire/bin/spire-server
+              - entry
+              - show
+              - -spiffeID
+              - "{{ m4j_workload_plan.node_agent.spiffe_id }}"
+              - -output
+              - json
+              - -socketPath
+              - /run/spire/server/private/api.sock
+          delegate_to: trust
+          become: true
+          changed_when: false
+          register: m4j_spire_alias_audit_response
+
+        - name: Parse only the bounded alias entry envelope
+          ansible.builtin.set_fact:
+            m4j_spire_alias_audit: >-
+              {{ m4j_spire_alias_audit_response.stdout | from_json }}
+
+        - name: Reject an absent or ambiguous post-bootstrap role alias
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_spire_alias_audit.keys() | list | sort ==
+                ['entries', 'next_page_token']
+              - m4j_spire_alias_audit.next_page_token == ""
+              - m4j_spire_alias_audit.entries | length == 1
+            fail_msg: "SPIRE role alias inventory is absent or ambiguous."
+
+        - name: Select the role alias and derive its actual agent identity
+          ansible.builtin.set_fact:
+            m4j_spire_alias_entry: "{{ m4j_spire_alias_audit.entries | first }}"
+            m4j_spire_actual_agent_spiffe_id: >-
+              {{ 'spiffe://' ~
+                 (m4j_spire_alias_audit.entries | first).parent_id.trust_domain ~
+                 (m4j_spire_alias_audit.entries | first).parent_id.path }}
+
+        - name: Reject any post-bootstrap role alias semantic drift
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_spire_alias_entry.id is match(
+                  "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                )
+              - >-
+                m4j_spire_alias_entry.parent_id.trust_domain ==
+                m4j_workload_plan.trust_domain
+              - >-
+                m4j_spire_alias_entry.parent_id.path is match(
+                  "^/spire/agent/join_token/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                )
+              - >-
+                m4j_spire_alias_entry.spiffe_id ==
+                {'trust_domain': m4j_workload_plan.trust_domain,
+                 'path': '/agent/' ~ inventory_hostname}
+              - >-
+                m4j_spire_alias_entry.selectors ==
+                [{'type': 'spiffe_id', 'value': m4j_spire_actual_agent_spiffe_id}]
+              - m4j_spire_alias_entry.x509_svid_ttl | type_debug == "int"
+              - m4j_spire_alias_entry.x509_svid_ttl == 0
+              - m4j_spire_alias_entry.jwt_svid_ttl | type_debug == "int"
+              - m4j_spire_alias_entry.jwt_svid_ttl == 0
+              - m4j_spire_alias_entry.expires_at | type_debug == "str"
+              - m4j_spire_alias_entry.expires_at == "0"
+              - m4j_spire_alias_entry.federates_with == []
+              - m4j_spire_alias_entry.dns_names == []
+              - m4j_spire_alias_entry.admin is sameas false
+              - m4j_spire_alias_entry.downstream is sameas false
+              - m4j_spire_alias_entry.store_svid is sameas false
+              - m4j_spire_alias_entry.hint | default('') == ''
+            fail_msg: "SPIRE role alias does not exactly select its token-derived agent."
+
+        - name: Read the bounded join-token agent inventory for this alias
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/docker
+              - exec
+              - aegis-m4j-spire-server
+              - /opt/spire/bin/spire-server
+              - agent
+              - list
+              - -attestationType
+              - join_token
+              - -output
+              - json
+              - -socketPath
+              - /run/spire/server/private/api.sock
+          delegate_to: trust
+          become: true
+          changed_when: false
+          register: m4j_spire_agent_audit_response
+
+        - name: Select only the actual agent identified by the alias parent
+          ansible.builtin.set_fact:
+            m4j_spire_agent_audit: >-
+              {{ m4j_spire_agent_audit_response.stdout | from_json }}
+            m4j_spire_actual_agent_matches: >-
+              {{ (m4j_spire_agent_audit_response.stdout | from_json).agents |
+                 selectattr('id.trust_domain', 'equalto',
+                   m4j_spire_alias_entry.parent_id.trust_domain) |
+                 selectattr('id.path', 'equalto', m4j_spire_alias_entry.parent_id.path) |
+                 list }}
+
+        - name: Reject an absent, ambiguous, or inexact actual agent identity
+          ansible.builtin.assert:
+            that:
+              - >-
+                m4j_spire_agent_audit.keys() | list | sort ==
+                ['agents', 'next_page_token']
+              - m4j_spire_agent_audit.next_page_token == ""
+              - m4j_spire_agent_audit.agents | length <= 64
+              - m4j_spire_actual_agent_matches | length == 1
+              - m4j_spire_actual_agent_matches[0].attestation_type == "join_token"
+              - >-
+                m4j_spire_actual_agent_matches[0].selectors ==
+                [{'type': 'spiffe_id', 'value': m4j_spire_actual_agent_spiffe_id}]
+              - m4j_spire_actual_agent_matches[0].banned is sameas false
+              - m4j_spire_actual_agent_matches[0].can_reattest is sameas false
+              - >-
+                m4j_spire_actual_agent_matches[0].x509_svid_serial_number is string
+              - >-
+                m4j_spire_actual_agent_matches[0].x509_svid_serial_number | length > 0
+              - m4j_spire_actual_agent_matches[0].x509_svid_expires_at is string
+              - >-
+                m4j_spire_actual_agent_matches[0].x509_svid_expires_at is
+                match("^[1-9][0-9]*$")
+            fail_msg: "SPIRE role alias does not resolve to one exact attested agent."
+      always:
+        - name: Clear token-derived identity audit material after every host
+          ansible.builtin.set_fact:
+            m4j_spire_alias_audit_response: {}
+            m4j_spire_alias_audit: {}
+            m4j_spire_alias_entry: {}
+            m4j_spire_actual_agent_spiffe_id: ""
+            m4j_spire_agent_audit_response: {}
+            m4j_spire_agent_audit: {}
+            m4j_spire_actual_agent_matches: []
+
+    - name: Prove no join-token file remains on this host
+      ansible.builtin.stat:
+        path: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/join-token"
+        follow: false
+      register: m4j_join_token_after
+
+    - name: Prove no bootstrap argument file remains on this host
+      ansible.builtin.stat:
+        path: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/agent-bootstrap.env"
+        follow: false
+      register: m4j_bootstrap_argument_after
+
+    - name: Reject retained per-host join material
+      ansible.builtin.assert:
+        that:
+          - not m4j_join_token_after.stat.exists
+          - not m4j_bootstrap_argument_after.stat.exists
+        fail_msg: "One-time SPIRE join material remained after host attestation."
+
+- name: Reconcile every workload registration against its host-agent parent
+  hosts: trust
+  become: true
+  gather_facts: false
+  vars:
+    m4j_agent_roles: [trust, agents, gateway, ot, simulation]
+  tasks:
+    - name: Install the exact-source SPIRE entry reconciler
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../scripts/reconcile_m4j_spire_entries.py"
+        dest: /usr/local/libexec/aegis-m4j-reconcile-spire-entry
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Initialize the closed registration plan list
+      ansible.builtin.set_fact:
+        m4j_all_registration_plans: []
+
+    - name: Combine role-distinct registration plans after all agents attest
+      ansible.builtin.set_fact:
+        m4j_all_registration_plans: >-
+          {{ m4j_all_registration_plans +
+             hostvars[item].m4j_workload_plan.registrations }}
+      loop: "{{ m4j_agent_roles }}"
+
+    - name: Find prior managed M4j registration documents
+      ansible.builtin.find:
+        paths: /etc/aegis-ot/spire/registrations
+        patterns: "m4j-*.json"
+        file_type: any
+        recurse: false
+      register: m4j_prior_registration_documents
+
+    - name: Delete stale local managed registration documents before exact audit
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ m4j_prior_registration_documents.files }}"
+      when: >-
+        item.path | basename | splitext | first not in
+        (m4j_all_registration_plans | map(attribute='entry_id') | list)
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    - name: Install one canonical registration document per workload
+      ansible.builtin.copy:
+        content: "{{ item.document }}"
+        dest: "/etc/aegis-ot/spire/registrations/{{ item.entry_id }}.json"
+        owner: root
+        group: root
+        mode: "0444"
+      loop: "{{ m4j_all_registration_plans }}"
+      loop_control:
+        label: "{{ item.entry_id }}"
+
+    - name: Prune stale managed entries and converge the exact parent-bound set
+      ansible.builtin.command:
+        argv:
+          - /usr/local/libexec/aegis-m4j-reconcile-spire-entry
+          - --converge-directory
+          - /etc/aegis-ot/spire/registrations
+      changed_when: >-
+        (m4j_registration_convergence.stdout | from_json).changed | bool
+      register: m4j_registration_convergence
+
+    - name: Reject any convergence result without exact final readback
+      ansible.builtin.assert:
+        that:
+          - (m4j_registration_convergence.stdout | from_json).converged | bool
+          - >-
+            (m4j_registration_convergence.stdout | from_json).managed_entry_ids ==
+            (m4j_all_registration_plans | map(attribute='entry_id') | sort | list)
+          - >-
+            (m4j_registration_convergence.stdout | from_json).managed_entry_count ==
+            m4j_all_registration_plans | length
+        fail_msg: "SPIRE registration convergence lacked exact set/property readback."
+
+- name: Install and activate the plant workload first
+  hosts: simulation
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_services
+
+- name: Install and activate trust-host policy and observation workloads second
+  hosts: trust
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_services
+
+- name: Install and activate the OT adapter third
+  hosts: ot
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_services
+
+- name: Install and activate the segmented gateway fourth
+  hosts: gateway
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_services
+
+- name: Install the disabled agent probe only after continuous dependencies are ready
+  hosts: agents
+  become: true
+  gather_facts: false
+  roles:
+    - role: m4j_workload_services

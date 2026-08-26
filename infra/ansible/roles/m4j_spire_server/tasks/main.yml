@@ -1,0 +1,105 @@
+---
+- name: Create private SPIRE server configuration, state, socket, and registration roots
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: /etc/aegis-ot/spire/server
+      owner: root
+      group: root
+      mode: "0700"
+    - path: /etc/aegis-ot/spire/registrations
+      owner: root
+      group: root
+      mode: "0755"
+    - path: /var/lib/aegis-ot/spire/server
+      owner: "1000"
+      group: "1000"
+      mode: "0700"
+    - path: /run/aegis-ot/spire/server/private
+      owner: "1000"
+      group: "1000"
+      mode: "0700"
+    - path: /run/aegis-ot/spire/bootstrap-attempts
+      owner: root
+      group: root
+      mode: "0700"
+
+- name: Install the exact trust-enrollment SPIRE server configuration
+  ansible.builtin.template:
+    src: server.conf.j2
+    dest: /etc/aegis-ot/spire/server/server.conf
+    owner: root
+    group: root
+    mode: "0444"
+  notify: Restart M4j SPIRE server
+
+- name: Install the host-managed SPIRE server unit
+  ansible.builtin.template:
+    src: aegis-m4j-spire-server.service.j2
+    dest: /etc/systemd/system/aegis-m4j-spire-server.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload M4j workload units
+    - Restart M4j SPIRE server
+
+- name: Install the source-bound one-time join-token revoker
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/revoke_m4j_spire_join_token.py"
+    dest: /usr/local/libexec/aegis-m4j-revoke-spire-join-token
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Apply SPIRE server unit changes before bootstrap
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the host-bound SPIRE server
+  ansible.builtin.systemd:
+    name: aegis-m4j-spire-server.service
+    enabled: true
+    state: started
+
+- name: Wait for the private SPIRE server API to become healthy
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - exec
+      - aegis-m4j-spire-server
+      - /opt/spire/bin/spire-server
+      - healthcheck
+      - -socketPath
+      - /run/spire/server/private/api.sock
+  changed_when: false
+  register: m4j_spire_server_health
+  retries: 30
+  delay: 2
+  until: m4j_spire_server_health.rc == 0
+
+- name: Read the public trust bundle for distinct host bootstrap
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - exec
+      - aegis-m4j-spire-server
+      - /opt/spire/bin/spire-server
+      - bundle
+      - show
+      - -format
+      - pem
+      - -socketPath
+      - /run/spire/server/private/api.sock
+  changed_when: false
+  register: m4j_spire_public_bundle
+
+- name: Reject an empty public SPIRE trust bundle
+  ansible.builtin.assert:
+    that:
+      - '"BEGIN CERTIFICATE" in m4j_spire_public_bundle.stdout'
+      - m4j_spire_public_bundle.stdout | length < 262144
+    fail_msg: "SPIRE server did not return a bounded public trust bundle."

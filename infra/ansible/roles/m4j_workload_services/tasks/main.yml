@@ -1,0 +1,272 @@
+---
+- name: Reject a service plan that could distribute the controller authority key
+  ansible.builtin.assert:
+    that:
+      - m4j_workload_plan.controller_authority_private_key_distributed == false
+      - >-
+        m4j_workload_plan.services |
+        map(attribute='secret_files') | flatten |
+        select('equalto', 'workload_authority.private') | list | length == 0
+      - >-
+        m4j_workload_plan.services |
+        map(attribute='identity_files') | flatten |
+        select('equalto', 'identity/workload_authority.private') | list | length == 0
+    fail_msg: "The M4j service plan attempted to distribute controller authority material."
+
+- name: Create root-controlled workload runtime and source-bound secret roots
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/aegis-ot/runtime
+    - /etc/aegis-ot/secrets
+    - "/etc/aegis-ot/secrets/{{ m4j_source_commit }}"
+
+- name: Create one least-privilege secret directory per workload
+  ansible.builtin.file:
+    path: "/etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.name }}"
+    state: directory
+    owner: root
+    group: "{{ item.gid | string }}"
+    mode: "0750"
+  loop: "{{ m4j_workload_plan.services }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the private transient agent-probe result directory
+  ansible.builtin.file:
+    path: /run/aegis-ot/m4j-probe
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: >-
+    'agent-probe' in
+    (m4j_workload_plan.services | map(attribute='name') | list)
+
+- name: Copy only each service's declared cryptographic inputs
+  ansible.builtin.copy:
+    src: "{{ m4j_secret_directory }}/{{ item.1 }}"
+    dest: >-
+      /etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.0.name }}/{{ item.1 | basename }}
+    owner: root
+    group: "{{ item.0.gid | string }}"
+    mode: "0440"
+  loop: "{{ m4j_workload_plan.services | subelements('secret_files') }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ item.1 | basename }}"
+  no_log: true
+  notify: Restart changed M4j workloads
+
+- name: Copy only each service's declared authority and credential inputs
+  ansible.builtin.copy:
+    src: "{{ m4j_secret_directory }}/{{ item.1 }}"
+    dest: >-
+      /etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.0.name }}/{{ item.1 | basename }}
+    owner: root
+    group: "{{ item.0.gid | string }}"
+    mode: "0440"
+  loop: "{{ m4j_workload_plan.services | subelements('identity_files') }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ item.1 | basename }}"
+  no_log: true
+  notify: Restart changed M4j workloads
+
+- name: Hash each delivered service-private cryptographic input
+  ansible.builtin.stat:
+    path: >-
+      /etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.0.name }}/{{ item.1 | basename }}
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  loop: "{{ m4j_workload_plan.services | subelements('secret_files') }}"
+  register: m4j_delivered_service_secrets
+  no_log: true
+
+- name: Reject service-private input drift after management-path delivery
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - not item.stat.islnk
+      - item.stat.mode == "0440"
+      - item.stat.checksum == m4j_workload_plan.secret_artifacts[item.item.1].sha256
+      - >-
+        item.stat.size | int ==
+        m4j_workload_plan.secret_artifacts[item.item.1].size_bytes | int
+    fail_msg: "A delivered workload secret differs from controller evidence."
+  loop: "{{ m4j_delivered_service_secrets.results }}"
+  no_log: true
+
+- name: Hash each delivered public authority or signed identity input
+  ansible.builtin.stat:
+    path: >-
+      /etc/aegis-ot/secrets/{{ m4j_source_commit }}/{{ item.0.name }}/{{ item.1 | basename }}
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  loop: "{{ m4j_workload_plan.services | subelements('identity_files') }}"
+  register: m4j_delivered_identity_inputs
+  no_log: true
+
+- name: Reject public authority or signed identity drift after delivery
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - not item.stat.islnk
+      - item.stat.mode == "0440"
+      - item.stat.checksum == m4j_workload_plan.secret_artifacts[item.item.1].sha256
+      - >-
+        item.stat.size | int ==
+        m4j_workload_plan.secret_artifacts[item.item.1].size_bytes | int
+    fail_msg: "A delivered workload identity input differs from controller evidence."
+  loop: "{{ m4j_delivered_identity_inputs.results }}"
+  no_log: true
+
+- name: Create private durable state roots declared by each workload
+  ansible.builtin.file:
+    path: "/var/lib/aegis-ot/state/{{ inventory_hostname }}/{{ item.1.host }}"
+    state: directory
+    owner: "{{ item.0.uid | string }}"
+    group: "{{ item.0.gid | string }}"
+    mode: "0700"
+  loop: "{{ m4j_workload_plan.services | subelements('state_mounts') }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ item.1.host }}"
+
+- name: Install non-secret closed environment files
+  ansible.builtin.template:
+    src: service.env.j2
+    dest: "/etc/aegis-ot/runtime/{{ item.name }}.env"
+    owner: root
+    group: "{{ item.gid | string }}"
+    mode: "0440"
+  loop: "{{ m4j_workload_plan.services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Restart changed M4j workloads
+
+- name: Install one host-managed unit per placed workload
+  ansible.builtin.template:
+    src: aegis-m4j-workload.service.j2
+    dest: "/etc/systemd/system/aegis-m4j-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ m4j_workload_plan.services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify:
+    - Reload M4j workload units
+    - Restart changed M4j workloads
+
+- name: Apply workload unit and environment changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Select continuous services in dependency-aware activation order
+  ansible.builtin.set_fact:
+    m4j_continuous_service_names: >-
+      {{ ['opa', 'plant', 'observer', 'candidate', 'ot-adapter',
+          'policy-relay', 'segmented-gateway'] |
+         select('in', m4j_workload_plan.services | map(attribute='name') | list) |
+         list }}
+
+- name: Enable and start continuous workloads without executing the agent probe
+  ansible.builtin.systemd:
+    name: "aegis-m4j-{{ item }}.service"
+    enabled: true
+    state: started
+  loop: "{{ m4j_continuous_service_names }}"
+
+- name: Keep the agent probe installed but disabled until an explicit experiment
+  ansible.builtin.systemd:
+    name: aegis-m4j-agent-probe.service
+    enabled: false
+    state: stopped
+  when: "'agent-probe' in (m4j_workload_plan.services | map(attribute='name') | list)"
+
+- name: Prove no stale agent-probe result remains after configuration
+  ansible.builtin.file:
+    path: /run/aegis-ot/m4j-probe/result.json
+    state: absent
+  when: "'agent-probe' in (m4j_workload_plan.services | map(attribute='name') | list)"
+
+- name: Inspect each continuous workload container
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - container
+      - inspect
+      - "aegis-m4j-{{ item }}"
+  changed_when: false
+  loop: "{{ m4j_continuous_service_names }}"
+  register: m4j_workload_container_inspections
+
+- name: Wait for each continuous workload listener before verification
+  ansible.builtin.wait_for:
+    host: "{{ item.listener.bind_address }}"
+    port: "{{ item.listener.port }}"
+    state: started
+    timeout: 60
+  loop: >-
+    {{ m4j_workload_plan.services |
+       selectattr('activation', 'equalto', 'continuous') |
+       selectattr('listener', 'ne', none) | list }}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Reject a stopped or wrong-image continuous workload
+  ansible.builtin.assert:
+    that:
+      - item.stdout | from_json | length == 1
+      - (item.stdout | from_json)[0].State.Running
+      - >-
+        (item.stdout | from_json)[0].Config.Image ==
+        (m4j_workload_plan.services |
+          selectattr('name', 'equalto', item.item) |
+          map(attribute='image') | first)
+    fail_msg: "A continuous M4j workload is stopped or uses the wrong immutable image."
+  loop: "{{ m4j_workload_container_inspections.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Read effective host TCP listeners after workload activation
+  ansible.builtin.command:
+    argv: [/usr/bin/ss, -H, -lnt]
+  changed_when: false
+  register: m4j_workload_listeners
+
+- name: Reject a continuous workload that did not bind its exact listener
+  ansible.builtin.assert:
+    that:
+      - >-
+        item.listener.bind_address + ':' + (item.listener.port | string) in
+        m4j_workload_listeners.stdout
+    fail_msg: "A continuous workload did not bind its exact contracted endpoint."
+  loop: >-
+    {{ m4j_workload_plan.services |
+       selectattr('activation', 'equalto', 'continuous') |
+       selectattr('listener', 'ne', none) | list }}
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Find prior source-bound secret roots after successful activation
+  ansible.builtin.find:
+    paths: /etc/aegis-ot/secrets
+    file_type: directory
+    recurse: false
+  register: m4j_prior_secret_roots
+
+- name: Delete stale source-bound service secret trees after successful cutover
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ m4j_prior_secret_roots.files }}"
+  when: item.path | basename != m4j_source_commit
+  loop_control:
+    label: "{{ item.path | basename }}"
+  no_log: true

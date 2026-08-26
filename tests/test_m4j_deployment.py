@@ -86,9 +86,11 @@ def test_json_mode_is_deterministic_and_retains_the_claim_boundary() -> None:
         "canonical_sha256": _canonical_sha256(_load(DEPLOYMENT_PATH)),
         "claim_boundary": "no_live_deployment_or_multi_host_isolation_evidence",
         "deployment_status": "configuration_only",
-        "schema_version": "aegis-ot-m4j-deployment-v1",
+        "schema_version": "aegis-ot-m4j-deployment-v2",
         "topology_canonical_sha256": _canonical_sha256(_load(TOPOLOGY_PATH)),
-        "unresolved_gates": ["multi_host_spire_bootstrap"],
+        "implementation_gates": {
+            "multi_host_spire_bootstrap": "implemented_live_validation_pending"
+        },
         "valid": True,
     }
 
@@ -283,21 +285,32 @@ def test_external_vagrant_control_source_targets_all_six_ssh_listeners() -> None
     }
 
 
-def test_multi_host_spire_bootstrap_remains_an_explicit_unresolved_gate() -> None:
+def test_multi_host_spire_bootstrap_implementation_retains_live_evidence_gate() -> None:
     deployment = _load(DEPLOYMENT_PATH)
 
-    assert deployment["unresolved_gates"] == [
+    assert deployment["implementation_gates"] == [
         {
             "gate_id": "multi_host_spire_bootstrap",
-            "status": "unresolved",
+            "status": "implemented_live_validation_pending",
             "blocks": "live_multi_host_deployment_evidence",
-            "current_limitation": (
-                "current_single_host_bootstrap_uses_one_shared_agent_identity_and_"
-                "shared_bootstrap_material"
-            ),
-            "required_resolution": (
-                "issue_distinct_node_attestation_identity_and_non_shared_bootstrap_"
-                "material_per_host_then_bind_and_validate_each_workload_registration_parent"
+            "implementation_contracts": [
+                "infra/m4j/workloads.yml",
+                "infra/ansible/workloads.yml",
+                "scripts/deploy_m4j_workloads.py",
+                "scripts/reconcile_m4j_spire_entries.py",
+                "scripts/revoke_m4j_spire_join_token.py",
+            ],
+            "implemented_controls": [
+                "distinct_node_attestation_identity_per_host",
+                "one_time_non_shared_join_material_per_host",
+                "exact_workload_registration_parent_binding",
+                "bounded_managed_registration_pruning_and_readback",
+                "join_token_cleanup_and_absence_verification",
+            ],
+            "live_evidence_status": "not_run",
+            "required_validation": (
+                "apply_exact_source_bundle_then_run_signed_two_phase_live_workload_"
+                "probe_on_all_six_hosts"
             ),
         }
     ]
@@ -317,7 +330,7 @@ def test_multi_host_spire_bootstrap_remains_an_explicit_unresolved_gate() -> Non
         "wrong_external_source",
         "missing_external_destination",
         "management_self_edge",
-        "missing_unresolved_gate",
+        "missing_implementation_gate",
     ],
 )
 def test_validator_fails_closed_on_deployment_drift(tmp_path: Path, case: str) -> None:
@@ -376,8 +389,8 @@ def test_validator_fails_closed_on_deployment_drift(tmp_path: Path, case: str) -
                 "authentication": "ssh_public_key",
             },
         )
-    elif case == "missing_unresolved_gate":
-        deployment["unresolved_gates"] = []
+    elif case == "missing_implementation_gate":
+        deployment["implementation_gates"] = []
     else:  # pragma: no cover - parameter list is closed above
         raise AssertionError(f"unhandled case: {case}")
 

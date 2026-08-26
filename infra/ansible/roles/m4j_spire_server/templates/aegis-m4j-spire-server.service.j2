@@ -1,0 +1,20 @@
+[Unit]
+Description=Aegis-OT M4j host-bound SPIRE server
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=2s
+TimeoutStartSec=60s
+TimeoutStopSec=20s
+ExecStartPre=-/usr/bin/docker rm -f aegis-m4j-spire-server
+ExecStart=/usr/bin/docker run --rm --name aegis-m4j-spire-server --network host --read-only --cap-drop=ALL --security-opt=no-new-privileges --user 1000:1000 --mount type=bind,src=/etc/aegis-ot/spire/server/server.conf,dst=/etc/spire/server/server.conf,readonly --mount type=bind,src=/etc/aegis-ot/spire/registrations,dst=/etc/spire/registrations,readonly --mount type=bind,src=/var/lib/aegis-ot/spire/server,dst=/var/lib/spire/server --mount type=bind,src=/run/aegis-ot/spire/server/private,dst=/run/spire/server/private --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1m,mode=1777 {{ m4j_workload_plan.runtime_images['spire-server'].image_id }} -config /etc/spire/server/server.conf
+ExecStop=-/usr/bin/docker stop --time 10 aegis-m4j-spire-server
+KillMode=none
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

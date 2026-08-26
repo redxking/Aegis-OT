@@ -15,20 +15,24 @@ validation, or operational effectiveness.
 from __future__ import annotations
 
 import argparse
+import base64
+import contextlib
 import hashlib
 import ipaddress
 import json
 import os
 import re
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
@@ -37,10 +41,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER_RELATIVE_PATH = "scripts/run_m4j_acceptance.py"
 TOPOLOGY_RELATIVE_PATH = "infra/m4j/topology.yml"
 DEPLOYMENT_RELATIVE_PATH = "infra/m4j/deployment.yml"
-SCHEMA_VERSION = "aegis-ot-m4j-acceptance-v1"
+WORKLOAD_RELATIVE_PATH = "infra/m4j/workloads.yml"
+SCHEMA_VERSION = "aegis-ot-m4j-network-acceptance-v2"
 TOPOLOGY_SCHEMA_VERSION = "aegis-ot-m4j-topology-v1"
-DEPLOYMENT_SCHEMA_VERSION = "aegis-ot-m4j-deployment-v1"
+DEPLOYMENT_SCHEMA_VERSION = "aegis-ot-m4j-deployment-v2"
 EXPECTED_ROLES = ("management", "trust", "agents", "gateway", "ot", "simulation")
+MANAGEMENT_ADDRESSES = {
+    "management": "192.168.56.10",
+    "trust": "192.168.56.11",
+    "agents": "192.168.56.12",
+    "gateway": "192.168.56.13",
+    "ot": "192.168.56.14",
+    "simulation": "192.168.56.15",
+}
 EXPECTED_NETWORKS: dict[str, dict[str, Any]] = {
     "management": {
         "kind": "host_only",
@@ -137,8 +150,8 @@ EVIDENCE_BOUNDARIES = (
         "does not establish Byzantine, quorum, rollback, or hostile-host resistance."
     ),
     (
-        "Host-level TCP reachability cannot distinguish separate workloads colocated on one "
-        "role host; workload authorization remains an application and mTLS acceptance concern."
+        "Host-level TCP reachability cannot establish the separately implemented workload "
+        "authorization and mTLS contract; signed live workload-probe evidence remains pending."
     ),
 )
 
@@ -147,10 +160,16 @@ _SAFE_ROLE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _SAFE_RUN_TOKEN = re.compile(r"^[a-f0-9]{16}$")
 _MAX_TOPOLOGY_BYTES = 128 * 1024
 _MAX_SSH_CONFIG_BYTES = 256 * 1024
+_MAX_SSH_IDENTITY_BYTES = 256 * 1024
 _MAX_REMOTE_STREAM_BYTES = 1024 * 1024
 _MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
 _SSH_TIMEOUT_SECONDS = 30.0
 _CONNECT_TIMEOUT_SECONDS = 1.5
+_PARTITION_STABLE_ABSENCE_READS = 7
+_PARTITION_MAX_RECONCILIATION_READS = 30
+_PARTITION_RECONCILIATION_INTERVAL_SECONDS = 1.0
+_TRUSTED_GIT = Path("/usr/bin/git")
+_TRUSTED_SSH = Path("/usr/bin/ssh")
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):  # type: ignore[misc]
@@ -333,11 +352,152 @@ def _safe_text(value: Any, *, label: str) -> str:
     return value
 
 
-def _run_git_bytes(root: Path, *arguments: str) -> bytes:
-    completed = subprocess.run(  # noqa: S603 - fixed Git argv, never a shell
-        ("/usr/bin/git", "-C", str(root), *arguments),
+def _require_owned_git_path(
+    path: Path,
+    *,
+    label: str,
+    directory: bool,
+    required: bool = True,
+) -> os.stat_result | None:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        if not required:
+            return None
+        raise AcceptanceError(f"{label} is unavailable") from None
+    except OSError as exc:
+        raise AcceptanceError(f"{label} is unavailable") from exc
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if path.is_symlink() or not expected_type(metadata.st_mode):
+        raise AcceptanceError(f"{label} must be a real {'directory' if directory else 'file'}")
+    if metadata.st_uid != os.getuid() or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise AcceptanceError(f"{label} must be owned and writable only by the invoking user")
+    return metadata
+
+
+def _reject_git_config_includes(path: Path) -> None:
+    metadata = _require_owned_git_path(
+        path,
+        label=f"Git configuration {path.name}",
+        directory=False,
+        required=False,
+    )
+    if metadata is None:
+        return
+    if metadata.st_size <= 0 or metadata.st_size > 1024 * 1024:
+        raise AcceptanceError("Git repository configuration has an invalid size")
+    material = path.read_bytes()
+    if len(material) != metadata.st_size or b"\x00" in material:
+        raise AcceptanceError("Git repository configuration changed or is malformed")
+    try:
+        text = material.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise AcceptanceError("Git repository configuration is not UTF-8") from exc
+    for line in text.splitlines():
+        normalized = line.strip().casefold()
+        if re.match(r"^\[\s*include(?:if\b[^]]*)?\s*]$", normalized) or re.match(
+            r"^include(?:if)?[.]path\s*=", normalized
+        ):
+            raise AcceptanceError("external Git configuration includes are forbidden")
+
+
+def _require_closed_git_topology(root: Path) -> tuple[Path, Path]:
+    try:
+        work_tree = root.resolve(strict=True)
+    except OSError as exc:
+        raise AcceptanceError("M4j source checkout is unavailable") from exc
+    _require_owned_git_path(
+        work_tree,
+        label="M4j source checkout",
+        directory=True,
+    )
+    git_directory = work_tree / ".git"
+    git_metadata = _require_owned_git_path(
+        git_directory,
+        label="authoritative Git directory",
+        directory=True,
+    )
+    assert git_metadata is not None
+    if (git_directory / "commondir").exists() or (git_directory / "commondir").is_symlink():
+        raise AcceptanceError("linked Git worktree metadata is forbidden")
+
+    _reject_git_config_includes(git_directory / "config")
+    _reject_git_config_includes(git_directory / "config.worktree")
+    for name, required in (("HEAD", True), ("index", True), ("packed-refs", False)):
+        metadata = _require_owned_git_path(
+            git_directory / name,
+            label=f"Git {name}",
+            directory=False,
+            required=required,
+        )
+        if metadata is not None and metadata.st_size > 64 * 1024 * 1024:
+            raise AcceptanceError(f"Git {name} has an invalid size")
+
+    object_directory = git_directory / "objects"
+    _require_owned_git_path(
+        object_directory,
+        label="authoritative Git object store",
+        directory=True,
+    )
+    for prohibited in (
+        object_directory / "info" / "alternates",
+        object_directory / "info" / "http-alternates",
+        git_directory / "info" / "grafts",
+    ):
+        if prohibited.exists() or prohibited.is_symlink():
+            raise AcceptanceError("Git alternate, HTTP alternate, and graft sources are forbidden")
+    for directory, directory_names, filenames in os.walk(object_directory, followlinks=False):
+        for name in (*directory_names, *filenames):
+            candidate = Path(directory) / name
+            metadata = candidate.lstat()
+            if stat.S_ISLNK(metadata.st_mode):
+                raise AcceptanceError("the Git object store must not contain symbolic links")
+            if metadata.st_uid != git_metadata.st_uid:
+                raise AcceptanceError("the Git object store contains material with a wrong owner")
+            if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+                raise AcceptanceError("the Git object store contains shared-writable material")
+    return work_tree, git_directory
+
+
+def _run_git_bytes(
+    root: Path,
+    *arguments: str,
+    input_bytes: bytes | None = None,
+) -> bytes:
+    work_tree, git_directory = _require_closed_git_topology(root)
+    if not _TRUSTED_GIT.is_file() or not os.access(_TRUSTED_GIT, os.X_OK):
+        raise AcceptanceError("the pinned /usr/bin/git executable is unavailable")
+    completed = subprocess.run(  # noqa: S603 - pinned Git and fixed argv
+        (
+            str(_TRUSTED_GIT),
+            "--git-dir",
+            str(git_directory),
+            "--work-tree",
+            str(work_tree),
+            "--no-replace-objects",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "core.attributesFile=/dev/null",
+            "-c",
+            "core.pager=cat",
+            *arguments,
+        ),
+        cwd=work_tree,
         check=False,
         capture_output=True,
+        input=input_bytes,
+        env={
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "HOME": "/dev/null",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+        },
     )
     if completed.returncode != 0:
         raise AcceptanceError("Git could not establish the exact M4j source binding")
@@ -369,18 +529,195 @@ def _regular_file_bytes(path: Path, *, maximum_bytes: int, label: str) -> bytes:
     return material
 
 
+def _head_blob_entries(root: Path, commit: str) -> list[tuple[str, str, str]]:
+    """Return every committed blob path, mode, and object ID without consulting the index."""
+
+    raw = _run_git_bytes(root, "ls-tree", "-rz", "--full-tree", commit)
+    entries: list[tuple[str, str, str]] = []
+    seen_paths: set[str] = set()
+    for record in raw.split(b"\x00"):
+        if not record:
+            continue
+        try:
+            metadata, encoded_path = record.split(b"\t", maxsplit=1)
+            mode_bytes, kind, object_id_bytes = metadata.split(b" ", maxsplit=2)
+            mode = mode_bytes.decode("ascii")
+            object_id = object_id_bytes.decode("ascii")
+            relative = encoded_path.decode("utf-8")
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise AcceptanceError("Git tree inventory is malformed or non-UTF-8") from exc
+        parts = PurePosixPath(relative).parts
+        if (
+            kind != b"blob"
+            or mode not in {"100644", "100755", "120000"}
+            or _GIT_OBJECT.fullmatch(object_id) is None
+            or not parts
+            or relative.startswith("/")
+            or any(part in {"", ".", ".."} for part in parts)
+            or relative in seen_paths
+        ):
+            raise AcceptanceError("Git tree inventory differs from the closed file contract")
+        seen_paths.add(relative)
+        entries.append((relative, mode, object_id))
+    if not entries:
+        raise AcceptanceError("Git tree inventory is empty")
+    return entries
+
+
+def _head_blob_material(
+    root: Path,
+    entries: Sequence[tuple[str, str, str]],
+) -> dict[str, bytes]:
+    """Read all HEAD blobs through one closed Git batch operation."""
+
+    request = b"".join(f"{object_id}\n".encode("ascii") for _, _, object_id in entries)
+    output = _run_git_bytes(root, "cat-file", "--batch", input_bytes=request)
+    offset = 0
+    material: dict[str, bytes] = {}
+    for relative, _mode, expected_object_id in entries:
+        header_end = output.find(b"\n", offset)
+        if header_end < 0:
+            raise AcceptanceError("Git blob batch response is truncated")
+        header = output[offset:header_end].split(b" ")
+        if len(header) != 3:
+            raise AcceptanceError("Git blob batch response header is malformed")
+        try:
+            object_id = header[0].decode("ascii")
+            kind = header[1].decode("ascii")
+            size = int(header[2].decode("ascii"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise AcceptanceError("Git blob batch response header is malformed") from exc
+        if object_id != expected_object_id or kind != "blob" or size < 0:
+            raise AcceptanceError("Git blob batch response differs from the HEAD tree")
+        start = header_end + 1
+        end = start + size
+        if end >= len(output) or output[end : end + 1] != b"\n":
+            raise AcceptanceError("Git blob batch response body is truncated")
+        body = output[start:end]
+        object_material = f"blob {len(body)}\x00".encode("ascii") + body
+        if len(expected_object_id) == 40:
+            computed_object_id = hashlib.sha1(  # noqa: S324 - Git SHA-1 object address
+                object_material,
+                usedforsecurity=False,
+            ).hexdigest()
+        elif len(expected_object_id) == 64:
+            computed_object_id = hashlib.sha256(object_material).hexdigest()
+        else:  # guarded by _GIT_OBJECT, retained here as a closed parser boundary
+            raise AcceptanceError("Git blob object ID uses an unsupported format")
+        if computed_object_id != expected_object_id:
+            raise AcceptanceError(f"Git blob content hash differs from HEAD: {relative}")
+        material[relative] = body
+        offset = end + 1
+    if offset != len(output):
+        raise AcceptanceError("Git blob batch response contains trailing material")
+    return material
+
+
+def _require_real_parent_directories(root: Path, relative: str) -> None:
+    current = root
+    for part in PurePosixPath(relative).parts[:-1]:
+        current = current / part
+        try:
+            metadata = current.lstat()
+        except OSError as exc:
+            raise AcceptanceError(f"tracked parent directory is unavailable: {relative}") from exc
+        if current.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+            raise AcceptanceError(f"tracked parent directory is not a real directory: {relative}")
+
+
+def _read_tracked_regular_file(path: Path, *, relative: str) -> tuple[bytes, int]:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise AcceptanceError(f"tracked file is unavailable: {relative}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise AcceptanceError(f"tracked path is not a regular file: {relative}")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+        before.st_size,
+        before.st_mtime_ns,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise AcceptanceError(f"tracked file changed while it was read: {relative}")
+    value = b"".join(chunks)
+    if len(value) != before.st_size:
+        raise AcceptanceError(f"tracked file changed while it was read: {relative}")
+    return value, before.st_mode
+
+
+def _require_worktree_matches_head(root: Path, commit: str) -> None:
+    """Compare every tracked path directly with HEAD, ignoring index masking flags."""
+
+    entries = _head_blob_entries(root, commit)
+    blobs = _head_blob_material(root, entries)
+    for relative, mode, _object_id in entries:
+        _require_real_parent_directories(root, relative)
+        path = root.joinpath(*PurePosixPath(relative).parts)
+        expected = blobs[relative]
+        if mode == "120000":
+            try:
+                before = path.lstat()
+                target = os.fsencode(os.readlink(path))
+                after = path.lstat()
+            except OSError as exc:
+                raise AcceptanceError(f"tracked symbolic link is unavailable: {relative}") from exc
+            if (
+                not stat.S_ISLNK(before.st_mode)
+                or before != after
+                or target != expected
+            ):
+                raise AcceptanceError(f"tracked symbolic link differs from HEAD: {relative}")
+            continue
+        working, working_mode = _read_tracked_regular_file(path, relative=relative)
+        expected_executable = mode == "100755"
+        working_executable = bool(working_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH))
+        if working != expected or working_executable != expected_executable:
+            raise AcceptanceError(f"tracked file differs from HEAD: {relative}")
+
+
 def _source_binding(root: Path = ROOT) -> dict[str, Any]:
     resolved_root = root.resolve()
     git_root = Path(_run_git_text(root, "rev-parse", "--show-toplevel").strip()).resolve()
     if git_root != resolved_root:
         raise AcceptanceError("runner root does not match the Git checkout root")
-    if _run_git_bytes(root, "status", "--porcelain=v1", "-z", "--untracked-files=all"):
-        raise AcceptanceError("M4j acceptance requires a clean checkout")
-
     commit = _run_git_text(root, "rev-parse", "HEAD").strip()
     tree = _run_git_text(root, "rev-parse", "HEAD^{tree}").strip()
     if _GIT_OBJECT.fullmatch(commit) is None or _GIT_OBJECT.fullmatch(tree) is None:
         raise AcceptanceError("Git commit or tree binding was malformed")
+    _run_git_bytes(
+        root,
+        "-c",
+        "fsck.skipList=/dev/null",
+        "fsck",
+        "--strict",
+        "--full",
+        "--no-dangling",
+        "--no-reflogs",
+        "--no-progress",
+        commit,
+    )
+    _require_worktree_matches_head(root, commit)
+    if _run_git_bytes(root, "status", "--porcelain=v1", "-z", "--untracked-files=all"):
+        raise AcceptanceError("M4j acceptance requires a clean checkout")
 
     files: list[dict[str, Any]] = []
     committed_material: dict[str, bytes] = {}
@@ -388,13 +725,19 @@ def _source_binding(root: Path = ROOT) -> dict[str, Any]:
         RUNNER_RELATIVE_PATH,
         TOPOLOGY_RELATIVE_PATH,
         DEPLOYMENT_RELATIVE_PATH,
+        WORKLOAD_RELATIVE_PATH,
     ):
         path = root / relative
         working = _regular_file_bytes(
             path,
             maximum_bytes=(
                 _MAX_TOPOLOGY_BYTES
-                if relative in {TOPOLOGY_RELATIVE_PATH, DEPLOYMENT_RELATIVE_PATH}
+                if relative
+                in {
+                    TOPOLOGY_RELATIVE_PATH,
+                    DEPLOYMENT_RELATIVE_PATH,
+                    WORKLOAD_RELATIVE_PATH,
+                }
                 else 2 * 1024 * 1024
             ),
             label=relative,
@@ -816,7 +1159,7 @@ def _load_deployment(material: bytes, topology: Mapping[str, Any]) -> dict[str, 
                 "listeners",
                 "external_control_sources",
                 "peer_edges",
-                "unresolved_gates",
+                "implementation_gates",
             }
         ),
         label="M4j deployment contract",
@@ -964,15 +1307,57 @@ def _load_deployment(material: bytes, topology: Mapping[str, Any]) -> dict[str, 
     ):
         raise AcceptanceError("M4j deployment permits a direct agents bypass path")
 
-    unresolved = deployment["unresolved_gates"]
+    agent_gateway_edges = [
+        edge
+        for edge in edges
+        if _mapping(edge, label="M4j peer edge").get("id")
+        == "agent-probe-to-segmented-gateway"
+    ]
+    if agent_gateway_edges != [
+        {
+            "id": "agent-probe-to-segmented-gateway",
+            "source_role": "agents",
+            "source_service": "agent-probe",
+            "destination_listener": "segmented-gateway-api",
+            "network": "agent_lane",
+            "protocol": "https",
+            "authentication": "spiffe_mtls_plus_signed_workload_capability",
+        }
+    ]:
+        raise AcceptanceError("agent-to-gateway application edge is not mTLS-bound")
+
+    implementation = deployment["implementation_gates"]
+    expected_implementation = [
+        {
+            "gate_id": "multi_host_spire_bootstrap",
+            "status": "implemented_live_validation_pending",
+            "blocks": "live_multi_host_deployment_evidence",
+            "implementation_contracts": [
+                "infra/m4j/workloads.yml",
+                "infra/ansible/workloads.yml",
+                "scripts/deploy_m4j_workloads.py",
+                "scripts/reconcile_m4j_spire_entries.py",
+                "scripts/revoke_m4j_spire_join_token.py",
+            ],
+            "implemented_controls": [
+                "distinct_node_attestation_identity_per_host",
+                "one_time_non_shared_join_material_per_host",
+                "exact_workload_registration_parent_binding",
+                "bounded_managed_registration_pruning_and_readback",
+                "join_token_cleanup_and_absence_verification",
+            ],
+            "live_evidence_status": "not_run",
+            "required_validation": (
+                "apply_exact_source_bundle_then_run_signed_two_phase_live_workload_"
+                "probe_on_all_six_hosts"
+            ),
+        }
+    ]
     if (
-        not isinstance(unresolved, list)
-        or len(unresolved) != 1
-        or _mapping(unresolved[0], label="M4j unresolved gate").get("gate_id")
-        != "multi_host_spire_bootstrap"
-        or _mapping(unresolved[0], label="M4j unresolved gate").get("status") != "unresolved"
+        not isinstance(implementation, list)
+        or implementation != expected_implementation
     ):
-        raise AcceptanceError("M4j multi-host SPIRE bootstrap gate is not explicit")
+        raise AcceptanceError("M4j SPIRE implementation/live-evidence boundary differs")
     return deployment
 
 
@@ -1275,11 +1660,15 @@ def build_plan(root: Path = ROOT) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": "plan_only",
-        "accepted": False,
+        "network_acceptance_passed": False,
         "source_binding": _public_source_binding(binding),
         "topology": _topology_projection(topology),
         "deployment_schema_version": deployment["schema_version"],
-        "unresolved_gates": deployment["unresolved_gates"],
+        "implementation_gates": deployment["implementation_gates"],
+        "workload_live_probe": {
+            "evidence_supplied": False,
+            "status": "not_run",
+        },
         "listener_contract": listener_contract,
         "connectivity_contract": connectivity_contract,
         "firewall_contract": {
@@ -1320,8 +1709,10 @@ def _execute_ssh(
 ) -> SshOutcome:
     if _SAFE_ROLE.fullmatch(role) is None or role not in EXPECTED_ROLES:
         raise AcceptanceError("SSH role alias is invalid")
+    if not _TRUSTED_SSH.is_file() or not os.access(_TRUSTED_SSH, os.X_OK):
+        raise AcceptanceError("the pinned /usr/bin/ssh executable is unavailable")
     command = (
-        "ssh",
+        str(_TRUSTED_SSH),
         "-F",
         str(ssh_config),
         "-o",
@@ -1330,12 +1721,44 @@ def _execute_ssh(
         "ConnectionAttempts=1",
         "-o",
         "ConnectTimeout=10",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "PasswordAuthentication=no",
+        "-o",
+        "KbdInteractiveAuthentication=no",
+        "-o",
+        "PreferredAuthentications=publickey",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        f"UserKnownHostsFile={ssh_config.parent / 'known_hosts'}",
+        "-o",
+        "GlobalKnownHostsFile=/dev/null",
+        "-o",
+        "HostKeyAlgorithms=ssh-ed25519",
+        "-o",
+        "CheckHostIP=yes",
+        "-o",
+        "CanonicalizeHostname=no",
+        "-o",
+        "ProxyCommand=none",
+        "-o",
+        "ProxyJump=none",
+        "-o",
+        "ClearAllForwardings=yes",
+        "-o",
+        "PermitLocalCommand=no",
         role,
         "--",
         *remote_argv,
     )
-    environment = dict(os.environ)
-    environment["LC_ALL"] = "C"
+    environment = {
+        "HOME": "/dev/null",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+    }
     started = time.monotonic_ns()
     try:
         completed = subprocess.run(  # noqa: S603 - validated SSH alias and fixed argv
@@ -1988,6 +2411,71 @@ def _partition_rule_argv(
     )
 
 
+def _reconcile_gateway_partition_absence(
+    *,
+    source: str,
+    destination: str,
+    marker: str,
+    ssh_config: Path,
+    command_records: list[dict[str, Any]],
+    executor: SshExecutor | None,
+) -> None:
+    stable_absence = 0
+    last_error: AcceptanceError | None = None
+    for read_number in range(1, _PARTITION_MAX_RECONCILIATION_READS + 1):
+        try:
+            observed = _recorded_ssh(
+                ssh_config=ssh_config,
+                role="gateway",
+                command_id=f"gateway-partition-cleanup-check-{read_number}",
+                remote_argv=_partition_rule_argv(
+                    action="check",
+                    source=source,
+                    destination=destination,
+                    port=8081,
+                    marker=marker,
+                ),
+                stdin_bytes=b"",
+                command_records=command_records,
+                allowed_returncodes=frozenset({0, 1}),
+                executor=executor,
+            )
+        except AcceptanceError as exc:
+            stable_absence = 0
+            last_error = exc
+        else:
+            if observed.returncode == 1:
+                stable_absence += 1
+                if stable_absence >= _PARTITION_STABLE_ABSENCE_READS:
+                    return
+            else:
+                stable_absence = 0
+                try:
+                    _recorded_ssh(
+                        ssh_config=ssh_config,
+                        role="gateway",
+                        command_id=f"gateway-partition-cleanup-delete-{read_number}",
+                        remote_argv=_partition_rule_argv(
+                            action="delete",
+                            source=source,
+                            destination=destination,
+                            port=8081,
+                            marker=marker,
+                        ),
+                        stdin_bytes=b"",
+                        command_records=command_records,
+                        allowed_returncodes=frozenset({0, 1}),
+                        executor=executor,
+                    )
+                except AcceptanceError as exc:
+                    last_error = exc
+        if read_number < _PARTITION_MAX_RECONCILIATION_READS:
+            time.sleep(_PARTITION_RECONCILIATION_INTERVAL_SECONDS)
+    raise AcceptanceError(
+        "gateway partition rule did not remain absent after bounded reconciliation"
+    ) from last_error
+
+
 def _gateway_partition_probe(
     *,
     topology: Mapping[str, Any],
@@ -2005,11 +2493,12 @@ def _gateway_partition_probe(
     marker = os.urandom(8).hex()
     if _SAFE_RUN_TOKEN.fullmatch(marker) is None:
         raise AcceptanceError("gateway partition marker generation failed")
-    installed = False
+    insert_attempted = False
     cleanup_verified = False
     denial_verified = False
     restoration_verified = False
     try:
+        insert_attempted = True
         _recorded_ssh(
             ssh_config=ssh_config,
             role="gateway",
@@ -2033,7 +2522,6 @@ def _gateway_partition_probe(
             command_records=command_records,
             executor=executor,
         )
-        installed = True
         _recorded_ssh(
             ssh_config=ssh_config,
             role="gateway",
@@ -2064,36 +2552,13 @@ def _gateway_partition_probe(
         )
         denial_verified = True
     finally:
-        if installed:
-            _recorded_ssh(
+        if insert_attempted:
+            _reconcile_gateway_partition_absence(
+                source=source,
+                destination=destination,
+                marker=marker,
                 ssh_config=ssh_config,
-                role="gateway",
-                command_id="gateway-partition-remove",
-                remote_argv=_partition_rule_argv(
-                    action="delete",
-                    source=source,
-                    destination=destination,
-                    port=8081,
-                    marker=marker,
-                ),
-                stdin_bytes=b"",
                 command_records=command_records,
-                executor=executor,
-            )
-            _recorded_ssh(
-                ssh_config=ssh_config,
-                role="gateway",
-                command_id="gateway-partition-absent",
-                remote_argv=_partition_rule_argv(
-                    action="check",
-                    source=source,
-                    destination=destination,
-                    port=8081,
-                    marker=marker,
-                ),
-                stdin_bytes=b"",
-                command_records=command_records,
-                allowed_returncodes=frozenset({1}),
                 executor=executor,
             )
             cleanup_verified = True
@@ -2179,14 +2644,268 @@ def _command_hashes_complete(records: Sequence[Mapping[str, Any]]) -> bool:
     return True
 
 
-def _validate_ssh_config(path: Path) -> dict[str, Any]:
-    material = _regular_file_bytes(
-        path, maximum_bytes=_MAX_SSH_CONFIG_BYTES, label="SSH configuration"
+def _private_regular_file_bytes(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    label: str,
+    allowed_modes: frozenset[int] = frozenset({0o600}),
+) -> tuple[bytes, int]:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path.absolute(), flags)
+    except OSError as exc:
+        raise AcceptanceError(f"{label} could not be opened as a private file") from exc
+    try:
+        before = os.fstat(descriptor)
+        mode = stat.S_IMODE(before.st_mode)
+        if not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid():
+            raise AcceptanceError(f"{label} must be a regular invoking-user-owned file")
+        if mode not in allowed_modes:
+            expected = ", ".join(f"{value:04o}" for value in sorted(allowed_modes))
+            raise AcceptanceError(f"{label} mode must be one of: {expected}")
+        if before.st_size <= 0 or before.st_size > maximum_bytes:
+            raise AcceptanceError(f"{label} has an invalid size")
+        material = b""
+        while len(material) <= maximum_bytes:
+            chunk = os.read(descriptor, min(1024 * 1024, maximum_bytes + 1 - len(material)))
+            if not chunk:
+                break
+            material += chunk
+        after = os.fstat(descriptor)
+        if (
+            len(material) != before.st_size
+            or (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+            != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+        ):
+            raise AcceptanceError(f"{label} changed while it was read")
+    finally:
+        os.close(descriptor)
+    return material, mode
+
+
+def _decode_ed25519_host_key(value: str) -> bytes:
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except ValueError as exc:
+        raise AcceptanceError("known-hosts contains invalid base64 key material") from exc
+    algorithm = b"ssh-ed25519"
+    prefix = len(algorithm).to_bytes(4, "big") + algorithm + (32).to_bytes(4, "big")
+    if len(decoded) != len(prefix) + 32 or not decoded.startswith(prefix):
+        raise AcceptanceError("known-hosts must contain canonical SSH Ed25519 public keys")
+    return decoded
+
+
+def _validate_known_hosts(path: Path) -> tuple[bytes, dict[str, Any]]:
+    material, mode = _private_regular_file_bytes(
+        path,
+        maximum_bytes=65536,
+        label="SSH known-hosts evidence",
     )
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
-        raise AcceptanceError("SSH configuration must not be accessible by group or others")
-    return {"sha256": _sha256(material), "size_bytes": len(material), "mode": f"{mode:04o}"}
+    try:
+        text = material.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise AcceptanceError("known-hosts evidence must be ASCII") from exc
+    lines = text.splitlines()
+    if len(lines) != len(EXPECTED_ROLES) or any(
+        not line or line != line.strip() for line in lines
+    ):
+        raise AcceptanceError("known-hosts must contain exactly six canonical entries")
+    observed: dict[str, bytes] = {}
+    for line in lines:
+        fields = line.split(" ")
+        if len(fields) != 3 or any(not field for field in fields):
+            raise AcceptanceError("known-hosts entries must have exactly three fields")
+        host_pattern, key_type, encoded_key = fields
+        if key_type != "ssh-ed25519":
+            raise AcceptanceError("known-hosts permits only SSH Ed25519 host keys")
+        matches = [
+            role
+            for role, address in MANAGEMENT_ADDRESSES.items()
+            if host_pattern == f"{role},{address}"
+        ]
+        if len(matches) != 1 or matches[0] in observed:
+            raise AcceptanceError("known-hosts role and management-address bindings differ")
+        observed[matches[0]] = _decode_ed25519_host_key(encoded_key)
+    if tuple(sorted(observed)) != tuple(sorted(EXPECTED_ROLES)):
+        raise AcceptanceError("known-hosts does not bind all six M4j roles")
+    if len(set(observed.values())) != len(EXPECTED_ROLES):
+        raise AcceptanceError("known-hosts must use a distinct host key for every M4j role")
+    return material, {
+        "sha256": _sha256(material),
+        "size_bytes": len(material),
+        "mode": f"{mode:04o}",
+        "algorithm": "ssh-ed25519",
+        "role_address_bindings": [
+            {"role": role, "address": MANAGEMENT_ADDRESSES[role]}
+            for role in EXPECTED_ROLES
+        ],
+        "distinct_host_key_count": len(observed),
+    }
+
+
+def _parse_ssh_config(path: Path) -> tuple[bytes, dict[str, dict[str, str]], dict[str, Any]]:
+    material, mode = _private_regular_file_bytes(
+        path,
+        maximum_bytes=_MAX_SSH_CONFIG_BYTES,
+        label="SSH configuration",
+    )
+    try:
+        text = material.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise AcceptanceError("SSH configuration must be UTF-8") from exc
+    roles: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        try:
+            fields = shlex.split(line, comments=True, posix=True)
+        except ValueError as exc:
+            raise AcceptanceError(
+                f"SSH configuration line {line_number} is malformed"
+            ) from exc
+        if not fields:
+            continue
+        if len(fields) != 2 or "=" in fields[0]:
+            raise AcceptanceError("SSH configuration must use one closed directive per line")
+        keyword, value = fields[0].casefold(), fields[1]
+        if keyword == "host":
+            if value not in EXPECTED_ROLES or value in roles:
+                raise AcceptanceError("SSH configuration must contain each exact role once")
+            roles[value] = {}
+            current = value
+            continue
+        if current is None or keyword not in {"hostname", "user", "identityfile"}:
+            raise AcceptanceError("SSH configuration contains a forbidden directive")
+        if keyword in roles[current]:
+            raise AcceptanceError("SSH configuration contains a duplicate role directive")
+        roles[current][keyword] = value
+    if tuple(sorted(roles)) != tuple(sorted(EXPECTED_ROLES)):
+        raise AcceptanceError("SSH configuration must contain exactly six role stanzas")
+
+    identity_digests: dict[str, str] = {}
+    for role in EXPECTED_ROLES:
+        role_config = roles[role]
+        if set(role_config) != {"hostname", "user", "identityfile"}:
+            raise AcceptanceError(f"SSH role {role} lacks its closed connection fields")
+        if role_config["hostname"] != MANAGEMENT_ADDRESSES[role]:
+            raise AcceptanceError(f"SSH role {role} has the wrong management address")
+        if role_config["user"] != "vagrant":
+            raise AcceptanceError(f"SSH role {role} must use the vagrant management account")
+        identity_path = Path(role_config["identityfile"])
+        if not identity_path.is_absolute() or "%" in role_config["identityfile"]:
+            raise AcceptanceError("SSH identity-file paths must be absolute and literal")
+        identity, _identity_mode = _private_regular_file_bytes(
+            identity_path,
+            maximum_bytes=_MAX_SSH_IDENTITY_BYTES,
+            label=f"SSH identity for {role}",
+            allowed_modes=frozenset({0o400, 0o600}),
+        )
+        identity_digests[role] = _sha256(identity)
+    return material, roles, {
+        "sha256": _sha256(material),
+        "size_bytes": len(material),
+        "mode": f"{mode:04o}",
+        "schema": "six_exact_host_user_identity_stanzas_v1",
+        "identity_sha256": identity_digests,
+    }
+
+
+def _write_private_file(path: Path, material: bytes) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        offset = 0
+        while offset < len(material):
+            written = os.write(descriptor, material[offset:])
+            if written <= 0:
+                raise AcceptanceError("private SSH transport file write made no progress")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+@contextlib.contextmanager
+def _stable_ssh_transport(
+    ssh_config: Path,
+    known_hosts: Path,
+) -> Iterator[tuple[Path, dict[str, Any]]]:
+    _config_material, roles, config_evidence = _parse_ssh_config(ssh_config)
+    known_hosts_material, known_hosts_evidence = _validate_known_hosts(known_hosts)
+    directory = Path(tempfile.mkdtemp(prefix="aegis-m4j-acceptance-ssh-"))
+    directory.chmod(0o700)
+    stable_known_hosts = directory / "known_hosts"
+    stable_config = directory / "config"
+    expected_files: dict[Path, bytes] = {}
+    try:
+        _write_private_file(stable_known_hosts, known_hosts_material)
+        expected_files[stable_known_hosts] = known_hosts_material
+        lines: list[str] = []
+        for role in EXPECTED_ROLES:
+            source_identity = Path(roles[role]["identityfile"])
+            identity, _mode = _private_regular_file_bytes(
+                source_identity,
+                maximum_bytes=_MAX_SSH_IDENTITY_BYTES,
+                label=f"SSH identity for {role}",
+                allowed_modes=frozenset({0o400, 0o600}),
+            )
+            if _sha256(identity) != config_evidence["identity_sha256"][role]:
+                raise AcceptanceError(f"SSH identity for {role} changed during stabilization")
+            stable_identity = directory / f"{role}.identity"
+            _write_private_file(stable_identity, identity)
+            expected_files[stable_identity] = identity
+            lines.extend(
+                (
+                    f"Host {role}",
+                    f"    HostName {MANAGEMENT_ADDRESSES[role]}",
+                    "    User vagrant",
+                    "    Port 22",
+                    f"    IdentityFile {stable_identity}",
+                    "    IdentitiesOnly yes",
+                    "    BatchMode yes",
+                    "    PasswordAuthentication no",
+                    "    KbdInteractiveAuthentication no",
+                    "    PreferredAuthentications publickey",
+                    "    StrictHostKeyChecking yes",
+                    f"    UserKnownHostsFile {stable_known_hosts}",
+                    "    GlobalKnownHostsFile /dev/null",
+                    "    HostKeyAlgorithms ssh-ed25519",
+                    "    CheckHostIP yes",
+                    "    CanonicalizeHostname no",
+                    "    ProxyCommand none",
+                    "    ProxyJump none",
+                    "    ClearAllForwardings yes",
+                    "    PermitLocalCommand no",
+                )
+            )
+        stable_config_material = ("\n".join(lines) + "\n").encode("utf-8")
+        _write_private_file(stable_config, stable_config_material)
+        expected_files[stable_config] = stable_config_material
+        evidence = {
+            "configuration": config_evidence,
+            "known_hosts": known_hosts_evidence,
+            "role_aliases": list(EXPECTED_ROLES),
+            "batch_mode": True,
+            "strict_host_key_checking": True,
+            "stable_private_copy": True,
+        }
+        yield stable_config, evidence
+    finally:
+        if directory.exists() and not directory.is_symlink():
+            try:
+                for path, expected in expected_files.items():
+                    observed, _mode = _private_regular_file_bytes(
+                        path,
+                        maximum_bytes=max(len(expected), 1),
+                        label="stable SSH transport input",
+                    )
+                    if observed != expected:
+                        raise AcceptanceError(
+                            "stable SSH transport input changed during acceptance"
+                        )
+            finally:
+                shutil.rmtree(directory)
 
 
 def _output_is_outside_checkout(output: Path, root: Path) -> None:
@@ -2246,7 +2965,7 @@ def _campaign(
     topology: Mapping[str, Any],
     deployment: Mapping[str, Any],
     ssh_config: Path,
-    ssh_config_evidence: Mapping[str, Any],
+    ssh_transport_evidence: Mapping[str, Any],
     root: Path,
     executor: SshExecutor | None,
 ) -> dict[str, Any]:
@@ -2375,6 +3094,16 @@ def _campaign(
             key: partition[key]
             for key in ("denial_verified", "cleanup_verified", "restoration_verified")
         },
+        "ssh_transport": {
+            "configuration_sha256": ssh_transport_evidence["configuration"]["sha256"],
+            "known_hosts_sha256": ssh_transport_evidence["known_hosts"]["sha256"],
+            "identity_sha256": ssh_transport_evidence["configuration"][
+                "identity_sha256"
+            ],
+            "role_address_bindings": ssh_transport_evidence["known_hosts"][
+                "role_address_bindings"
+            ],
+        },
         "acceptance": gates,
     }
     return {
@@ -2382,18 +3111,22 @@ def _campaign(
         "mode": "live_ssh",
         "generated_at": datetime.now(UTC).isoformat(),
         "analyst": "Angelis Pseftis",
-        "accepted": True,
+        "network_acceptance_passed": True,
         "source_binding": _public_source_binding(binding),
         "ssh_transport": {
-            "configuration": dict(ssh_config_evidence),
+            **dict(ssh_transport_evidence),
             "configuration_contents_retained": False,
-            "role_aliases": list(EXPECTED_ROLES),
-            "batch_mode": True,
+            "known_hosts_contents_retained": False,
+            "private_identity_contents_retained": False,
         },
         "topology": _topology_projection(topology),
         "deployment": {
             "schema_version": deployment["schema_version"],
-            "unresolved_gates": deployment["unresolved_gates"],
+            "implementation_gates": deployment["implementation_gates"],
+            "workload_live_probe": {
+                "evidence_supplied": False,
+                "status": "not_run",
+            },
         },
         "host_observations": before,
         "connectivity_observations": connectivity,
@@ -2410,6 +3143,7 @@ def _campaign(
 def run_live(
     output: Path,
     ssh_config: Path,
+    known_hosts: Path,
     *,
     root: Path = ROOT,
     executor: SshExecutor | None = None,
@@ -2422,25 +3156,32 @@ def run_live(
         raise AcceptanceError("committed topology or deployment material was malformed")
     topology = _load_topology(topology_material)
     deployment = _load_deployment(deployment_material, topology)
-    ssh_config_evidence = _validate_ssh_config(ssh_config)
-    descriptor = _reserve_output(output, root)
+    descriptor: int | None = None
     published = False
     try:
-        evidence = _campaign(
-            binding=binding,
-            topology=topology,
-            deployment=deployment,
-            ssh_config=ssh_config,
-            ssh_config_evidence=ssh_config_evidence,
-            root=root,
-            executor=executor,
-        )
+        with _stable_ssh_transport(ssh_config, known_hosts) as (
+            stable_ssh_config,
+            ssh_transport_evidence,
+        ):
+            descriptor = _reserve_output(output, root)
+            evidence = _campaign(
+                binding=binding,
+                topology=topology,
+                deployment=deployment,
+                ssh_config=stable_ssh_config,
+                ssh_transport_evidence=ssh_transport_evidence,
+                root=root,
+                executor=executor,
+            )
+        if descriptor is None:  # pragma: no cover - context/control-flow invariant
+            raise AcceptanceError("M4j evidence output was not reserved")
         _write_reserved_output(descriptor, output, evidence)
         published = True
         return evidence
     finally:
-        os.close(descriptor)
-        if not published:
+        if descriptor is not None:
+            os.close(descriptor)
+        if descriptor is not None and not published:
             try:
                 output.unlink()
             except FileNotFoundError:
@@ -2454,23 +3195,35 @@ def _parser() -> argparse.ArgumentParser:
     mode.add_argument("--live", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--ssh-config", type=Path)
+    parser.add_argument("--known-hosts", type=Path)
     return parser
 
 
 def main() -> None:
     arguments = _parser().parse_args()
     if arguments.plan:
-        if arguments.output is not None or arguments.ssh_config is not None:
-            raise SystemExit("--plan does not accept --output or --ssh-config")
+        if any(
+            value is not None
+            for value in (arguments.output, arguments.ssh_config, arguments.known_hosts)
+        ):
+            raise SystemExit(
+                "--plan does not accept --output, --ssh-config, or --known-hosts"
+            )
         print(json.dumps(build_plan(), sort_keys=True, separators=(",", ":")))
         return
-    if arguments.output is None or arguments.ssh_config is None:
-        raise SystemExit("--live requires --output and --ssh-config")
-    evidence = run_live(arguments.output, arguments.ssh_config)
+    if (
+        arguments.output is None
+        or arguments.ssh_config is None
+        or arguments.known_hosts is None
+    ):
+        raise SystemExit("--live requires --output, --ssh-config, and --known-hosts")
+    evidence = run_live(arguments.output, arguments.ssh_config, arguments.known_hosts)
     print(
         json.dumps(
             {
-                "accepted": evidence["accepted"],
+                "network_acceptance_passed": evidence[
+                    "network_acceptance_passed"
+                ],
                 "output": str(arguments.output),
                 "semantic_outcome_sha256": evidence["semantic_outcome_sha256"],
                 "source_fingerprint_sha256": evidence["source_binding"][

@@ -1,0 +1,269 @@
+---
+- name: Reject an empty or role-mismatched firewall plan
+  ansible.builtin.assert:
+    that:
+      - m4j_workload_plan.role == inventory_hostname
+      - m4j_workload_plan.firewall_ingress is sequence
+      - m4j_workload_plan.firewall_ingress | length >= 1
+      - >-
+        m4j_workload_plan.firewall_ingress |
+        map(attribute='rule_id') | unique | list | length ==
+        m4j_workload_plan.firewall_ingress | length
+    fail_msg: "The exact M4j ingress plan is absent or ambiguous."
+
+- name: Install the source-bound full-tuple UFW reconciler
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/reconcile_m4j_ufw_rules.py"
+    dest: /usr/local/libexec/aegis-m4j-reconcile-ufw
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Resolve the destination interface for every exact ingress rule
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - -4
+      - addr
+      - show
+      - to
+      - "{{ item.destination_address }}/32"
+  changed_when: false
+  loop: "{{ m4j_workload_plan.firewall_ingress }}"
+  loop_control:
+    label: "{{ item.rule_id }}"
+  register: m4j_firewall_interface_results
+
+- name: Reject any absent or ambiguous contracted destination interface
+  ansible.builtin.assert:
+    that:
+      - item.stdout_lines | length == 1
+      - item.item.destination_address in item.stdout
+      - item.stdout.split() | length >= 2
+    fail_msg: "A contracted M4j destination address did not resolve to one interface."
+  loop: "{{ m4j_firewall_interface_results.results }}"
+  loop_control:
+    label: "{{ item.item.rule_id }}"
+
+- name: Initialize the exact rule-to-interface mapping
+  ansible.builtin.set_fact:
+    m4j_firewall_interfaces: {}
+
+- name: Bind each ingress rule to its observed destination interface
+  ansible.builtin.set_fact:
+    m4j_firewall_interfaces: >-
+      {{ m4j_firewall_interfaces |
+         combine({item.item.rule_id: item.stdout.split()[1]}) }}
+  loop: "{{ m4j_firewall_interface_results.results }}"
+  loop_control:
+    label: "{{ item.item.rule_id }}"
+
+- name: Initialize exact full-tuple UFW rule inputs
+  ansible.builtin.set_fact:
+    m4j_firewall_expected_tuples: []
+
+- name: Build one exact complete tuple per managed ingress rule
+  ansible.builtin.set_fact:
+    m4j_firewall_expected_tuples: >-
+      {{ m4j_firewall_expected_tuples + [{
+        'rule_id': item.rule_id,
+        'interface': m4j_firewall_interfaces[item.rule_id],
+        'source_address': item.source_address,
+        'destination_address': item.destination_address,
+        'port': item.port,
+        'protocol': item.protocol
+      }] }}
+  loop: "{{ m4j_workload_plan.firewall_ingress }}"
+  loop_control:
+    label: "{{ item.rule_id }}"
+
+- name: Select exact management SSH rules that preserve controller access
+  ansible.builtin.set_fact:
+    m4j_management_firewall_ingress: >-
+      {{ m4j_workload_plan.firewall_ingress |
+         selectattr('network', 'equalto', 'management') |
+         selectattr('port', 'equalto', 22) | list }}
+
+- name: Install exact management SSH rules before any firewall cleanup
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ufw
+      - allow
+      - in
+      - "on"
+      - "{{ m4j_firewall_interfaces[item.rule_id] }}"
+      - from
+      - "{{ item.source_address }}"
+      - to
+      - "{{ item.destination_address }}"
+      - port
+      - "{{ item.port | string }}"
+      - proto
+      - "{{ item.protocol }}"
+      - comment
+      - "Aegis-M4j-{{ item.rule_id }}"
+  changed_when: "'Rule added' in m4j_management_rule_additions.stdout"
+  environment:
+    LC_ALL: C
+  loop: "{{ m4j_management_firewall_ingress }}"
+  loop_control:
+    label: "{{ item.rule_id }}"
+  register: m4j_management_rule_additions
+
+- name: Read active UFW policy before default reconciliation
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, status, verbose]
+  changed_when: false
+  environment:
+    LC_ALL: C
+  register: m4j_ufw_before_defaults
+
+- name: Establish default-deny workload firewall policy without disabling enforcement
+  ansible.builtin.command:
+    argv: "{{ item }}"
+  when: >-
+    "Default: deny (incoming), allow (outgoing), deny (routed)" not in
+    m4j_ufw_before_defaults.stdout
+  changed_when: true
+  environment:
+    LC_ALL: C
+  loop:
+    - [/usr/sbin/ufw, default, deny, incoming]
+    - [/usr/sbin/ufw, default, allow, outgoing]
+    - [/usr/sbin/ufw, default, deny, routed]
+  register: m4j_ufw_default_updates
+
+- name: Ensure UFW enforcement remains active throughout reconciliation
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, --force, enable]
+  when: '"Status: active" not in m4j_ufw_before_defaults.stdout'
+  changed_when: true
+  environment:
+    LC_ALL: C
+  register: m4j_ufw_enable
+
+- name: Install every exact ingress rule before stale-rule removal
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ufw
+      - allow
+      - in
+      - "on"
+      - "{{ m4j_firewall_interfaces[item.rule_id] }}"
+      - from
+      - "{{ item.source_address }}"
+      - to
+      - "{{ item.destination_address }}"
+      - port
+      - "{{ item.port | string }}"
+      - proto
+      - "{{ item.protocol }}"
+      - comment
+      - "Aegis-M4j-{{ item.rule_id }}"
+  changed_when: "'Rule added' in m4j_exact_rule_additions.stdout"
+  environment:
+    LC_ALL: C
+  loop: "{{ m4j_workload_plan.firewall_ingress }}"
+  loop_control:
+    label: "{{ item.rule_id }}"
+  register: m4j_exact_rule_additions
+
+- name: Read numbered UFW rules before stale-rule removal
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, status, numbered]
+  changed_when: false
+  environment:
+    LC_ALL: C
+  register: m4j_ufw_before_cleanup
+
+- name: Select non-exact and duplicate rules by complete tuple
+  ansible.builtin.command:
+    argv:
+      - /usr/local/libexec/aegis-m4j-reconcile-ufw
+    stdin: >-
+      {{ {'rules': m4j_firewall_expected_tuples,
+          'status_lines': m4j_ufw_before_cleanup.stdout_lines} | to_json }}
+    stdin_add_newline: false
+  changed_when: false
+  register: m4j_ufw_cleanup_selection
+
+- name: Bind reverse-ordered full-tuple cleanup rule numbers
+  ansible.builtin.set_fact:
+    m4j_stale_ufw_rule_numbers: >-
+      {{ (m4j_ufw_cleanup_selection.stdout | from_json).stale_rule_numbers }}
+
+- name: Delete stale UFW rules while exact management access remains active
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ufw
+      - --force
+      - delete
+      - "{{ item | string }}"
+  changed_when: true
+  environment:
+    LC_ALL: C
+  loop: "{{ m4j_stale_ufw_rule_numbers }}"
+  loop_control:
+    label: "rule {{ item }}"
+
+- name: Enable bounded UFW logging for workload policy
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, logging, low]
+  when: '"Logging: on (low)" not in m4j_ufw_before_defaults.stdout'
+  changed_when: true
+  environment:
+    LC_ALL: C
+  register: m4j_ufw_logging
+
+- name: Read effective workload UFW defaults
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, status, verbose]
+  changed_when: false
+  environment:
+    LC_ALL: C
+  register: m4j_workload_ufw_verbose
+
+- name: Read effective workload UFW rules
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, status, numbered]
+  changed_when: false
+  environment:
+    LC_ALL: C
+  register: m4j_workload_ufw_rules
+
+- name: Reject default-policy or exact ingress-rule count drift
+  ansible.builtin.assert:
+    that:
+      - '"Status: active" in m4j_workload_ufw_verbose.stdout'
+      - >-
+        "Default: deny (incoming), allow (outgoing), deny (routed)" in
+        m4j_workload_ufw_verbose.stdout
+      - >-
+        m4j_workload_ufw_rules.stdout_lines |
+        select('search', 'ALLOW IN') | list | length ==
+        m4j_workload_plan.firewall_ingress | length
+    fail_msg: "Effective UFW defaults or exact ingress count differs from the host plan."
+
+- name: Audit the final effective UFW set against every complete tuple
+  ansible.builtin.command:
+    argv:
+      - /usr/local/libexec/aegis-m4j-reconcile-ufw
+      - --audit
+    stdin: >-
+      {{ {'rules': m4j_firewall_expected_tuples,
+          'status_lines': m4j_workload_ufw_rules.stdout_lines} | to_json }}
+    stdin_add_newline: false
+  changed_when: false
+  register: m4j_ufw_final_tuple_audit
+
+- name: Reject a final firewall result without exact full-tuple convergence
+  ansible.builtin.assert:
+    that:
+      - (m4j_ufw_final_tuple_audit.stdout | from_json).exact_set | bool
+      - >-
+        (m4j_ufw_final_tuple_audit.stdout | from_json).expected_rule_count ==
+        m4j_workload_plan.firewall_ingress | length
+      - >-
+        (m4j_ufw_final_tuple_audit.stdout | from_json).stale_rule_numbers | length == 0
+    fail_msg: "Effective UFW rules differ from the exact complete host tuple set."

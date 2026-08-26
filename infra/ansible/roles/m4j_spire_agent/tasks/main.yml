@@ -1,0 +1,110 @@
+---
+- name: Reject a host without one role-distinct SPIRE agent plan
+  ansible.builtin.assert:
+    that:
+      - m4j_workload_plan.node_agent is mapping
+      - >-
+        m4j_workload_plan.node_agent.spiffe_id ==
+        "spiffe://aegis-ot.m4g.local/agent/" + inventory_hostname
+      - >-
+        m4j_workload_plan.node_agent.data_directory.endswith(
+          "/" + inventory_hostname
+        )
+      - >-
+        m4j_workload_plan.node_agent.socket_directory.endswith(
+          "/" + inventory_hostname
+        )
+      - >-
+        m4j_workload_plan.node_agent.bootstrap_directory.endswith(
+          "/" + inventory_hostname
+        )
+    fail_msg: "SPIRE agent state or identity is not bound to this host role."
+
+- name: Create role-distinct SPIRE agent configuration and state roots
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: /etc/aegis-ot/spire/agent
+      owner: root
+      group: root
+      mode: "0700"
+    - path: "{{ m4j_workload_plan.node_agent.data_directory }}"
+      owner: root
+      group: root
+      mode: "0700"
+    - path: "{{ m4j_workload_plan.node_agent.socket_directory }}"
+      owner: root
+      group: root
+      mode: "0755"
+    - path: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}"
+      owner: root
+      group: root
+      mode: "0700"
+
+- name: Install the exact host-role SPIRE agent configuration
+  ansible.builtin.template:
+    src: agent.conf.j2
+    dest: /etc/aegis-ot/spire/agent/agent.conf
+    owner: root
+    group: root
+    mode: "0400"
+  notify: Restart an already active M4j SPIRE agent
+
+- name: Install the host-managed role-distinct SPIRE agent unit
+  ansible.builtin.template:
+    src: aegis-m4j-spire-agent.service.j2
+    dest: /etc/systemd/system/aegis-m4j-spire-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload M4j SPIRE agent unit
+    - Restart an already active M4j SPIRE agent
+
+- name: Copy only the public trust bundle to this host bootstrap directory
+  ansible.builtin.copy:
+    content: "{{ hostvars['trust'].m4j_spire_public_bundle.stdout }}\n"
+    dest: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/bundle.pem"
+    owner: root
+    group: root
+    mode: "0444"
+  notify: Restart an already active M4j SPIRE agent
+
+- name: Remove stale one-time bootstrap files before any agent restart
+  ansible.builtin.file:
+    path: "{{ m4j_workload_plan.node_agent.bootstrap_directory }}/{{ item }}"
+    state: absent
+  loop:
+    - join-token
+    - agent-bootstrap.env
+  no_log: true
+
+- name: Apply SPIRE agent unit changes before one-time bootstrap
+  ansible.builtin.meta: flush_handlers
+
+- name: Start the role-distinct SPIRE agent from retained state when available
+  ansible.builtin.systemd:
+    name: aegis-m4j-spire-agent.service
+    enabled: true
+    state: started
+
+- name: Probe whether this exact host agent is already healthy
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - exec
+      - aegis-m4j-spire-agent
+      - /opt/spire/bin/spire-agent
+      - healthcheck
+      - -socketPath
+      - /run/spire/agent/public/api.sock
+  changed_when: false
+  failed_when: false
+  register: m4j_spire_agent_initial_health
+  retries: 5
+  delay: 2
+  until: m4j_spire_agent_initial_health.rc == 0

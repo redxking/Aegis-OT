@@ -30,6 +30,10 @@
             m4j_vagrant_communicator_marker_path ==
             ((playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
              m4j_vagrant_machine ~ "/virtualbox/m4j-management-communicator")
+          - >-
+            m4j_vagrant_host_key_evidence_path ==
+            ((playbook_dir | dirname | dirname) ~ "/.vagrant/machines/" ~
+             m4j_vagrant_machine ~ "/virtualbox/m4j-ssh-host-ed25519.pub")
           - m4j_required_ansible_core_version is match("^[0-9]+\\.[0-9]+\\.[0-9]+$")
           - ansible_version.full == m4j_required_ansible_core_version
           - >-

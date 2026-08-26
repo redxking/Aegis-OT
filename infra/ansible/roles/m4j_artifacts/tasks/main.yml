@@ -1,0 +1,421 @@
+---
+- name: Reject a malformed host workload plan before artifact mutation
+  ansible.builtin.assert:
+    that:
+      - m4j_workload_plan.schema_version == "aegis-ot-m4j-host-workload-plan-v1"
+      - m4j_workload_plan.deployment_status == "configuration_only"
+      - >-
+        m4j_workload_plan.claim_boundary ==
+        "no_live_deployment_or_multi_host_isolation_evidence"
+      - m4j_workload_plan.role == inventory_hostname
+      - m4j_workload_plan.source_git_commit == m4j_source_commit
+      - m4j_workload_plan.controller_authority_private_key_distributed == false
+      - m4j_workload_plan.join_token_material_retained == false
+    fail_msg: "The controller did not provide a closed exact-source M4j host plan."
+
+- name: Create the root-controlled exact-source bundle directory
+  ansible.builtin.file:
+    path: /var/lib/aegis-ot/m4j-bundle
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Copy exact bundle artifacts over the authorized management path
+  ansible.builtin.copy:
+    src: "{{ m4j_bundle_directory }}/{{ item }}"
+    dest: "/var/lib/aegis-ot/m4j-bundle/{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - manifest.json
+    - source.tar
+    - application-image.tar
+  register: m4j_bundle_copy
+
+- name: Hash every copied exact-source bundle artifact
+  ansible.builtin.stat:
+    path: "/var/lib/aegis-ot/m4j-bundle/{{ item }}"
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  loop:
+    - manifest.json
+    - source.tar
+    - application-image.tar
+  register: m4j_copied_bundle_artifacts
+
+- name: Reject any copied bundle artifact that differs from controller evidence
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - not item.stat.islnk
+      - item.stat.mode == "0600"
+      - >-
+        item.stat.checksum ==
+        m4j_workload_plan.bundle.artifacts[item.item].sha256
+      - >-
+        item.stat.size | int ==
+        m4j_workload_plan.bundle.artifacts[item.item].size_bytes | int
+    fail_msg: "A copied M4j bundle artifact differs from its exact-source evidence."
+  loop: "{{ m4j_copied_bundle_artifacts.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect whether the immutable application image is already loaded
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - inspect
+      - "{{ m4j_workload_plan.bundle.application_image_id }}"
+  changed_when: false
+  failed_when: false
+  register: m4j_application_image_before
+
+- name: Load the one exact application-image archive when absent
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - load
+      - --input
+      - /var/lib/aegis-ot/m4j-bundle/application-image.tar
+  when: m4j_application_image_before.rc != 0
+  changed_when: true
+
+- name: Inspect the loaded immutable application image
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - inspect
+      - "{{ m4j_workload_plan.bundle.application_image_id }}"
+  changed_when: false
+  register: m4j_application_image_after
+
+- name: Reject image-ID or OCI source-revision drift after load
+  ansible.builtin.assert:
+    that:
+      - m4j_application_image_after.stdout | from_json | length == 1
+      - >-
+        (m4j_application_image_after.stdout | from_json)[0].Id ==
+        m4j_workload_plan.bundle.application_image_id
+      - >-
+        (m4j_application_image_after.stdout | from_json)[0].Config.Labels[
+          "org.opencontainers.image.revision"
+        ] == m4j_source_commit
+      - >-
+        (m4j_application_image_after.stdout | from_json)[0].Os ==
+        m4j_workload_plan.bundle.application_image_platform.os
+      - >-
+        (m4j_application_image_after.stdout | from_json)[0].Architecture ==
+        m4j_workload_plan.bundle.application_image_platform.architecture
+      - >-
+        (m4j_application_image_after.stdout | from_json)[0].Variant | default(none) ==
+        m4j_workload_plan.bundle.application_image_platform.variant
+    fail_msg: "The loaded application image is not bound to the exact source commit."
+
+- name: Select immutable third-party image bundles required by this role
+  ansible.builtin.set_fact:
+    m4j_required_runtime_image_names: >-
+      {{
+        (['spire-agent'] if
+          m4j_workload_plan.node_agent is not none else []) +
+        (['spire-server', 'opa'] if
+          inventory_hostname == 'trust' else [])
+      }}
+
+- name: Create the private third-party runtime image bundle directory
+  ansible.builtin.file:
+    path: /var/lib/aegis-ot/m4j-bundle/runtime-images
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Copy each exact third-party image archive over the management path
+  ansible.builtin.copy:
+    src: >-
+      {{ m4j_runtime_image_directory }}/{{
+         m4j_workload_plan.runtime_images[item].archive.path }}
+    dest: >-
+      /var/lib/aegis-ot/m4j-bundle/runtime-images/{{
+        m4j_workload_plan.runtime_images[item].archive.path }}
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ m4j_required_runtime_image_names }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Hash each copied third-party runtime image archive
+  ansible.builtin.stat:
+    path: >-
+      /var/lib/aegis-ot/m4j-bundle/runtime-images/{{
+        m4j_workload_plan.runtime_images[item].archive.path }}
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  loop: "{{ m4j_required_runtime_image_names }}"
+  loop_control:
+    label: "{{ item }}"
+  register: m4j_copied_runtime_image_archives
+
+- name: Reject third-party archive drift after management-path delivery
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - not item.stat.islnk
+      - item.stat.mode == "0600"
+      - >-
+        item.stat.checksum ==
+        m4j_workload_plan.runtime_images[item.item].archive.sha256
+      - >-
+        item.stat.size | int ==
+        m4j_workload_plan.runtime_images[item.item].archive.size_bytes | int
+    fail_msg: "A third-party image archive differs from controller evidence."
+  loop: "{{ m4j_copied_runtime_image_archives.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect whether each exact third-party image ID is already loaded
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - inspect
+      - "{{ m4j_workload_plan.runtime_images[item].image_id }}"
+  changed_when: false
+  failed_when: false
+  loop: "{{ m4j_required_runtime_image_names }}"
+  loop_control:
+    label: "{{ item }}"
+  register: m4j_runtime_images_before
+
+- name: Load a verified third-party image archive only when its image ID is absent
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - load
+      - --input
+      - >-
+        /var/lib/aegis-ot/m4j-bundle/runtime-images/{{
+          m4j_workload_plan.runtime_images[item.item].archive.path }}
+  when: item.rc != 0
+  changed_when: true
+  loop: "{{ m4j_runtime_images_before.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect every loaded third-party image by immutable image ID
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/docker
+      - image
+      - inspect
+      - "{{ m4j_workload_plan.runtime_images[item].image_id }}"
+  changed_when: false
+  loop: "{{ m4j_required_runtime_image_names }}"
+  loop_control:
+    label: "{{ item }}"
+  register: m4j_runtime_images_after
+
+- name: Reject third-party image ID or target-platform drift after load
+  ansible.builtin.assert:
+    that:
+      - item.stdout | from_json | length == 1
+      - >-
+        (item.stdout | from_json)[0].Id ==
+        m4j_workload_plan.runtime_images[item.item].image_id
+      - (item.stdout | from_json)[0].Os == "linux"
+      - (item.stdout | from_json)[0].Architecture == "amd64"
+    fail_msg: "A loaded third-party image differs from its exact distribution evidence."
+  loop: "{{ m4j_runtime_images_after.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Create the exact-source OPA policy extraction root
+  ansible.builtin.file:
+    path: /etc/aegis-ot/opa
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: inventory_hostname == "trust"
+
+- name: Create the exact-source OPA policy directory
+  ansible.builtin.file:
+    path: /etc/aegis-ot/opa/policy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: inventory_hostname == "trust"
+
+- name: Inspect exact-source OPA policy parent directories
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - /etc/aegis-ot/opa
+    - /etc/aegis-ot/opa/policy
+  register: m4j_opa_policy_parents
+  when: inventory_hostname == "trust"
+
+- name: Reject linked or non-root-controlled OPA policy parents
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+      - not item.stat.islnk
+      - item.stat.pw_name == "root"
+      - item.stat.gr_name == "root"
+      - item.stat.mode == "0755"
+    fail_msg: "OPA policy parent path is not a real root-controlled directory."
+  loop: "{{ m4j_opa_policy_parents.results }}"
+  when: inventory_hostname == "trust"
+
+- name: Inspect the exact-source OPA policy path
+  ansible.builtin.stat:
+    path: /etc/aegis-ot/opa/policy/aegis.rego
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  register: m4j_opa_policy_before
+  when: inventory_hostname == "trust"
+
+- name: Decide whether the installed OPA policy requires exact replacement
+  ansible.builtin.set_fact:
+    m4j_opa_policy_replacement_required: >-
+      {{
+        not m4j_opa_policy_before.stat.exists | default(false) or
+        not m4j_opa_policy_before.stat.isreg | default(false) or
+        m4j_opa_policy_before.stat.islnk | default(false) or
+        m4j_opa_policy_before.stat.checksum | default('') !=
+          m4j_workload_plan.bundle.opa_policy.sha256 or
+        m4j_opa_policy_before.stat.size | default(0) | int !=
+          m4j_workload_plan.bundle.opa_policy.size_bytes | int
+      }}
+  when: inventory_hostname == "trust"
+
+- name: Stage, verify, and atomically install an exact-source OPA policy
+  when:
+    - inventory_hostname == "trust"
+    - m4j_opa_policy_replacement_required | bool
+  block:
+    - name: Create a private OPA policy staging directory
+      ansible.builtin.tempfile:
+        path: /etc/aegis-ot/opa
+        prefix: .policy-stage-
+        state: directory
+      register: m4j_opa_staging
+
+    - name: Create the staged policy member parent
+      ansible.builtin.file:
+        path: "{{ m4j_opa_staging.path }}/policy"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Extract only the exact-source OPA policy member into staging
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/tar
+          - --extract
+          - --file
+          - /var/lib/aegis-ot/m4j-bundle/source.tar
+          - --directory
+          - "{{ m4j_opa_staging.path }}"
+          - --no-same-owner
+          - --no-same-permissions
+          - policy/aegis.rego
+      changed_when: true
+
+    - name: Hash the staged exact-source OPA policy
+      ansible.builtin.stat:
+        path: "{{ m4j_opa_staging.path }}/policy/aegis.rego"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: m4j_staged_opa_policy
+
+    - name: Reject staged OPA policy drift before installation
+      ansible.builtin.assert:
+        that:
+          - m4j_staged_opa_policy.stat.exists
+          - m4j_staged_opa_policy.stat.isreg
+          - not m4j_staged_opa_policy.stat.islnk
+          - >-
+            m4j_staged_opa_policy.stat.checksum ==
+            m4j_workload_plan.bundle.opa_policy.sha256
+          - >-
+            m4j_staged_opa_policy.stat.size | int ==
+            m4j_workload_plan.bundle.opa_policy.size_bytes | int
+        fail_msg: "Staged OPA policy differs from exact source archive evidence."
+
+    - name: Remove an unsafe non-regular installed policy target
+      ansible.builtin.file:
+        path: /etc/aegis-ot/opa/policy/aegis.rego
+        state: absent
+      when:
+        - m4j_opa_policy_before.stat.exists | default(false)
+        - >-
+          not m4j_opa_policy_before.stat.isreg | default(false) or
+          m4j_opa_policy_before.stat.islnk | default(false)
+
+    - name: Atomically replace the installed policy from verified staging
+      ansible.builtin.copy:
+        src: "{{ m4j_opa_staging.path }}/policy/aegis.rego"
+        dest: /etc/aegis-ot/opa/policy/aegis.rego
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0444"
+  always:
+    - name: Delete the private OPA policy staging directory
+      ansible.builtin.file:
+        path: "{{ m4j_opa_staging.path }}"
+        state: absent
+      when:
+        - m4j_opa_staging is defined
+        - m4j_opa_staging.path is defined
+
+- name: Make the extracted OPA policy root-owned and read-only
+  ansible.builtin.file:
+    path: /etc/aegis-ot/opa/policy/aegis.rego
+    state: file
+    owner: root
+    group: root
+    mode: "0444"
+  when: inventory_hostname == "trust"
+
+- name: Hash the installed exact-source OPA policy
+  ansible.builtin.stat:
+    path: /etc/aegis-ot/opa/policy/aegis.rego
+    checksum_algorithm: sha256
+    get_checksum: true
+    follow: false
+  register: m4j_opa_policy_after
+  when: inventory_hostname == "trust"
+
+- name: Reject installed OPA policy drift from the exact source archive
+  ansible.builtin.assert:
+    that:
+      - m4j_opa_policy_after.stat.exists
+      - m4j_opa_policy_after.stat.isreg
+      - not m4j_opa_policy_after.stat.islnk
+      - m4j_opa_policy_after.stat.mode == "0444"
+      - >-
+        m4j_opa_policy_after.stat.checksum ==
+        m4j_workload_plan.bundle.opa_policy.sha256
+      - >-
+        m4j_opa_policy_after.stat.size | int ==
+        m4j_workload_plan.bundle.opa_policy.size_bytes | int
+    fail_msg: "Installed OPA policy differs from its exact-source evidence."
+  when: inventory_hostname == "trust"

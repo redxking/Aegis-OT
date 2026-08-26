@@ -1,0 +1,344 @@
+---
+- name: Validate exact M4j workload probe inputs without managed-host mutation
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    m4j_source_commit: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_SOURCE_COMMIT') }}
+    m4j_expected_application_image_id: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_APPLICATION_IMAGE_ID') }}
+    m4j_probe_staging_directory: >-
+      {{ lookup('ansible.builtin.env', 'AEGIS_M4J_PROBE_STAGING_DIRECTORY') }}
+    m4j_roles: [management, trust, agents, gateway, ot, simulation]
+  tasks:
+    - name: Load the authoritative M4j topology for the live workload probe
+      ansible.builtin.include_vars:
+        file: ../m4j/topology.yml
+        name: m4j_topology
+
+    - name: Load the source-bound M4j workload contract for the live probe
+      ansible.builtin.include_vars:
+        file: ../m4j/workloads.yml
+        name: m4j_workload_contract
+
+    - name: Reject source, image, staging, or Ansible version drift
+      ansible.builtin.assert:
+        that:
+          - m4j_source_commit is match("^[0-9a-f]{40}([0-9a-f]{24})?$")
+          - m4j_expected_application_image_id is match("^sha256:[0-9a-f]{64}$")
+          - m4j_probe_staging_directory | length > 0
+          - ansible_version.full == "2.19.12"
+          - m4j_workload_contract.orchestration.version == "2.19.12"
+          - >-
+            m4j_workload_contract.live_probe_contract.playbook ==
+            "infra/ansible/probe.yml"
+        fail_msg: "M4j live workload probe inputs differ from the exact contract."
+
+    - name: Reject inventory drift from exact management-plane destinations
+      ansible.builtin.assert:
+        that:
+          - >-
+            groups['all'] | reject('equalto', 'localhost') | list | sort ==
+            m4j_roles | sort
+          - groups[item] == [item]
+          - hostvars[item].aegis_role == item
+          - >-
+            hostvars[item].ansible_host ==
+            m4j_topology.nodes[item].interfaces.management
+        fail_msg: "M4j probe inventory differs from the source-bound topology."
+      loop: "{{ m4j_roles }}"
+
+    - name: Inspect the private controller probe staging directory
+      ansible.builtin.stat:
+        path: "{{ m4j_probe_staging_directory }}"
+        follow: false
+      register: m4j_probe_staging
+
+    - name: Reject an unsafe controller probe staging directory
+      ansible.builtin.assert:
+        that:
+          - m4j_probe_staging.stat.exists
+          - m4j_probe_staging.stat.isdir
+          - not m4j_probe_staging.stat.islnk
+          - m4j_probe_staging.stat.mode == "0700"
+        fail_msg: "M4j probe staging must be a private real directory."
+
+    - name: Inspect every validated Vagrant management communicator marker
+      ansible.builtin.stat:
+        path: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/m4j-management-communicator' }}
+        follow: false
+      loop: "{{ m4j_roles }}"
+      register: m4j_probe_communicator_markers
+
+    - name: Reject absent, linked, or non-private communicator markers
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - not item.stat.islnk
+          - item.stat.mode == "0600"
+        fail_msg: "Every probed host must have completed defensive base provisioning."
+      loop: "{{ m4j_probe_communicator_markers.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read each role-bound management communicator marker
+      ansible.builtin.slurp:
+        path: "{{ item.stat.path }}"
+      loop: "{{ m4j_probe_communicator_markers.results }}"
+      register: m4j_probe_communicator_contents
+
+    - name: Reject a marker not bound to its exact role and management address
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.content | b64decode ==
+            "aegis-ot-m4j-management-communicator-v1\nrole=" + item.item.item +
+            "\naddress=" + m4j_topology.nodes[item.item.item].interfaces.management + "\n"
+        fail_msg: "A management communicator marker differs from the topology."
+      loop: "{{ m4j_probe_communicator_contents.results }}"
+      loop_control:
+        label: "{{ item.item.item }}"
+
+    - name: Inspect every role-specific Vagrant management private key
+      ansible.builtin.stat:
+        path: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/private_key' }}
+        follow: false
+      loop: "{{ m4j_roles }}"
+      register: m4j_probe_management_private_keys
+
+    - name: Reject an absent, linked, or non-private management key
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - not item.stat.islnk
+          - item.stat.mode == "0600"
+        fail_msg: "Each probed host requires its role-specific private SSH key."
+      loop: "{{ m4j_probe_management_private_keys.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      no_log: true
+
+    - name: Attach only validated role-specific management keys to probe hosts
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        m4j_source_commit: "{{ m4j_source_commit }}"
+        m4j_expected_application_image_id: >-
+          {{ m4j_expected_application_image_id }}
+        m4j_probe_staging_directory: "{{ m4j_probe_staging_directory }}"
+        ansible_ssh_private_key_file: >-
+          {{ (playbook_dir | dirname | dirname) ~ '/.vagrant/machines/' ~ item ~
+             '/virtualbox/private_key' }}
+      loop: "{{ m4j_roles }}"
+      changed_when: false
+      no_log: true
+
+- name: Run the initial bounded identity, policy, and action probe
+  hosts: agents
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Inspect the installed agent-probe unit
+      ansible.builtin.stat:
+        path: /etc/systemd/system/aegis-m4j-agent-probe.service
+        follow: false
+      register: m4j_agent_probe_unit
+
+    - name: Read the installed agent-probe unit
+      ansible.builtin.slurp:
+        path: /etc/systemd/system/aegis-m4j-agent-probe.service
+      register: m4j_agent_probe_unit_content
+
+    - name: Reject a missing, mutable, or source-drifted probe unit
+      ansible.builtin.assert:
+        that:
+          - m4j_agent_probe_unit.stat.exists
+          - m4j_agent_probe_unit.stat.isreg
+          - not m4j_agent_probe_unit.stat.islnk
+          - m4j_agent_probe_unit.stat.mode == "0644"
+          - >-
+            m4j_expected_application_image_id in
+            (m4j_agent_probe_unit_content.content | b64decode)
+          - >-
+            m4j_source_commit in
+            (m4j_agent_probe_unit_content.content | b64decode)
+          - >-
+            "StandardOutput=file:/run/aegis-ot/m4j-probe/result.json" in
+            (m4j_agent_probe_unit_content.content | b64decode)
+        fail_msg: "Installed agent-probe unit differs from exact deployment inputs."
+
+    - name: Execute and retrieve only the initial private probe record
+      block:
+        - name: Remove a prior transient probe result
+          ansible.builtin.file:
+            path: /run/aegis-ot/m4j-probe/result.json
+            state: absent
+
+        - name: Start the disabled one-shot probe explicitly
+          ansible.builtin.systemd:
+            name: aegis-m4j-agent-probe.service
+            enabled: false
+            state: started
+
+        - name: Inspect the completed initial probe result
+          ansible.builtin.stat:
+            path: /run/aegis-ot/m4j-probe/result.json
+            follow: false
+          register: m4j_initial_probe_result
+
+        - name: Reject an absent, public, or unbounded initial probe result
+          ansible.builtin.assert:
+            that:
+              - m4j_initial_probe_result.stat.exists
+              - m4j_initial_probe_result.stat.isreg
+              - not m4j_initial_probe_result.stat.islnk
+              - m4j_initial_probe_result.stat.mode == "0600"
+              - m4j_initial_probe_result.stat.pw_name == "root"
+              - m4j_initial_probe_result.stat.gr_name == "root"
+              - m4j_initial_probe_result.stat.size | int > 0
+              - m4j_initial_probe_result.stat.size | int <= 4194304
+            fail_msg: "Initial M4j workload probe result is unsafe or absent."
+
+        - name: Fetch the initial probe record into private controller staging
+          ansible.builtin.fetch:
+            src: /run/aegis-ot/m4j-probe/result.json
+            dest: "{{ m4j_probe_staging_directory }}/initial.json"
+            flat: true
+          no_log: true
+      always:
+        - name: Delete the transient initial probe result from the agents host
+          ansible.builtin.file:
+            path: /run/aegis-ot/m4j-probe/result.json
+            state: absent
+
+- name: Restart the plant first for a bounded recovery probe
+  hosts: simulation
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Restart the exact plant workload
+      ansible.builtin.systemd:
+        name: aegis-m4j-plant.service
+        state: restarted
+
+    - name: Wait for the recovered plant listener
+      ansible.builtin.wait_for:
+        host: 192.168.60.15
+        port: 8084
+        state: started
+        timeout: 60
+
+- name: Restart plant-identity-bound trust workloads after the plant
+  hosts: trust
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Restart observer and candidate in deterministic order
+      ansible.builtin.systemd:
+        name: "aegis-m4j-{{ item }}.service"
+        state: restarted
+      loop: [observer, candidate]
+
+    - name: Wait for each recovered trust workload listener
+      ansible.builtin.wait_for:
+        host: 192.168.59.11
+        port: "{{ item }}"
+        state: started
+        timeout: 60
+      loop: [8082, 8085]
+
+- name: Restart the OT adapter after its plant-bound dependencies
+  hosts: ot
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Restart the exact OT adapter workload
+      ansible.builtin.systemd:
+        name: aegis-m4j-ot-adapter.service
+        state: restarted
+
+    - name: Wait for the recovered OT adapter listener
+      ansible.builtin.wait_for:
+        host: 192.168.59.14
+        port: 8083
+        state: started
+        timeout: 60
+
+- name: Restart the gateway last for a bounded recovery probe
+  hosts: gateway
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Restart the exact segmented gateway workload
+      ansible.builtin.systemd:
+        name: aegis-m4j-segmented-gateway.service
+        state: restarted
+
+    - name: Wait for the recovered segmented gateway listener
+      ansible.builtin.wait_for:
+        host: 192.168.58.13
+        port: 8081
+        state: started
+        timeout: 60
+
+- name: Re-run the bounded identity, policy, and action probe after recovery
+  hosts: agents
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Execute and retrieve only the recovered private probe record
+      block:
+        - name: Remove any transient probe result before recovered execution
+          ansible.builtin.file:
+            path: /run/aegis-ot/m4j-probe/result.json
+            state: absent
+
+        - name: Start the disabled one-shot probe after bounded restarts
+          ansible.builtin.systemd:
+            name: aegis-m4j-agent-probe.service
+            enabled: false
+            state: started
+
+        - name: Inspect the completed recovered probe result
+          ansible.builtin.stat:
+            path: /run/aegis-ot/m4j-probe/result.json
+            follow: false
+          register: m4j_recovered_probe_result
+
+        - name: Reject an absent, public, or unbounded recovered probe result
+          ansible.builtin.assert:
+            that:
+              - m4j_recovered_probe_result.stat.exists
+              - m4j_recovered_probe_result.stat.isreg
+              - not m4j_recovered_probe_result.stat.islnk
+              - m4j_recovered_probe_result.stat.mode == "0600"
+              - m4j_recovered_probe_result.stat.pw_name == "root"
+              - m4j_recovered_probe_result.stat.gr_name == "root"
+              - m4j_recovered_probe_result.stat.size | int > 0
+              - m4j_recovered_probe_result.stat.size | int <= 4194304
+            fail_msg: "Recovered M4j workload probe result is unsafe or absent."
+
+        - name: Fetch the recovered probe record into private controller staging
+          ansible.builtin.fetch:
+            src: /run/aegis-ot/m4j-probe/result.json
+            dest: "{{ m4j_probe_staging_directory }}/after-bounded-restart.json"
+            flat: true
+          no_log: true
+      always:
+        - name: Delete the transient recovered probe result from the agents host
+          ansible.builtin.file:
+            path: /run/aegis-ot/m4j-probe/result.json
+            state: absent

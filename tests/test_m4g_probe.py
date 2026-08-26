@@ -190,12 +190,10 @@ def test_execute_posts_exact_request_and_parses_terminal_result(
 def test_bypass_results_classify_each_direct_service_independently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def exchange(_method: str, url: str, **_: Any) -> dict[str, Any]:
-        if "candidate" in url or "simulation" in url:
-            raise ServiceExchangeError("blocked")
-        return {"status": "ready"}
+    def reachable(host: str, _port: int, **_: Any) -> bool:
+        return host not in {"candidate", "simulation"}
 
-    monkeypatch.setattr(m4g_probe, "request_json", exchange)
+    monkeypatch.setattr(m4g_probe, "_tcp_reachable", reachable)
 
     assert m4g_probe._bypass_results() == {
         "observer": True,
@@ -203,6 +201,25 @@ def test_bypass_results_classify_each_direct_service_independently(
         "ot-adapter": True,
         "simulation": False,
     }
+
+
+def test_tcp_bypass_observation_reports_an_open_tls_listener_as_reachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    closed: list[bool] = []
+
+    class Connection:
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setattr(
+        m4g_probe.socket,
+        "create_connection",
+        lambda target, *, timeout: Connection(),
+    )
+
+    assert m4g_probe._tcp_reachable("observer", 8082) is True
+    assert closed == [True]
 
 
 def test_run_probe_sequences_nominal_replay_and_unsafe_without_retry(

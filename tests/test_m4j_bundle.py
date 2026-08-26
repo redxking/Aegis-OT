@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import base64
 import gzip
 import hashlib
 import io
 import json
+import shutil
+import socket
+import stat
 import subprocess
 import tarfile
+import tempfile
 from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 @pytest.fixture
@@ -20,7 +26,20 @@ def bundler(monkeypatch: pytest.MonkeyPatch) -> Any:
     return import_module("build_m4j_bundle")
 
 
+@pytest.fixture
+def workload_validator(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    return import_module("validate_m4j_workloads")
+
+
+@pytest.fixture
+def runtime_preparer(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1] / "scripts"))
+    return import_module("prepare_m4j_runtime_images")
+
+
 def _write_repository_files(root: Path, *, topology: bool = True) -> None:
+    (root / ".dockerignore").write_text(".git\n.env\n*.key\n", encoding="utf-8")
     (root / "Dockerfile").write_text(
         "\n".join(
             (
@@ -40,6 +59,14 @@ def _write_repository_files(root: Path, *, topology: bool = True) -> None:
         encoding="utf-8",
     )
     (root / "tracked.txt").write_text("committed-source\n", encoding="utf-8")
+    policy = root / "policy" / "aegis.rego"
+    policy.parent.mkdir()
+    policy.write_text("package aegis\ndefault allow := false\n", encoding="utf-8")
+    helper = root / "scripts" / "build_m4j_bundle.py"
+    helper.parent.mkdir()
+    helper.write_bytes(
+        (Path(__file__).parents[1] / "scripts" / "build_m4j_bundle.py").read_bytes()
+    )
     if topology:
         topology_path = root / "infra" / "m4j" / "topology.yml"
         topology_path.parent.mkdir(parents=True)
@@ -71,15 +98,94 @@ def _repository(bundler: Any, root: Path, *, topology: bool = True) -> str:
     return _commit(bundler, root, "fixture")
 
 
-def _fixed_tools(*, plan_only: bool = False) -> dict[str, str]:
+def _fixed_tools(
+    *,
+    plan_only: bool = False,
+    builder_profile: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    del builder_profile
     return {
-        "builder": "m4j-exact-source-application-image-bundle-v1",
+        "builder": "m4j-exact-source-application-image-bundle-v2",
         "docker_build": "not_invoked_plan_only" if plan_only else "fixture",
         "docker_daemon": "fixture",
         "buildkit_worker": "fixture",
         "git": "git version fixture",
         "python": "CPython fixture",
     }
+
+
+def _builder_key(tmp_path: Path, *, name: str = "builder") -> tuple[Path, bytes]:
+    signer = Ed25519PrivateKey.generate()
+    private_path = tmp_path / f"{name}.private"
+    private_path.write_bytes(signer.private_bytes_raw())
+    private_path.chmod(0o600)
+    return private_path, signer.public_key().public_bytes_raw()
+
+
+def _builder_boundary(
+    bundler: Any,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> tuple[dict[str, Any], socket.socket]:
+    (
+        client,
+        client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        endpoint,
+    ) = _docker_boundary_materials(tmp_path, request)
+    inspected = bundler.inspect_builder_profile(
+        docker_client=client,
+        docker_client_sha256=client_sha256,
+        docker_buildx_plugin=buildx_plugin,
+        docker_buildx_plugin_sha256=buildx_plugin_sha256,
+        docker_socket=socket_path,
+    )
+    return (
+        {
+            "docker_client": client,
+            "docker_client_sha256": client_sha256,
+            "docker_buildx_plugin": buildx_plugin,
+            "docker_buildx_plugin_sha256": buildx_plugin_sha256,
+            "docker_socket": socket_path,
+            "expected_builder_profile_sha256": inspected["profile_sha256"],
+        },
+        endpoint,
+    )
+
+
+def _docker_boundary_materials(
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> tuple[Path, str, Path, str, Path, socket.socket]:
+    client = tmp_path / "docker-client"
+    client.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    client.chmod(0o700)
+    client_sha256 = hashlib.sha256(client.read_bytes()).hexdigest()
+    buildx_plugin = tmp_path / "docker-buildx"
+    buildx_plugin.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    buildx_plugin.chmod(0o700)
+    buildx_plugin_sha256 = hashlib.sha256(buildx_plugin.read_bytes()).hexdigest()
+    socket_root = Path(
+        tempfile.mkdtemp(
+            prefix=".m4jb-",
+            dir=Path(__file__).parents[1],
+        )
+    )
+    socket_path = socket_root / "docker.sock"
+    endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    endpoint.bind(str(socket_path))
+    request.addfinalizer(endpoint.close)
+    request.addfinalizer(lambda: shutil.rmtree(socket_root, ignore_errors=True))
+    return (
+        client,
+        client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        endpoint,
+    )
 
 
 def _image_config(
@@ -146,9 +252,10 @@ def _write_oci_saved_image_archive(
     *,
     commit: str,
     stored_layer: bytes | None = None,
+    config_layer: bytes | None = None,
 ) -> tuple[str, str]:
     layer = b"fixture-oci-layer"
-    config = _image_config(commit, layer=layer)
+    config = _image_config(commit, layer=config_layer or layer)
     config_digest = hashlib.sha256(config).hexdigest()
     layer_digest = hashlib.sha256(layer).hexdigest()
     image_manifest = json.dumps(
@@ -296,6 +403,61 @@ class _FakeDocker:
             )
         command = tuple(args)
         self.calls.append(command)
+        if command[1:3] == ("version", "--format"):
+            return self._completed(
+                command,
+                stdout=json.dumps(
+                    {
+                        "Client": {
+                            "Version": "29.7.2",
+                            "GitCommit": "fixture-client",
+                            "Os": "darwin",
+                            "Arch": "arm64",
+                        },
+                        "Server": {
+                            "Version": "29.7.2",
+                            "GitCommit": "fixture-server",
+                            "Os": "linux",
+                            "Arch": "amd64",
+                            "Platform": {"Name": "fixture-daemon"},
+                        },
+                    }
+                ),
+            )
+        if command[1:3] == ("info", "--format"):
+            return self._completed(
+                command,
+                stdout=json.dumps(
+                    {
+                        "ID": "fixture-daemon-id",
+                        "Name": "fixture-daemon",
+                        "Driver": "overlay2",
+                        "ServerVersion": "29.7.2",
+                        "OSType": "linux",
+                        "Architecture": "amd64",
+                        "SecurityOptions": ["name=seccomp,profile=builtin"],
+                    }
+                ),
+            )
+        if command[1:3] == ("buildx", "version"):
+            return self._completed(
+                command,
+                stdout="github.com/docker/buildx v0.36.1 fixture\n",
+            )
+        if command[1:3] == ("buildx", "inspect"):
+            return self._completed(
+                command,
+                stdout=(
+                    "Name: fixture-builder\n"
+                    "Driver: docker\n\n"
+                    "Nodes:\n"
+                    "Name: fixture-node\n"
+                    "Endpoint: unix:///fixture/buildkit.sock\n"
+                    "Status: running\n"
+                    "BuildKit version: v0.32.2\n"
+                    "Platforms: linux/amd64\n"
+                ),
+            )
         if command[1:3] == ("image", "inspect"):
             return self._inspect(command, command[3])
         if command[1:3] == ("image", "ls"):
@@ -507,6 +669,36 @@ def test_source_archive_tamper_and_unsafe_members_are_rejected(
         original_extract(capped, tmp_path / "capped-context")
 
 
+def test_source_archive_tree_binding_rejects_rehashed_extra_directory(
+    bundler: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    commit = _repository(bundler, repository)
+    monkeypatch.setattr(bundler, "ROOT", repository)
+    monkeypatch.setattr(bundler, "_tool_versions", _fixed_tools)
+    output = tmp_path / "plan-bundle"
+    manifest = bundler.build_bundle(
+        output,
+        commit_reference=commit,
+        plan_only=True,
+    )
+    source_archive = output / "source.tar"
+    with tarfile.open(source_archive, mode="a") as archive:
+        extra = tarfile.TarInfo("extra-empty")
+        extra.type = tarfile.DIRTYPE
+        extra.mode = 0o755
+        archive.addfile(extra)
+
+    with pytest.raises(bundler.BundleError, match="directory members"):
+        bundler._validate_source_archive_binding(
+            source_archive,
+            expected_commit=commit,
+            source_binding=manifest["source"],
+        )
+
+
 def test_unpinned_base_and_existing_or_symlink_outputs_are_rejected(
     bundler: Any,
     tmp_path: Path,
@@ -622,6 +814,19 @@ def test_saved_archive_is_cryptographically_bound_to_image_config(
     assert oci_binding["image_id_binding"]["verified_layers"][0][
         "digest_semantics"
     ] == "stored_descriptor_digest"
+    wrong_diff_id = tmp_path / "wrong-oci-diff-id.tar"
+    wrong_diff_id_image, _ = _write_oci_saved_image_archive(
+        wrong_diff_id,
+        commit=commit,
+        config_layer=b"different-uncompressed-layer",
+    )
+    with pytest.raises(bundler.BundleError, match="uncompressed diff ID digest"):
+        bundler._validate_saved_image_archive(
+            wrong_diff_id,
+            expected_image_id=wrong_diff_id_image,
+            expected_commit=commit,
+            expected_platform=bundler._target_platform("linux/amd64"),
+        )
     tampered = tmp_path / "tampered-image.tar"
     _write_saved_image_archive(
         tampered,
@@ -685,6 +890,38 @@ def test_saved_archive_is_cryptographically_bound_to_image_config(
         )
 
 
+def test_saved_archive_canonicalization_removes_unreferenced_payloads(
+    bundler: Any,
+    tmp_path: Path,
+) -> None:
+    commit = "a" * 40
+    config = _image_config(commit)
+    archive_path = tmp_path / "image.tar"
+    image_id = _write_saved_image_archive(archive_path, config=config)
+    with tarfile.open(archive_path, mode="a") as archive:
+        material = b'{"untrusted":"ancillary"}'
+        member = tarfile.TarInfo("repositories")
+        member.size = len(material)
+        archive.addfile(member, io.BytesIO(material))
+
+    with pytest.raises(bundler.BundleError, match="unreferenced members"):
+        bundler._validate_saved_image_archive(
+            archive_path,
+            expected_image_id=image_id,
+            expected_commit=commit,
+            expected_platform=bundler._target_platform("linux/amd64"),
+        )
+    binding = bundler._canonicalize_saved_image_archive(
+        archive_path,
+        expected_image_id=image_id,
+        expected_commit=commit,
+        expected_platform=bundler._target_platform("linux/amd64"),
+    )
+    assert "repositories" not in binding["reachable_members"]
+    with tarfile.open(archive_path, mode="r:") as archive:
+        assert "repositories" not in archive.getnames()
+
+
 def test_docker_image_presence_distinguishes_not_found_from_daemon_failure(
     bundler: Any,
     monkeypatch: pytest.MonkeyPatch,
@@ -744,10 +981,28 @@ def test_docker_daemon_buildx_and_buildkit_provenance_is_recorded(
             stdout = json.dumps(docker_version)
         elif command[1:3] == ("buildx", "version"):
             stdout = "github.com/docker/buildx v0.36.1 fixture\n"
+        elif command[1:3] == ("info", "--format"):
+            stdout = json.dumps(
+                {
+                    "ID": "daemon-id",
+                    "Name": "daemon-name",
+                    "Driver": "overlay2",
+                    "ServerVersion": "29.7.2",
+                    "OSType": "linux",
+                    "Architecture": "arm64",
+                    "SecurityOptions": ["name=seccomp,profile=builtin"],
+                }
+            )
         elif command[1:3] == ("buildx", "inspect"):
             stdout = (
-                "Name: fixture\nDriver: docker\nNodes:\n"
+                "Name: fixture-builder\n"
+                "Driver: docker-container\n\n"
+                "Nodes:\n"
+                "Name: fixture-node\n"
+                "Endpoint: unix:///fixture/buildkit.sock\n"
+                "Status: running\n"
                 "BuildKit version: v0.32.2\n"
+                "Platforms: linux/arm64, linux/amd64\n"
             )
         else:
             pytest.fail(f"unexpected provenance command: {command}")
@@ -755,14 +1010,272 @@ def test_docker_daemon_buildx_and_buildkit_provenance_is_recorded(
 
     monkeypatch.setattr(bundler, "_run", fake_run)
 
-    provenance = bundler._docker_build_provenance()
+    profile = bundler._builder_execution_profile(
+        {
+            "client": {
+                "path": "/usr/local/bin/docker",
+                "sha256": "a" * 64,
+                "size_bytes": 100,
+                "uid": 0,
+                "gid": 0,
+                "mode": "0755",
+            },
+            "buildx_plugin": {
+                "path": "/usr/local/lib/docker/cli-plugins/docker-buildx",
+                "sha256": "b" * 64,
+                "size_bytes": 200,
+                "uid": 0,
+                "gid": 0,
+                "mode": "0755",
+            },
+            "endpoint": {
+                "transport": "unix",
+                "path": "/var/run/docker.sock",
+                "uid": 0,
+                "gid": 0,
+                "mode": "0660",
+            },
+            "environment": {
+                "DOCKER_CONFIG": "/private/empty",
+                "PATH": "/usr/bin:/bin",
+            },
+        }
+    )
 
-    assert provenance["docker_client"] == "29.7.2 client-commit darwin/arm64"
-    assert provenance["docker_daemon"] == "29.7.2 server-commit linux/arm64"
-    assert provenance["docker_daemon_platform"] == "Docker Desktop fixture"
-    assert provenance["docker_buildx"] == "github.com/docker/buildx v0.36.1 fixture"
-    assert provenance["docker_buildx_driver"] == "docker"
-    assert provenance["buildkit_worker"] == "v0.32.2"
+    assert profile["docker_client"]["reported_version"] == "29.7.2"
+    assert profile["docker_client"]["execution"] == "private_exact_byte_copy"
+    assert profile["docker_buildx_plugin"] == {
+        "path": "/usr/local/lib/docker/cli-plugins/docker-buildx",
+        "sha256": "b" * 64,
+        "size_bytes": 200,
+        "uid": 0,
+        "gid": 0,
+        "mode": "0755",
+        "execution": "private_exact_byte_copy",
+    }
+    assert profile["daemon"]["id"] == "daemon-id"
+    assert profile["daemon"]["platform_name"] == "Docker Desktop fixture"
+    assert profile["buildkit"]["builder_name"] == "fixture-builder"
+    assert profile["buildkit"]["driver"] == "docker-container"
+    assert profile["buildkit"]["nodes"] == [
+        {
+            "name": "fixture-node",
+            "endpoint": "unix:///fixture/buildkit.sock",
+            "status": "running",
+            "buildkit_version": "v0.32.2",
+            "platforms": ["linux/amd64", "linux/arm64"],
+        }
+    ]
+    versions = bundler._docker_tool_versions(profile)
+    assert versions["docker_buildx_driver"] == "docker-container"
+    assert versions["buildkit_worker"] == "v0.32.2"
+
+
+def test_closed_docker_boundary_excludes_hostile_ambient_inputs(
+    bundler: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    (
+        client,
+        client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        _endpoint,
+    ) = _docker_boundary_materials(tmp_path, request)
+    for name, value in {
+        "DOCKER_HOST": "tcp://attacker.invalid:2375",
+        "DOCKER_CONTEXT": "attacker",
+        "DOCKER_CONFIG": "/attacker/docker-config",
+        "BUILDX_CONFIG": "/attacker/buildx-config",
+        "DOCKER_CLI_PLUGIN_EXTRA_DIRS": "/attacker/plugins",
+        "HTTP_PROXY": "http://attacker.invalid",
+        "HTTPS_PROXY": "http://attacker.invalid",
+        "ALL_PROXY": "socks5://attacker.invalid",
+        "PATH": "/attacker/bin",
+    }.items():
+        monkeypatch.setenv(name, value)
+    observed: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    def capture_run(command: tuple[str, ...], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        observed.append((command, kwargs["env"]))
+        return subprocess.CompletedProcess(command, 0, "ok\n", "")
+
+    monkeypatch.setattr(bundler.subprocess, "run", capture_run)
+    with bundler._closed_docker_boundary(
+        client_path=client,
+        expected_client_sha256=client_sha256,
+        buildx_plugin_path=buildx_plugin,
+        expected_buildx_plugin_sha256=buildx_plugin_sha256,
+        socket_path=socket_path,
+    ) as boundary:
+        bundler._run("docker", "version")
+        bundler._run("docker", "buildx", "version")
+        staged_client = boundary["client_execution_path"]
+        staged_plugin = boundary["buildx_plugin_path"]
+
+    command, environment = observed[0]
+    assert command[0] == str(staged_client)
+    assert command[0] != str(client)
+    assert command[1:3] == ("--config", environment["DOCKER_CONFIG"])
+    assert command[3:5] == ("--host", f"unix://{socket_path}")
+    assert command[5:] == ("version",)
+    plugin_command, plugin_environment = observed[1]
+    assert plugin_command == (str(staged_plugin), "version")
+    assert plugin_environment == environment
+    assert environment["PATH"] == "/usr/bin:/bin"
+    assert environment["DOCKER_HOST"] == f"unix://{socket_path}"
+    assert set(environment) == {
+        "BUILDX_CONFIG",
+        "DOCKER_BUILDKIT",
+        "DOCKER_CONFIG",
+        "DOCKER_HOST",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "PATH",
+        "TMPDIR",
+    }
+
+
+def test_closed_docker_boundary_detects_client_byte_drift(
+    bundler: Any,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    (
+        client,
+        client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        _endpoint,
+    ) = _docker_boundary_materials(tmp_path, request)
+    with pytest.raises(bundler.BundleError, match="client bytes differ"):
+        with bundler._closed_docker_boundary(
+            client_path=client,
+            expected_client_sha256=client_sha256,
+            buildx_plugin_path=buildx_plugin,
+            expected_buildx_plugin_sha256=buildx_plugin_sha256,
+            socket_path=socket_path,
+        ):
+            client.write_text("#!/bin/sh\nexit 99\n", encoding="ascii")
+
+
+def test_closed_docker_boundary_detects_buildx_plugin_byte_drift(
+    bundler: Any,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    (
+        client,
+        client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        _endpoint,
+    ) = _docker_boundary_materials(tmp_path, request)
+    with pytest.raises(bundler.BundleError, match="Buildx plugin bytes differ"):
+        with bundler._closed_docker_boundary(
+            client_path=client,
+            expected_client_sha256=client_sha256,
+            buildx_plugin_path=buildx_plugin,
+            expected_buildx_plugin_sha256=buildx_plugin_sha256,
+            socket_path=socket_path,
+        ):
+            buildx_plugin.write_text("#!/bin/sh\nexit 99\n", encoding="ascii")
+
+
+def test_docker_client_under_world_writable_parent_executes_only_private_copy(
+    bundler: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    unsafe_root = Path(
+        tempfile.mkdtemp(
+            prefix=".m4jb-unsafe-client-",
+            dir=Path(__file__).parents[1],
+        )
+    )
+    request.addfinalizer(lambda: shutil.rmtree(unsafe_root, ignore_errors=True))
+    unsafe_root.chmod(0o777)
+    client = unsafe_root / "docker"
+    client.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    client.chmod(0o700)
+    trusted_client = client.read_bytes()
+    digest = hashlib.sha256(trusted_client).hexdigest()
+    (
+        _safe_client,
+        _safe_client_sha256,
+        buildx_plugin,
+        buildx_plugin_sha256,
+        socket_path,
+        _endpoint,
+    ) = _docker_boundary_materials(tmp_path, request)
+    observed: list[tuple[str, ...]] = []
+
+    def capture_run(
+        command: tuple[str, ...],
+        **kwargs: Any,
+    ) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0, "ok\n", "")
+
+    monkeypatch.setattr(bundler.subprocess, "run", capture_run)
+    with pytest.raises(bundler.BundleError, match="client bytes differ"):
+        with bundler._closed_docker_boundary(
+            client_path=client,
+            expected_client_sha256=digest,
+            buildx_plugin_path=buildx_plugin,
+            expected_buildx_plugin_sha256=buildx_plugin_sha256,
+            socket_path=socket_path,
+        ) as boundary:
+            staged_client = cast(Path, boundary["client_execution_path"])
+            client.rename(unsafe_root / "trusted-client-replaced")
+            client.write_text("#!/bin/sh\nexit 99\n", encoding="ascii")
+            client.chmod(0o700)
+            bundler._run("docker", "version")
+            assert staged_client.read_bytes() == trusted_client
+            assert stat.S_IMODE(staged_client.parent.stat().st_mode) == 0o700
+
+    assert observed[0][0] == str(staged_client)
+    assert observed[0][0] != str(client)
+
+
+def test_docker_socket_rejects_nonsticky_world_writable_parent(
+    bundler: Any,
+    request: pytest.FixtureRequest,
+) -> None:
+    unsafe_root = Path(
+        tempfile.mkdtemp(
+            prefix=".m4jb-unsafe-socket-",
+            dir=Path(__file__).parents[1],
+        )
+    )
+    request.addfinalizer(lambda: shutil.rmtree(unsafe_root, ignore_errors=True))
+    unsafe_root.chmod(0o777)
+    socket_path = unsafe_root / "docker.sock"
+    endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    endpoint.bind(str(socket_path))
+    request.addfinalizer(endpoint.close)
+
+    with pytest.raises(bundler.BundleError, match="path ancestry"):
+        bundler._docker_socket_identity(socket_path)
+
+
+def test_builder_helper_must_match_exact_archived_source(
+    bundler: Any,
+    tmp_path: Path,
+) -> None:
+    helper = tmp_path / "scripts" / "build_m4j_bundle.py"
+    helper.parent.mkdir()
+    helper.write_text("raise SystemExit('foreign helper')\n", encoding="utf-8")
+    with pytest.raises(bundler.BundleError, match="exact source commit"):
+        bundler._builder_helper_binding(tmp_path, object_format="sha1")
 
 
 def test_atomic_publication_refuses_race_created_empty_directory(
@@ -874,10 +1387,13 @@ def test_docker_inspect_rejects_wrong_image_id_or_revision(
 def test_manifest_binds_one_built_image_archive_and_exact_source(
     bundler: Any,
 ) -> None:
+    signer = Ed25519PrivateKey.generate()
     revision = {
         "requested_reference": "release",
         "commit": "a" * 40,
         "tree": "b" * 40,
+        "object_format": "sha1",
+        "commit_object_base64": "Zml4dHVyZQ==",
         "committed_at": "2026-08-25T12:00:00+00:00",
     }
     source = {
@@ -897,6 +1413,12 @@ def test_manifest_binds_one_built_image_archive_and_exact_source(
             "contract_validated": True,
         },
         "secret_like_member_count": 0,
+        "tree_binding": {
+            "git_object_format": "sha1",
+            "commit_sha": "a" * 40,
+            "tree_sha": "b" * 40,
+            "archive_tree_sha": "b" * 40,
+        },
     }
     image = {
         "image_built": True,
@@ -918,6 +1440,17 @@ def test_manifest_binds_one_built_image_archive_and_exact_source(
         },
     }
     target = bundler._target_platform("linux/amd64")
+    builder_helper = {
+        "path": "scripts/build_m4j_bundle.py",
+        "sha256": "2" * 64,
+        "size_bytes": 1,
+        "git_object_format": "sha1",
+        "git_blob_id": "3" * 40,
+    }
+    builder_profile = {
+        "schema_version": "aegis-ot-m4j-builder-execution-profile-v1",
+        "fixture": True,
+    }
 
     first = bundler._manifest(
         revision=revision,
@@ -926,6 +1459,10 @@ def test_manifest_binds_one_built_image_archive_and_exact_source(
         target=target,
         tools=_fixed_tools(),
         plan_only=False,
+        builder_helper=builder_helper,
+        builder_profile=builder_profile,
+        builder_signer=signer,
+        builder_public_key=signer.public_key().public_bytes_raw(),
     )
     second = bundler._manifest(
         revision=revision,
@@ -934,6 +1471,10 @@ def test_manifest_binds_one_built_image_archive_and_exact_source(
         target=target,
         tools=_fixed_tools(),
         plan_only=False,
+        builder_helper=builder_helper,
+        builder_profile=builder_profile,
+        builder_signer=signer,
+        builder_public_key=signer.public_key().public_bytes_raw(),
     )
 
     assert bundler._canonical_bytes(first) == bundler._canonical_bytes(second)
@@ -949,6 +1490,7 @@ def test_mocked_build_constructs_once_saves_by_id_and_atomically_publishes(
     bundler: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     repository = tmp_path / "repository"
     commit = _repository(bundler, repository)
@@ -957,8 +1499,15 @@ def test_mocked_build_constructs_once_saves_by_id_and_atomically_publishes(
     fake = _FakeDocker(bundler, bundler._run, commit=commit)
     monkeypatch.setattr(bundler, "_run", fake.run)
     output = tmp_path / "accepted-bundle"
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
 
-    manifest = bundler.build_bundle(output, commit_reference=commit)
+    manifest = bundler.build_bundle(
+        output,
+        commit_reference=commit,
+        builder_signing_key=signing_key,
+        **boundary,
+    )
 
     build_calls = [call for call in fake.calls if call[1:3] == ("buildx", "build")]
     save_calls = [call for call in fake.calls if call[1:3] == ("image", "save")]
@@ -988,10 +1537,38 @@ def test_mocked_build_constructs_once_saves_by_id_and_atomically_publishes(
     assert retained == manifest
 
 
+def test_build_refuses_unreviewed_live_builder_profile_before_image_build(
+    bundler: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    repository = tmp_path / "repository"
+    commit = _repository(bundler, repository)
+    monkeypatch.setattr(bundler, "ROOT", repository)
+    monkeypatch.setattr(bundler, "_tool_versions", _fixed_tools)
+    fake = _FakeDocker(bundler, bundler._run, commit=commit)
+    monkeypatch.setattr(bundler, "_run", fake.run)
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
+    boundary["expected_builder_profile_sha256"] = "0" * 64
+
+    with pytest.raises(bundler.BundleError, match="separately reviewed"):
+        bundler.build_bundle(
+            tmp_path / "unreviewed-profile-bundle",
+            commit_reference=commit,
+            builder_signing_key=signing_key,
+            **boundary,
+        )
+
+    assert not [call for call in fake.calls if call[1:3] == ("buildx", "build")]
+
+
 def test_mocked_post_build_failure_cleans_only_owned_image_for_retry(
     bundler: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     repository = tmp_path / "repository"
     commit = _repository(bundler, repository)
@@ -1005,9 +1582,16 @@ def test_mocked_post_build_failure_cleans_only_owned_image_for_retry(
     )
     monkeypatch.setattr(bundler, "_run", fake.run)
     output = tmp_path / "failed-bundle"
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
 
     with pytest.raises(bundler.BundleError, match="config digest"):
-        bundler.build_bundle(output, commit_reference=commit)
+        bundler.build_bundle(
+            output,
+            commit_reference=commit,
+            builder_signing_key=signing_key,
+            **boundary,
+        )
 
     build_calls = [call for call in fake.calls if call[1:3] == ("buildx", "build")]
     removal_calls = [call for call in fake.calls if call[1:3] == ("image", "rm")]
@@ -1019,7 +1603,12 @@ def test_mocked_post_build_failure_cleans_only_owned_image_for_retry(
     assert not tuple(tmp_path.glob(".failed-bundle.m4j-*"))
 
     fake.tamper_saved_config = False
-    retry = bundler.build_bundle(output, commit_reference=commit)
+    retry = bundler.build_bundle(
+        output,
+        commit_reference=commit,
+        builder_signing_key=signing_key,
+        **boundary,
+    )
     assert retry["accepted_deploy_bundle"] is True
     assert len(
         [call for call in fake.calls if call[1:3] == ("buildx", "build")]
@@ -1030,6 +1619,7 @@ def test_mocked_malformed_iid_cleans_untagged_owned_image_for_retry(
     bundler: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     repository = tmp_path / "repository"
     commit = _repository(bundler, repository)
@@ -1043,9 +1633,16 @@ def test_mocked_malformed_iid_cleans_untagged_owned_image_for_retry(
     )
     monkeypatch.setattr(bundler, "_run", fake.run)
     output = tmp_path / "bad-iid-bundle"
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
 
     with pytest.raises(bundler.BundleError, match="immutable ID"):
-        bundler.build_bundle(output, commit_reference=commit)
+        bundler.build_bundle(
+            output,
+            commit_reference=commit,
+            builder_signing_key=signing_key,
+            **boundary,
+        )
 
     removal_calls = [call for call in fake.calls if call[1:3] == ("image", "rm")]
     assert removal_calls == [("docker", "image", "rm", fake.image_id)]
@@ -1053,7 +1650,12 @@ def test_mocked_malformed_iid_cleans_untagged_owned_image_for_retry(
     assert not output.exists()
 
     fake.malformed_iid = False
-    retry = bundler.build_bundle(output, commit_reference=commit)
+    retry = bundler.build_bundle(
+        output,
+        commit_reference=commit,
+        builder_signing_key=signing_key,
+        **boundary,
+    )
     assert retry["accepted_deploy_bundle"] is True
     assert len(
         [call for call in fake.calls if call[1:3] == ("buildx", "build")]
@@ -1064,6 +1666,7 @@ def test_untagged_cleanup_refuses_foreign_invocation_label_collision(
     bundler: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     repository = tmp_path / "repository"
     commit = _repository(bundler, repository)
@@ -1102,9 +1705,16 @@ def test_untagged_cleanup_refuses_foreign_invocation_label_collision(
 
     monkeypatch.setattr(bundler, "_run", raced_run)
     output = tmp_path / "foreign-race-bundle"
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
 
     with pytest.raises(bundler.BundleError, match="refusing destructive cleanup"):
-        bundler.build_bundle(output, commit_reference=commit)
+        bundler.build_bundle(
+            output,
+            commit_reference=commit,
+            builder_signing_key=signing_key,
+            **boundary,
+        )
 
     assert not [call for call in fake.calls if call[1:3] == ("image", "rm")]
     assert not output.exists()
@@ -1114,6 +1724,7 @@ def test_mocked_publication_race_after_build_cleans_owned_docker_state(
     bundler: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     repository = tmp_path / "repository"
     commit = _repository(bundler, repository)
@@ -1130,9 +1741,16 @@ def test_mocked_publication_race_after_build_cleans_owned_docker_state(
         original_publish(staging, destination)
 
     monkeypatch.setattr(bundler, "_publish_directory_noreplace", race_publication)
+    signing_key, _public_key = _builder_key(tmp_path)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
 
     with pytest.raises(bundler.BundleError, match="overwrite"):
-        bundler.build_bundle(output, commit_reference=commit)
+        bundler.build_bundle(
+            output,
+            commit_reference=commit,
+            builder_signing_key=signing_key,
+            **boundary,
+        )
 
     removal_calls = [call for call in fake.calls if call[1:3] == ("image", "rm")]
     assert removal_calls == [("docker", "image", "rm", fake.image_id)]
@@ -1140,3 +1758,191 @@ def test_mocked_publication_race_after_build_cleans_owned_docker_state(
     assert fake.image_present is False
     assert (output / "racer-owned").read_text(encoding="utf-8") == "preserve\n"
     assert not tuple(tmp_path.glob(".raced-bundle.m4j-*"))
+
+
+def test_consumer_requires_out_of_band_trusted_builder_for_foreign_image(
+    bundler: Any,
+    workload_validator: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    repository = tmp_path / "repository"
+    commit = _repository(bundler, repository)
+    monkeypatch.setattr(bundler, "ROOT", repository)
+    monkeypatch.setattr(bundler, "_tool_versions", _fixed_tools)
+    trusted_private, trusted_public = _builder_key(tmp_path, name="trusted-builder")
+    trusted_fake = _FakeDocker(bundler, bundler._run, commit=commit)
+    monkeypatch.setattr(bundler, "_run", trusted_fake.run)
+    boundary, _endpoint = _builder_boundary(bundler, tmp_path, request)
+    trusted_bundle = tmp_path / "trusted-bundle"
+    manifest = bundler.build_bundle(
+        trusted_bundle,
+        commit_reference=commit,
+        builder_signing_key=trusted_private,
+        **boundary,
+    )
+
+    validated = workload_validator._validate_bundle(
+        trusted_bundle,
+        commit,
+        trusted_public,
+        boundary["expected_builder_profile_sha256"],
+    )
+    assert validated["application_image_id"] == trusted_fake.image_id
+    assert validated["builder_attestation_key_id"] == hashlib.sha256(
+        trusted_public
+    ).hexdigest()
+    assert manifest["builder_attestation"]["key_id"] == validated[
+        "builder_attestation_key_id"
+    ]
+    with pytest.raises(
+        workload_validator.WorkloadContractError,
+        match="explicit raw Ed25519",
+    ):
+        workload_validator._validate_bundle(
+            trusted_bundle,
+            commit,
+            b"",
+            boundary["expected_builder_profile_sha256"],
+        )
+    with pytest.raises(
+        workload_validator.WorkloadContractError,
+        match="execution profile",
+    ):
+        workload_validator._validate_bundle(
+            trusted_bundle,
+            commit,
+            trusted_public,
+            "0" * 64,
+        )
+
+    foreign_private, _foreign_public = _builder_key(tmp_path, name="foreign-builder")
+    foreign_fake = _FakeDocker(bundler, bundler._run, commit=commit)
+    foreign_fake.layer = b"foreign-image-layer"
+    monkeypatch.setattr(bundler, "_run", foreign_fake.run)
+    foreign_bundle = tmp_path / "foreign-bundle"
+    bundler.build_bundle(
+        foreign_bundle,
+        commit_reference=commit,
+        builder_signing_key=foreign_private,
+        **boundary,
+    )
+    with pytest.raises(
+        workload_validator.WorkloadContractError,
+        match="trusted-builder provenance",
+    ):
+        workload_validator._validate_bundle(
+            foreign_bundle,
+            commit,
+            trusted_public,
+            boundary["expected_builder_profile_sha256"],
+        )
+
+
+def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
+    runtime_preparer: Any,
+    tmp_path: Path,
+) -> None:
+    layer = b"registry-bound-runtime-layer"
+    config = _image_config("a" * 40, layer=layer)
+    config_digest = hashlib.sha256(config).hexdigest()
+    layer_digest = hashlib.sha256(layer).hexdigest()
+    registry_manifest = json.dumps(
+        {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {
+                "mediaType": "application/vnd.oci.image.config.v1+json",
+                "digest": f"sha256:{config_digest}",
+                "size": len(config),
+            },
+            "layers": [
+                {
+                    "mediaType": "application/vnd.oci.image.layer.v1.tar",
+                    "digest": f"sha256:{layer_digest}",
+                    "size": len(layer),
+                }
+            ],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    root_digest = "sha256:" + hashlib.sha256(registry_manifest).hexdigest()
+    reference = f"registry.example.invalid/runtime:1@{root_digest}"
+    root_descriptor = {
+        "digest": root_digest,
+        "size_bytes": len(registry_manifest),
+        "media_type": "application/vnd.oci.image.manifest.v1+json",
+        "document_base64": base64.b64encode(registry_manifest).decode("ascii"),
+    }
+    registry_binding = {
+        "schema_version": "aegis-ot-oci-registry-archive-binding-v1",
+        "registry_reference": reference,
+        "target_platform": "linux/amd64",
+        "root_descriptor": root_descriptor,
+        "selected_manifest": dict(root_descriptor),
+        "config_descriptor": {
+            "digest": f"sha256:{config_digest}",
+            "size_bytes": len(config),
+            "media_type": "application/vnd.oci.image.config.v1+json",
+        },
+        "layer_descriptors": [
+            {
+                "digest": f"sha256:{layer_digest}",
+                "size_bytes": len(layer),
+                "media_type": "application/vnd.oci.image.layer.v1.tar",
+            }
+        ],
+    }
+    distribution_tag = "aegis-m4j-runtime/fixture:0123456789abcdef"
+    archive_path = tmp_path / "runtime-image.tar"
+    image_id = _write_saved_image_archive(
+        archive_path,
+        config=config,
+        repo_tags=[distribution_tag],
+        layer=layer,
+    )
+
+    binding = runtime_preparer._validate_saved_runtime_archive(
+        archive_path,
+        reference=reference,
+        distribution_tag=distribution_tag,
+        image_id=image_id,
+        registry_binding=registry_binding,
+    )
+    assert binding["config_sha256"] == config_digest
+
+    wrong_reference = reference.rsplit("sha256:", maxsplit=1)[0] + "sha256:" + "0" * 64
+    with pytest.raises(
+        runtime_preparer.RuntimeImageBundleError,
+        match="exact request",
+    ):
+        runtime_preparer._validate_saved_runtime_archive(
+            archive_path,
+            reference=wrong_reference,
+            distribution_tag=distribution_tag,
+            image_id=image_id,
+            registry_binding=registry_binding,
+        )
+
+    foreign_layer = b"foreign-runtime-layer"
+    foreign_config = _image_config("a" * 40, layer=foreign_layer)
+    foreign_archive = tmp_path / "foreign-runtime-image.tar"
+    foreign_image_id = _write_saved_image_archive(
+        foreign_archive,
+        config=foreign_config,
+        repo_tags=[distribution_tag],
+        layer=foreign_layer,
+    )
+    with pytest.raises(
+        runtime_preparer.RuntimeImageBundleError,
+        match="not bound to the registry",
+    ):
+        runtime_preparer._validate_saved_runtime_archive(
+            foreign_archive,
+            reference=reference,
+            distribution_tag=distribution_tag,
+            image_id=foreign_image_id,
+            registry_binding=registry_binding,
+        )

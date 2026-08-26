@@ -1,0 +1,34 @@
+server {
+    trust_domain = "{{ m4j_workload_plan.trust_domain }}"
+    bind_address = "{{ m4j_topology.nodes.trust.interfaces.trust_enrollment }}"
+    bind_port = "8081"
+    socket_path = "/run/spire/server/private/api.sock"
+    data_dir = "/var/lib/spire/server"
+    log_level = "INFO"
+    default_x509_svid_ttl = "5m"
+    ca_ttl = "24h"
+    disable_jwt_svids = true
+
+    experimental {
+        agent_spiffe_id_as_selector = true
+    }
+}
+
+plugins {
+    DataStore "sql" {
+        plugin_data {
+            database_type = "sqlite3"
+            connection_string = "/var/lib/spire/server/datastore.sqlite3"
+        }
+    }
+
+    NodeAttestor "join_token" {
+        plugin_data {}
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            keys_path = "/var/lib/spire/server/keys.json"
+        }
+    }
+}

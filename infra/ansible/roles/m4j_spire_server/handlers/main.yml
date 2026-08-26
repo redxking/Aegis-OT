@@ -1,0 +1,9 @@
+---
+- name: Reload M4j workload units
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart M4j SPIRE server
+  ansible.builtin.systemd:
+    name: aegis-m4j-spire-server.service
+    state: restarted
