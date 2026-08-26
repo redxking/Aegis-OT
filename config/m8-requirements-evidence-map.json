@@ -1,0 +1,143 @@
+{
+  "schema": "aegis-ot-m8-reviewed-evidence-map-v1",
+  "mapping_id": "m8-local-evidence-map-2026-08-26",
+  "baseline_status": "proposed_not_approved",
+  "review_scope": "Explicit implementation-custody mapping of bounded local repository evidence; not requirement acceptance or independent review.",
+  "review_authority": "implementation_custody",
+  "approval_state": "not_approved",
+  "entries": [
+    {
+      "requirement_id": "AOT-EVID-001",
+      "rationale": "The mapped evidence-chain implementation and tamper tests provide local trace links for proposal-to-terminal chain construction and verification.",
+      "trust_boundary": "Evidence writers are inside implementation custody; the offline verifier and retained package are local artifacts without independent custody.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_evidence_replay.py::test_evidence_chain_verifies",
+        "pytest::tests/test_evidence_replay.py::test_evidence_link_tampering_is_detected",
+        "pytest::tests/test_evidence_replay.py::test_evidence_tampering_is_detected"
+      ],
+      "configuration": "Deterministic local evidence-chain fixtures and the retained M4b manifest.",
+      "environment": "Local software test and simulated-OT evidence package; no independent evidence custodian.",
+      "implementation_artifacts": [
+        "src/aegis_ot/evidence.py"
+      ],
+      "result_artifacts": [
+        "results/m4b-capability-evidence/manifest.json"
+      ],
+      "owner": "evidence_service_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "historical_only_no_current_result",
+      "limitations": "The mapping does not demonstrate every proposal path, external anchoring, independent custody, or requirement acceptance."
+    },
+    {
+      "requirement_id": "AOT-EVID-005",
+      "rationale": "The M4b package writer, offline-verifier tests, and retained manifest provide bounded local evidence for artifact inventory and source/package integrity fields.",
+      "trust_boundary": "Package generation and verification remain within implementation custody; the external trust anchor is a local research artifact.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_m4b_package.py::test_verifier_rejects_artifact_tamper",
+        "pytest::tests/test_m4b_package.py::test_writer_emits_externally_rooted_package_that_verifies_offline"
+      ],
+      "configuration": "Committed M4b evidence package with manifest, schemas, source snapshot, topology, scenarios, and integrity records.",
+      "environment": "Local simulated-OT campaign package; not a production build, independent reproduction, or external qualification record.",
+      "implementation_artifacts": [
+        "src/aegis_ot/m4b_package.py"
+      ],
+      "result_artifacts": [
+        "results/m4b-capability-evidence/manifest.json"
+      ],
+      "owner": "evidence_package_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "historical_only_no_current_result",
+      "limitations": "The retained M4b package does not by itself cover every end-state binding category or establish independent provenance."
+    },
+    {
+      "requirement_id": "AOT-EXEC-001",
+      "rationale": "The gateway implementation and focused tests map the local permit-admission sequence across identity, freshness, replay, approval, and safety checks.",
+      "trust_boundary": "The local gateway is outside the proposing-agent object but remains in the same implementation and test custody.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_gateway.py::test_high_risk_requires_approval",
+        "pytest::tests/test_gateway.py::test_replay_is_denied",
+        "pytest::tests/test_gateway.py::test_safe_authorized_action_is_permitted",
+        "pytest::tests/test_gateway.py::test_unsafe_transition_is_denied"
+      ],
+      "configuration": "Default deterministic local lab configuration with signed identities, delegation, policy, replay state, and safety kernel.",
+      "environment": "Local software conformance fixtures; no representative multi-host or HIL acceptance environment.",
+      "implementation_artifacts": [
+        "src/aegis_ot/gateway.py"
+      ],
+      "result_artifacts": [],
+      "owner": "gateway_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "no_result_artifact",
+      "limitations": "Mapped tests cover selected local paths and do not establish complete end-state channel, deployment, or independent acceptance evidence."
+    },
+    {
+      "requirement_id": "AOT-PERF-007",
+      "rationale": "The deterministic fleet model explicitly exercises the four named logical-agent scales and an explicit provisional action/conflict mix.",
+      "trust_boundary": "The fleet workload generator and verifier share implementation custody and produce modeled, not representative operational, evidence.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_m6_fleet.py::test_action_and_conflict_distribution_is_fixed_and_exact_at_every_scale",
+        "pytest::tests/test_m6_fleet.py::test_study_covers_only_the_four_required_logical_agent_scales"
+      ],
+      "configuration": "Fixed deterministic M6 v2 model assumptions for 10, 100, 1,000, and 10,000 logical agents.",
+      "environment": "Deterministic analytical model on a local Python runtime; no distributed workload or approved representative mix.",
+      "implementation_artifacts": [
+        "scripts/run_m6_fleet.py",
+        "src/aegis_ot/m6_fleet.py"
+      ],
+      "result_artifacts": [],
+      "owner": "performance_model_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "no_result_artifact",
+      "limitations": "The action/conflict distribution is explicitly provisional and unapproved, and the run is a model rather than a representative distributed fleet test."
+    },
+    {
+      "requirement_id": "AOT-PERF-008",
+      "rationale": "The fleet model emits the named delegation, approval, replay, pending-effect, reconciliation, policy-distribution, and operator-span measures.",
+      "trust_boundary": "All modeled measures and their checks remain within implementation custody and depend on declared analytical assumptions.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_m6_fleet.py::test_approval_replay_pending_effect_and_reconciliation_outputs_scale",
+        "pytest::tests/test_m6_fleet.py::test_queue_graph_propagation_policy_and_evidence_relationships_are_auditable"
+      ],
+      "configuration": "Fixed deterministic M6 v2 fleet model with explicit units, queue assumptions, and measurement definitions.",
+      "environment": "Deterministic analytical model on a local Python runtime; no measured distributed infrastructure.",
+      "implementation_artifacts": [
+        "scripts/run_m6_fleet.py",
+        "src/aegis_ot/m6_fleet.py"
+      ],
+      "result_artifacts": [],
+      "owner": "performance_model_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "no_result_artifact",
+      "limitations": "The measures are modeled outputs, not observed fleet performance, representative capacity evidence, or verification completion."
+    },
+    {
+      "requirement_id": "AOT-SAFE-001",
+      "rationale": "The deterministic safety kernel and independently implemented decimal oracle tests map selected unsafe-transition denial behavior.",
+      "trust_boundary": "The safety kernel is outside the proposing agent, while both the kernel and reference oracle remain under implementation custody.",
+      "procedure_or_test_ids": [
+        "pytest::tests/test_safety_oracle.py::test_isolation_limit_is_enforced",
+        "pytest::tests/test_safety_oracle.py::test_line_loading_limit_is_enforced",
+        "pytest::tests/test_safety_oracle.py::test_oracle_does_not_call_safety_kernel"
+      ],
+      "configuration": "Deterministic local safety parameters and decimal reference-oracle fixtures.",
+      "environment": "Synthetic local safety model; no approved site envelope, HIL plant, or independent assessor.",
+      "implementation_artifacts": [
+        "src/aegis_ot/oracle.py",
+        "src/aegis_ot/safety.py"
+      ],
+      "result_artifacts": [
+        "results/m2-independent-oracle/manifest.json"
+      ],
+      "owner": "safety_model_implementation_custody",
+      "disposition": "open_not_accepted",
+      "result": "not_executed",
+      "result_artifact_state": "historical_only_no_current_result",
+      "limitations": "The mapped evidence is synthetic and local and does not prove an approved operational constraint set, physical accuracy, or independent validation."
+    }
+  ]
+}
