@@ -281,6 +281,13 @@ def test_demo_source_hashes_bind_to_retained_artifacts() -> None:
         assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source.sha256
 
 
+def test_m2_package_bytes_match_registered_retention_commit() -> None:
+    demo_builder._bind_directory_to_retention_commit(
+        demo_builder.M2_RETENTION_COMMIT,
+        demo_builder.M2_PACKAGE_DIR,
+    )
+
+
 def test_binomial_model_rejects_numerator_greater_than_denominator() -> None:
     payload = _mutable_evidence_payload()
     metric = payload["m2"]["baselines"][3]["metrics"]["unsafe_action_escape"]
