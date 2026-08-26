@@ -163,11 +163,14 @@ docker compose \
   --profile experiment config --quiet
 ```
 
-M4i has committed runtime coordination, durable journals, reconciliation, and
-an accepted single-host campaign at `results/m4i-coordination-evidence.json`.
-That result does not establish consensus, a rollback-resistant external anchor,
-or exactly-once-effect behavior. The [M4j lab guide](docs/reproducibility/M4J_LAB.md)
-provides the compatible-host deployment and live-probe sequence.
+The current actor-bound workload-identity and coordination code has accepted
+single-host campaigns at `results/m4g-workload-identity-evidence-v2.json` and
+`results/m4i-coordination-evidence-v2.json`. The unsuffixed files remain as
+immutable historical evidence for the preceding credential contract. These
+results do not establish consensus, a rollback-resistant external anchor,
+multi-host deployment, or exactly-once-effect behavior. The
+[M4j lab guide](docs/reproducibility/M4J_LAB.md) provides the compatible-host
+deployment and live-probe sequence.
 
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
 

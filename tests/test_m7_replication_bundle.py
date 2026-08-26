@@ -262,9 +262,21 @@ def test_bundle_contains_source_derived_spdx_inputs_and_conservative_inventory(
 
     inventory = _json(bundle / "milestone-evidence-inventory.json")
     m1 = next(item for item in inventory["milestones"] if item["milestone"] == "M1")
+    m4g = next(item for item in inventory["milestones"] if item["milestone"] == "M4g")
+    m4i = next(item for item in inventory["milestones"] if item["milestone"] == "M4i")
     m8 = next(item for item in inventory["milestones"] if item["milestone"] == "M8")
     assert m1["artifact_presence_state"] == "all_declared_artifacts_present_unverified"
     assert m1["artifact_acceptance_state"] == "not_evaluated_by_this_inventory"
+    assert [item["path"] for item in m4g["declared_artifacts"]] == [
+        "results/m4g-workload-identity-evidence.json",
+        "results/m4g-workload-identity-evidence-v2.json",
+    ]
+    assert m4g["artifact_presence_state"] == "no_declared_artifact_present"
+    assert [item["path"] for item in m4i["declared_artifacts"]] == [
+        "results/m4i-coordination-evidence.json",
+        "results/m4i-coordination-evidence-v2.json",
+    ]
+    assert m4i["artifact_presence_state"] == "no_declared_artifact_present"
     assert m8["artifact_presence_state"] == "no_declared_artifact_present"
     assert m8["execution_state"] == "not_executed_by_this_bundle"
     assert m8["independent_replication_state"] == "not_established"

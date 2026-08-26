@@ -209,7 +209,10 @@ MILESTONE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "M4g",
         "workload_identity_and_revocation",
-        ("results/m4g-workload-identity-evidence.json",),
+        (
+            "results/m4g-workload-identity-evidence.json",
+            "results/m4g-workload-identity-evidence-v2.json",
+        ),
     ),
     (
         "M4h",
@@ -219,7 +222,10 @@ MILESTONE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "M4i",
         "durable_transaction_coordination_and_reconciliation",
-        ("results/m4i-coordination-evidence.json",),
+        (
+            "results/m4i-coordination-evidence.json",
+            "results/m4i-coordination-evidence-v2.json",
+        ),
     ),
     (
         "M4j",
