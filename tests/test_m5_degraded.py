@@ -488,6 +488,38 @@ def test_degraded_lease_requires_explicit_reversal_after_health_recovers(
     )
 
 
+def test_removing_accepted_lease_cannot_bypass_signed_reversal(
+    proposal: Any,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    degraded = _snapshot(role=DegradedRole.MANAGEMENT)
+    current: dict[str, Any] = {
+        "snapshot": degraded,
+        "authorization": _authorization(
+            private_key,
+            degraded,
+            role=DegradedRole.MANAGEMENT,
+        ),
+    }
+    gate = DegradedOperationGate(
+        authority_id=AUTHORITY_ID,
+        authority_public_key=private_key.public_key(),
+        snapshot_source=lambda: current["snapshot"],
+        authorization_source=lambda: current["authorization"],
+    )
+
+    assert gate.evaluate(proposal, now=NOW).may_enter_primary_assurance
+    current["snapshot"] = _snapshot()
+    current["authorization"] = None
+
+    held = gate.evaluate(proposal, now=NOW)
+
+    assert held.outcome is DegradedAdmissionOutcome.HOLD_STATE
+    assert held.reasons == ("degraded_condition_cleared_reversal_required",)
+    assert not held.may_enter_primary_assurance
+    assert not held.execution_authorized
+
+
 def test_forged_or_replayed_reversal_cannot_revoke_a_lease(proposal: Any) -> None:
     private_key = Ed25519PrivateKey.generate()
     snapshot = _snapshot(role=DegradedRole.MANAGEMENT)

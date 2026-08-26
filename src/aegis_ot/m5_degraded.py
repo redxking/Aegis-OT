@@ -625,11 +625,18 @@ class InMemoryDegradedOperationStateStore:
 class FileDegradedOperationStateStore:
     """Crash-durable, process-serialized state for the configured M5 gate."""
 
-    def __init__(self, path: Path, *, authority_id: str) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        authority_id: str,
+        require_existing: bool = False,
+    ) -> None:
         if not path.is_absolute() or not path.name:
             raise ValueError("degraded state path must be an absolute file path")
         self.path = path
         self.authority_id = authority_id
+        self.require_existing = require_existing
 
     def _open_parent(self) -> int:
         parent = self.path.parent
@@ -681,7 +688,9 @@ class FileDegradedOperationStateStore:
             flags |= os.O_NOFOLLOW
         try:
             descriptor = os.open(self.path.name, flags, dir_fd=parent_fd)
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
+            if self.require_existing:
+                raise ValueError("degraded state is unavailable") from exc
             return DegradedOperationState.initial(self.authority_id)
         try:
             state_stat = os.fstat(descriptor)
@@ -1054,6 +1063,11 @@ class DegradedOperationGate:
             authorization is not None
             and authorization.digest in operation_state.revoked_authorization_sha256
         )
+        active_authorization_revoked = (
+            operation_state.active_authorization_sha256 is not None
+            and operation_state.active_authorization_sha256
+            in operation_state.revoked_authorization_sha256
+        )
 
         affected = snapshot.affected_roles
         snapshot_age = evaluated_at - snapshot.captured_at
@@ -1064,7 +1078,13 @@ class DegradedOperationGate:
             freshness_reasons.append("degraded_snapshot_stale")
 
         if not affected and not freshness_reasons and not snapshot.unresolved_effect:
-            if authorization is not None and not authorization_revoked:
+            # Durable state, not the mutable authorization source, determines
+            # whether a previously accepted lease is still active. Otherwise
+            # withholding the lease file would bypass signed reversal.
+            if (
+                operation_state.active_authorization_sha256 is not None
+                and not active_authorization_revoked
+            ):
                 return self._result(
                     outcome=DegradedAdmissionOutcome.HOLD_STATE,
                     reasons=("degraded_condition_cleared_reversal_required",),
@@ -1076,7 +1096,7 @@ class DegradedOperationGate:
                 )
             normal_reason = (
                 "normal_runtime_dependencies_healthy_after_signed_reversal"
-                if authorization_revoked
+                if active_authorization_revoked or authorization_revoked
                 else "normal_runtime_dependencies_healthy"
             )
             return self._result(

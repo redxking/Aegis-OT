@@ -2605,6 +2605,7 @@ def _configured_m5_degraded_gate() -> DegradedOperationGate | None:
         state_store=FileDegradedOperationStateStore(
             paths["state"],
             authority_id=settings["authority_id"],
+            require_existing=True,
         ),
     )
     try:

@@ -491,6 +491,20 @@ def test_file_state_store_rejects_invalid_persisted_state(tmp_path: Path) -> Non
         store.read()
 
 
+def test_file_state_store_can_require_initialized_state(tmp_path: Path) -> None:
+    state_parent = tmp_path / "state-parent"
+    state_parent.mkdir(mode=0o700)
+    state_parent.chmod(0o700)
+    store = FileDegradedOperationStateStore(
+        state_parent / "state.json",
+        authority_id=AUTHORITY_ID,
+        require_existing=True,
+    )
+
+    with pytest.raises(ValueError, match="degraded state is unavailable"):
+        store.read()
+
+
 def test_file_state_store_rejects_read_races(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
