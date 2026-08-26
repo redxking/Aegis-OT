@@ -102,6 +102,7 @@ class CapabilityIdentities:
     authority: Ed25519PrivateKey
     authority_key_id: str
     bundle_path: Path
+    trust_sequence_state_path: Path
     agent_signer: WorkloadSigner
     agent_credential_path: Path
     gateway_signer: WorkloadSigner
@@ -115,6 +116,7 @@ class CapabilityIdentities:
             trust_root_key_id=self.authority_key_id,
             trust_domain=TRUST_DOMAIN,
             trust_bundle_path=self.bundle_path,
+            trust_sequence_state_path=self.trust_sequence_state_path,
         )
 
     def write_bundle(
@@ -157,6 +159,9 @@ def identities(tmp_path: Path) -> CapabilityIdentities:
     gateway_private = Ed25519PrivateKey.generate()
     ot_private = Ed25519PrivateKey.generate()
     bundle_path = tmp_path / "workload-trust-bundle.json"
+    trust_sequence_directory = tmp_path / "trust-sequence"
+    trust_sequence_directory.mkdir(mode=0o700)
+    trust_sequence_directory.chmod(0o700)
     agent_path = tmp_path / "agent-credential.json"
     gateway_path = tmp_path / "gateway-credential.json"
     ot_path = tmp_path / "ot-credential.json"
@@ -191,6 +196,7 @@ def identities(tmp_path: Path) -> CapabilityIdentities:
         authority=authority,
         authority_key_id=workload_key_id(authority.public_key()),
         bundle_path=bundle_path,
+        trust_sequence_state_path=trust_sequence_directory / "state.json",
         agent_signer=WorkloadSigner(
             credential=agent_credential,
             private_key=agent_private,

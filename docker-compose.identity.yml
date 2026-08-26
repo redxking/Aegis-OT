@@ -36,6 +36,9 @@ services:
       AEGIS_OT_PUBLIC_KEY_FILE: /run/secrets/ot_public
       AEGIS_RUNTIME_UID: "${AEGIS_RUNTIME_UID:-65532}"
       AEGIS_RUNTIME_GID: "${AEGIS_RUNTIME_GID:-65532}"
+      AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY: /var/lib/aegis-ot/trust-sequence-state/agent
+      AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY: /var/lib/aegis-ot/trust-sequence-state/gateway
+      AEGIS_OT_TRUST_SEQUENCE_DIRECTORY: /var/lib/aegis-ot/trust-sequence-state/ot
     secrets:
       - workload_authority_private
       - agent_public
@@ -43,6 +46,11 @@ services:
       - ot_public
     volumes:
       - workload_identity:/var/lib/aegis-ot/identity
+      # Empty roots are assigned once. Runtime-owned 0700 roots remain opaque
+      # here and are validated by their owning verifier process.
+      - workload_trust_sequence_agent:/var/lib/aegis-ot/trust-sequence-state/agent
+      - workload_trust_sequence_gateway:/var/lib/aegis-ot/trust-sequence-state/gateway
+      - workload_trust_sequence_ot:/var/lib/aegis-ot/trust-sequence-state/ot
 
   identity-admin:
     profiles: [identity-admin]
@@ -73,10 +81,12 @@ services:
       AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
       AEGIS_GATEWAY_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/gateway_private
       AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
     secrets:
       - gateway_private
     volumes:
       - workload_identity:/run/aegis-identity:ro
+      - workload_trust_sequence_gateway:/var/lib/aegis-ot/trust-sequence
     depends_on:
       identity-init:
         condition: service_completed_successfully
@@ -87,12 +97,14 @@ services:
       AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
       AEGIS_OT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/ot.credential.json
       AEGIS_OT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/ot_private
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
       AEGIS_WORKLOAD_REPLAY_LEDGER_FILE: /var/lib/aegis-ot/workload-replay.json
     secrets:
       - ot_private
     volumes:
       - workload_identity:/run/aegis-identity:ro
       - workload_replay:/var/lib/aegis-ot
+      - workload_trust_sequence_ot:/var/lib/aegis-ot/trust-sequence
     depends_on:
       identity-init:
         condition: service_completed_successfully
@@ -123,10 +135,12 @@ services:
       <<: [*m4g-workload-common, *m4g-workload-subjects]
       AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/agent.credential.json
       AEGIS_AGENT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/agent_private
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
     secrets:
       - agent_private
     volumes:
       - workload_identity:/run/aegis-identity:ro
+      - workload_trust_sequence_agent:/var/lib/aegis-ot/trust-sequence
     depends_on:
       identity-init:
         condition: service_completed_successfully
@@ -146,3 +160,6 @@ secrets:
 volumes:
   workload_identity: {}
   workload_replay: {}
+  workload_trust_sequence_agent: {}
+  workload_trust_sequence_gateway: {}
+  workload_trust_sequence_ot: {}

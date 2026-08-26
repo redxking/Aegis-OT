@@ -236,6 +236,12 @@ def create_secret_package(
             "AEGIS_WORKLOAD_BUNDLE_TTL_SECONDS": str(credential_ttl_seconds),
             "AEGIS_RUNTIME_UID": str(os.getuid()),
             "AEGIS_RUNTIME_GID": str(os.getgid()),
+            # Runtime trust-sequence roots belong to managed hosts, never the
+            # offline secret package. Mask ambient shell values while calling
+            # the shared identity initializer.
+            "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY": "",
+            "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY": "",
+            "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY": "",
         }
         with _installed_environment(identity_environment):
             identity = initialize(now=now)

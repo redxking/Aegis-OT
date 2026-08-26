@@ -74,6 +74,143 @@ def test_runtime_assignment_sets_mode_before_transferring_ownership(
     assert stat.S_IMODE(target.stat().st_mode) == mode
 
 
+def _configure_trust_sequence_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, Path]:
+    paths = {
+        role: tmp_path / f"trust-sequence-{role}"
+        for role in ("agent", "gateway", "ot-adapter")
+    }
+    environment_names = {
+        "agent": "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+        "gateway": "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        "ot-adapter": "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+    }
+    for role, path in paths.items():
+        path.mkdir()
+        monkeypatch.setenv(environment_names[role], str(path))
+    return paths
+
+
+def test_trust_sequence_roots_prepare_bootstrap_then_preserve_runtime_dac_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _configure_trust_sequence_directories(tmp_path, monkeypatch)
+
+    prepared = identity_init._prepare_trust_sequence_directories(
+        target_uid=os.getuid(),
+        target_gid=os.getgid(),
+    )
+
+    assert set(prepared) == {"agent", "gateway", "ot-adapter"}
+    assert all(item["state"] == "bootstrap_prepared" for item in prepared.values())
+    assert len({path.stat().st_ino for path in paths.values()}) == 3
+    for path in paths.values():
+        assert list(path.iterdir()) == []
+        assert stat.S_IMODE(path.stat().st_mode) == 0o700
+        assert path.stat().st_uid == os.getuid()
+        assert path.stat().st_gid == os.getgid()
+
+    original: dict[Path, bytes] = {}
+    for index, path in enumerate(paths.values(), start=1):
+        item = path / f"runtime-private-{index}"
+        material = b"runtime-owned-content"
+        item.write_bytes(material)
+        original[item] = material
+
+    def forbid_runtime_enumeration(_path: Path) -> None:
+        raise AssertionError("runtime-owned 0700 roots must not be enumerated")
+
+    monkeypatch.setattr(Path, "iterdir", forbid_runtime_enumeration)
+
+    preserved = identity_init._prepare_trust_sequence_directories(
+        target_uid=os.getuid(),
+        target_gid=os.getgid(),
+    )
+
+    assert all(
+        item["state"] == "runtime_owned_preserved_uninspected"
+        for item in preserved.values()
+    )
+    assert {path: path.read_bytes() for path in original} == original
+
+
+@pytest.mark.parametrize("invalid_entries", [("state.json",), ("unexpected",)])
+def test_trust_sequence_roots_reject_nonempty_bootstrap_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_entries: tuple[str, ...],
+) -> None:
+    paths = _configure_trust_sequence_directories(tmp_path, monkeypatch)
+    agent = paths["agent"]
+    agent.chmod(0o751)
+    for name in invalid_entries:
+        (paths["gateway"] / name).write_text("invalid", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="must be empty before ownership transfer"):
+        identity_init._prepare_trust_sequence_directories(
+            target_uid=os.getuid(),
+            target_gid=os.getgid(),
+        )
+
+    # All roots are validated before any empty root is chmod/chowned.
+    assert stat.S_IMODE(agent.stat().st_mode) == 0o751
+
+
+def test_trust_sequence_roots_reject_inaccessible_bootstrap_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _configure_trust_sequence_directories(tmp_path, monkeypatch)
+    paths["gateway"].chmod(0o400)
+
+    with pytest.raises(RuntimeError, match="unexpected ownership or mode"):
+        identity_init._prepare_trust_sequence_directories(
+            target_uid=os.getuid(),
+            target_gid=os.getgid(),
+        )
+
+
+def test_trust_sequence_roles_reject_shared_directory_inode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _configure_trust_sequence_directories(tmp_path, monkeypatch)
+    monkeypatch.setenv(
+        "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        str(paths["agent"]),
+    )
+
+    with pytest.raises(RuntimeError, match="must use isolated directories"):
+        identity_init._prepare_trust_sequence_directories(
+            target_uid=os.getuid(),
+            target_gid=os.getgid(),
+        )
+
+
+def test_trust_sequence_root_configuration_is_optional_but_never_partial(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for environment_name in identity_init.TRUST_SEQUENCE_DIRECTORY_ENVIRONMENTS.values():
+        monkeypatch.delenv(environment_name, raising=False)
+    assert identity_init._prepare_trust_sequence_directories(
+        target_uid=os.getuid(),
+        target_gid=os.getgid(),
+    ) == {}
+
+    path = tmp_path / "agent-only"
+    path.mkdir()
+    monkeypatch.setenv("AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY", str(path))
+    with pytest.raises(RuntimeError, match="configured all together"):
+        identity_init._prepare_trust_sequence_directories(
+            target_uid=os.getuid(),
+            target_gid=os.getgid(),
+        )
+
+
 def _raw_private(key: Ed25519PrivateKey) -> bytes:
     return key.private_bytes(
         serialization.Encoding.Raw,
@@ -92,6 +229,7 @@ def _raw_public(key: Ed25519PrivateKey) -> bytes:
 @dataclass(frozen=True)
 class ProvisionedIdentity:
     directory: Path
+    trust_sequence_directories: dict[str, Path]
     authority_path: Path
     authority: Ed25519PrivateKey
     leaves: dict[WorkloadRole, Ed25519PrivateKey]
@@ -106,6 +244,12 @@ def _provision(
     identity_directory = tmp_path / "identity"
     input_directory.mkdir()
     identity_directory.mkdir()
+    trust_sequence_directories = {
+        role: tmp_path / f"trust-sequence-{role}"
+        for role in ("agent", "gateway", "ot")
+    }
+    for path in trust_sequence_directories.values():
+        path.mkdir()
     authority = Ed25519PrivateKey.generate()
     authority_path = input_directory / "authority.private"
     authority_path.write_bytes(_raw_private(authority))
@@ -131,6 +275,18 @@ def _provision(
     }
     for name, path in environment.items():
         monkeypatch.setenv(name, str(path))
+    monkeypatch.setenv(
+        "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["agent"]),
+    )
+    monkeypatch.setenv(
+        "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["gateway"]),
+    )
+    monkeypatch.setenv(
+        "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["ot"]),
+    )
     monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", "agent/probe-1")
     monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", AGENT_ACTOR_ID)
     monkeypatch.setenv("AEGIS_GATEWAY_WORKLOAD_SUBJECT", "gateway/control-1")
@@ -140,6 +296,7 @@ def _provision(
     summary = initialize(now=NOW)
     return ProvisionedIdentity(
         directory=identity_directory,
+        trust_sequence_directories=trust_sequence_directories,
         authority_path=authority_path,
         authority=authority,
         leaves=leaves,
@@ -153,6 +310,9 @@ def _verifier(provisioned: ProvisionedIdentity) -> WorkloadIdentityVerifier:
         trust_root_key_id=workload_key_id(provisioned.authority.public_key()),
         trust_domain=TRUST_DOMAIN,
         trust_bundle_path=provisioned.directory / "trust-bundle.json",
+        trust_sequence_state_path=(
+            provisioned.trust_sequence_directories["gateway"] / "state.json"
+        ),
     )
 
 
@@ -165,6 +325,12 @@ def _configure_uninitialized_identity(
     identity_directory = tmp_path / "collision-identity"
     input_directory.mkdir()
     identity_directory.mkdir()
+    trust_sequence_directories = {
+        role: tmp_path / f"collision-trust-sequence-{role}"
+        for role in ("agent", "gateway", "ot")
+    }
+    for path in trust_sequence_directories.values():
+        path.mkdir()
     authority_path = input_directory / "authority.private"
     authority_path.write_bytes(_raw_private(keys["authority"]))
     public_paths: dict[str, Path] = {}
@@ -182,6 +348,18 @@ def _configure_uninitialized_identity(
     }
     for name, path in environment.items():
         monkeypatch.setenv(name, str(path))
+    monkeypatch.setenv(
+        "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["agent"]),
+    )
+    monkeypatch.setenv(
+        "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["gateway"]),
+    )
+    monkeypatch.setenv(
+        "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+        str(trust_sequence_directories["ot"]),
+    )
     monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", "agent/probe-1")
     monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", AGENT_ACTOR_ID)
     monkeypatch.setenv("AEGIS_GATEWAY_WORKLOAD_SUBJECT", "gateway/control-1")

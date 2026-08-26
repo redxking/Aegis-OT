@@ -218,6 +218,54 @@ def test_contract_rejects_missing_or_mismatched_agent_actor_binding(
         _validate_mutation(compiler, tmp_path, workload)
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_state_file",
+        "wrong_state_file",
+        "shared_state_root",
+        "foreign_state_consumer",
+    ],
+)
+def test_contract_rejects_trust_sequence_state_drift(
+    compiler: ModuleType,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    workload = _workload_document()
+    agent = workload["services"]["agent-probe"]
+    gateway = workload["services"]["segmented-gateway"]
+    if mutation == "missing_state_file":
+        agent["environment"].pop("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE")
+    elif mutation == "wrong_state_file":
+        gateway["environment"]["AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"] = (
+            "/var/lib/aegis-ot/trust-sequence/other.json"
+        )
+    elif mutation == "shared_state_root":
+        gateway_mount = next(
+            mount
+            for mount in gateway["state_mounts"]
+            if mount["container"] == "/var/lib/aegis-ot/trust-sequence"
+        )
+        gateway_mount["host"] = "agent-workload-trust-sequence"
+    elif mutation == "foreign_state_consumer":
+        candidate = workload["services"]["candidate"]
+        candidate["environment"]["AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"] = (
+            "/var/lib/aegis-ot/trust-sequence/state.json"
+        )
+        candidate["state_mounts"].append(
+            {
+                "host": "agent-workload-trust-sequence",
+                "container": "/var/lib/aegis-ot/trust-sequence",
+            }
+        )
+    else:  # pragma: no cover - parameter list is closed above
+        raise AssertionError(f"unhandled mutation: {mutation}")
+
+    with pytest.raises(compiler.WorkloadContractError, match="trust-sequence"):
+        _validate_mutation(compiler, tmp_path, workload)
+
+
 def test_inventory_is_source_bound_and_ansible_environment_is_closed(
     deployer: ModuleType,
     tmp_path: Path,
@@ -1962,12 +2010,55 @@ def test_runtime_contract_pins_orchestrator_images_and_probe_transport(
     assert workload["runtime_images"] == compiler.RUNTIME_IMAGE_REFS
     agent = workload["services"]["agent-probe"]
     gateway = workload["services"]["segmented-gateway"]
+    ot_adapter = workload["services"]["ot-adapter"]
     assert agent["environment"]["AEGIS_GATEWAY_URL"].startswith("https://")
     assert agent["environment"]["AEGIS_SPIRE_MTLS_MODE"] == "required"
     assert agent["environment"]["AEGIS_AGENT_ACTOR_ID"] == "agent:operator-1"
     assert gateway["environment"]["AEGIS_AGENT_ACTOR_ID"] == "agent:operator-1"
+    expected_state_file = "/var/lib/aegis-ot/trust-sequence/state.json"
+    expected_state_mounts = {
+        "agent-probe": "agent-workload-trust-sequence",
+        "segmented-gateway": "gateway-workload-trust-sequence",
+        "ot-adapter": "ot-workload-trust-sequence",
+    }
+    for name, service in {
+        "agent-probe": agent,
+        "segmented-gateway": gateway,
+        "ot-adapter": ot_adapter,
+    }.items():
+        assert service["environment"][
+            "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"
+        ] == expected_state_file
+        assert {
+            "host": expected_state_mounts[name],
+            "container": "/var/lib/aegis-ot/trust-sequence",
+        } in service["state_mounts"]
     assert gateway["command"].count("--allowed-client-spiffe-id") == 1
     assert "aegis_ot.spire_mtls" in gateway["command"]
+
+    workload_tasks = yaml.safe_load(
+        (
+            ROOT
+            / "infra"
+            / "ansible"
+            / "roles"
+            / "m4j_workload_services"
+            / "tasks"
+            / "main.yml"
+        ).read_text(encoding="utf-8")
+    )
+    state_root_task = next(
+        task
+        for task in workload_tasks
+        if task["name"] == "Create private durable state roots declared by each workload"
+    )
+    assert state_root_task["ansible.builtin.file"] == {
+        "path": "/var/lib/aegis-ot/state/{{ inventory_hostname }}/{{ item.1.host }}",
+        "state": "directory",
+        "owner": "{{ item.0.uid | string }}",
+        "group": "{{ item.0.gid | string }}",
+        "mode": "0700",
+    }
 
 
 def test_primary_probe_transport_cannot_downgrade_required_spire_mtls(

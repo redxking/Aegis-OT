@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import shutil
@@ -68,8 +69,27 @@ AEGIS_HEALTH_PORTS = {
 PROJECT_VOLUME_SUFFIXES = (
     "workload_identity",
     "workload_replay",
+    "workload_trust_sequence_agent",
+    "workload_trust_sequence_gateway",
+    "workload_trust_sequence_ot",
     "transport_replay",
     "transport_probe",
+)
+SOURCE_BINDING_FILES = (
+    *COMPOSE_FILES,
+    "Dockerfile",
+    "pyproject.toml",
+    "requirements.lock",
+    "scripts/run_m4d_experiment.py",
+    "scripts/run_m4g_experiment.py",
+    "src/aegis_ot/m4g_identity_admin.py",
+    "src/aegis_ot/m4g_identity_init.py",
+    "src/aegis_ot/m4g_probe.py",
+    "src/aegis_ot/segmented_capability_models.py",
+    "src/aegis_ot/segmented_capability_runtime.py",
+    "src/aegis_ot/workload_identity.py",
+    "src/aegis_ot/workload_runtime.py",
+    "src/aegis_ot/workload_trust_state.py",
 )
 TRUST_DOMAIN = "aegis-ot.m4g.local"
 AGENT_ACTOR_ID = "agent:operator-1"
@@ -78,6 +98,13 @@ GATEWAY_SUBJECT = "urn:aegis-ot:m4g:workload:gateway"
 OT_SUBJECT = "urn:aegis-ot:m4g:workload:ot-adapter"
 FIXED_ROTATION_NONCE = "m4g-cross-leaf-transport-nonce-0001"
 MAX_CAPTURE_BYTES = 1_048_576
+TRUST_SEQUENCE_DIRECTORY = "/var/lib/aegis-ot/trust-sequence"
+TRUST_SEQUENCE_STATE_FILE = f"{TRUST_SEQUENCE_DIRECTORY}/state.json"
+TRUST_SEQUENCE_VOLUME_SUFFIXES = {
+    "agent": "workload_trust_sequence_agent",
+    "gateway": "workload_trust_sequence_gateway",
+    "ot-adapter": "workload_trust_sequence_ot",
+}
 
 
 def _compose_prefix(project_name: str) -> tuple[str, ...]:
@@ -101,6 +128,32 @@ def _assert_source_checkout() -> dict[str, str]:
         "package_directory": str(actual.relative_to(ROOT)),
         "checkout_root": str(ROOT),
     }
+
+
+def _source_binding(commit: str) -> dict[str, Any]:
+    checkout = _assert_source_checkout()
+    if m4d._run("git", "rev-parse", "HEAD").stdout.strip() != commit:
+        raise m4d.ExperimentError("M4g source-binding commit changed")
+    git_tree = m4d._run("git", "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+    source_files: dict[str, str] = {}
+    for relative in SOURCE_BINDING_FILES:
+        path = ROOT / relative
+        try:
+            material = path.read_bytes()
+        except OSError as exc:
+            raise m4d.ExperimentError(
+                f"M4g source-binding file is unavailable: {relative}"
+            ) from exc
+        source_files[relative] = hashlib.sha256(material).hexdigest()
+    binding: dict[str, Any] = {
+        **checkout,
+        "git_commit": commit,
+        "git_tree": git_tree,
+        "source_files": source_files,
+        "source_files_sha256": m4d._canonical_sha256(source_files),
+    }
+    binding["source_binding_sha256"] = m4d._canonical_sha256(binding)
+    return binding
 
 
 def _assert_checkout(commit: str) -> None:
@@ -593,6 +646,134 @@ def _replay_snapshot(prefix: tuple[str, ...]) -> dict[str, Any]:
     )
 
 
+_TRUST_SEQUENCE_SNAPSHOT_CODE = r"""
+import base64, hashlib, json, stat
+from pathlib import Path
+root = Path('/var/lib/aegis-ot/trust-sequence')
+metadata = root.lstat()
+result = {
+    'directory': {
+        'path': str(root),
+        'entries': sorted(item.name for item in root.iterdir()),
+        'mode': format(stat.S_IMODE(metadata.st_mode), '04o'),
+        'uid': metadata.st_uid,
+        'gid': metadata.st_gid,
+    },
+    'files': {},
+}
+for name in ('state.json', '.state.json.lock'):
+    path = root / name
+    material = path.read_bytes()
+    item_metadata = path.lstat()
+    item = {
+        'bytes_base64': base64.b64encode(material).decode('ascii'),
+        'sha256': hashlib.sha256(material).hexdigest(),
+        'size_bytes': len(material),
+        'mode': format(stat.S_IMODE(item_metadata.st_mode), '04o'),
+        'uid': item_metadata.st_uid,
+        'gid': item_metadata.st_gid,
+        'regular': stat.S_ISREG(item_metadata.st_mode),
+        'links': item_metadata.st_nlink,
+    }
+    if name == 'state.json':
+        item['document'] = json.loads(material)
+    result['files'][name] = item
+print(json.dumps(result,sort_keys=True,separators=(',',':')))
+"""
+
+
+def _service_trust_sequence_snapshot(
+    prefix: tuple[str, ...],
+    service: str,
+) -> dict[str, Any]:
+    profile = ("--profile", "experiment") if service == "agent-probe" else ()
+    completed = m4d._run(
+        *prefix,
+        *profile,
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        service,
+        "-c",
+        _TRUST_SEQUENCE_SNAPSHOT_CODE,
+    )
+    return _json_object(
+        completed.stdout,
+        label=f"{service} trust-sequence snapshot",
+    )
+
+
+def _trust_sequence_snapshot(prefix: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        "agent": _service_trust_sequence_snapshot(prefix, "agent-probe"),
+        "gateway": _service_trust_sequence_snapshot(prefix, "segmented-gateway"),
+        "ot-adapter": _service_trust_sequence_snapshot(prefix, "ot-adapter"),
+    }
+
+
+def _trust_sequence_snapshot_at(
+    snapshot: dict[str, Any],
+    *,
+    sequence: int,
+) -> bool:
+    if set(snapshot) != set(TRUST_SEQUENCE_VOLUME_SUFFIXES):
+        return False
+    for item in snapshot.values():
+        if not isinstance(item, dict):
+            return False
+        directory = item.get("directory")
+        files = item.get("files")
+        if not isinstance(directory, dict) or not isinstance(files, dict):
+            return False
+        if (
+            directory.get("path") != TRUST_SEQUENCE_DIRECTORY
+            or directory.get("entries") != [".state.json.lock", "state.json"]
+            or directory.get("mode") != "0700"
+            or directory.get("uid") != 65532
+            or directory.get("gid") != 65532
+            or set(files) != {"state.json", ".state.json.lock"}
+        ):
+            return False
+        state = files["state.json"]
+        lock = files[".state.json.lock"]
+        if not isinstance(state, dict) or not isinstance(lock, dict):
+            return False
+        document = state.get("document")
+        if (
+            not isinstance(document, dict)
+            or document.get("schema_version")
+            != "m4g-workload-trust-sequence-state-v1"
+            or document.get("highest_sequence") != sequence
+            or document.get("trust_domain") != TRUST_DOMAIN
+            or not isinstance(document.get("highest_bundle_sha256"), str)
+            or len(document["highest_bundle_sha256"]) != 64
+        ):
+            return False
+        for persisted in (state, lock):
+            if (
+                persisted.get("mode") != "0600"
+                or persisted.get("uid") != 65532
+                or persisted.get("gid") != 65532
+                or persisted.get("regular") is not True
+                or persisted.get("links") != 1
+            ):
+                return False
+    return True
+
+
+def _trust_sequence_floors(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        role: item.get("files", {})
+        .get("state.json", {})
+        .get("document", {})
+        .get("highest_sequence")
+        for role, item in snapshot.items()
+        if isinstance(item, dict)
+    }
+
+
 _ROTATION_FIXTURE_CODE = r"""
 import json, os, secrets
 from datetime import UTC, datetime, timedelta
@@ -998,6 +1179,357 @@ def _bundle_fault_case(
     }
 
 
+_LOCAL_TRUST_VERIFIER_PROBE_CODE = r"""
+import json, os
+from aegis_ot.segmented_capability_models import (
+    GATEWAY_CAPABILITY_AUDIENCE,
+    OT_CAPABILITY_AUDIENCE,
+)
+from aegis_ot.workload_identity import WorkloadRole
+from aegis_ot.workload_runtime import (
+    local_identity_from_environment,
+    verifier_from_environment,
+)
+prefix = os.environ['AEGIS_M4G_TRUST_TEST_PREFIX']
+if prefix == 'GATEWAY':
+    role = WorkloadRole.GATEWAY
+    audience = OT_CAPABILITY_AUDIENCE
+elif prefix == 'OT':
+    role = WorkloadRole.OT_ADAPTER
+    audience = GATEWAY_CAPABILITY_AUDIENCE
+else:
+    raise RuntimeError('unsupported trust verifier probe prefix')
+identity = local_identity_from_environment(
+    verifier_from_environment(),
+    prefix,
+    role=role,
+    audience=audience,
+)
+resolved = identity.resolve()
+print(json.dumps({
+    'credential_id': identity.signer.credential.credential.credential_id,
+    'sequence': resolved.verification.trust_bundle_sequence,
+},sort_keys=True,separators=(',',':')))
+"""
+
+_LOCAL_HEALTH_EXCHANGE_CODE = r"""
+import json, os
+from urllib.error import HTTPError
+from urllib.request import urlopen
+url = 'http://127.0.0.1:' + os.environ['AEGIS_M4G_HEALTH_PORT'] + '/health'
+try:
+    with urlopen(url, timeout=3) as response:
+        status = response.status
+        material = response.read(1048577)
+except HTTPError as exc:
+    status = exc.code
+    material = exc.read(1048577)
+if len(material) > 1048576:
+    raise RuntimeError('local health response exceeded evidence limit')
+print(json.dumps({
+    'http_status': status,
+    'body': json.loads(material),
+},sort_keys=True,separators=(',',':')))
+"""
+
+
+def _local_trust_verifier_probe(
+    prefix: tuple[str, ...],
+    *,
+    service: str,
+    identity_prefix: str,
+    check: bool,
+) -> subprocess.CompletedProcess[str]:
+    return m4d._run(
+        *prefix,
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "--env",
+        f"AEGIS_M4G_TRUST_TEST_PREFIX={identity_prefix}",
+        service,
+        "-c",
+        _LOCAL_TRUST_VERIFIER_PROBE_CODE,
+        check=check,
+    )
+
+
+def _recreate_gateway_ot(
+    prefix: tuple[str, ...],
+    *,
+    await_ready: bool = True,
+) -> dict[str, Any]:
+    before = {
+        service: _container_identity(prefix, service)
+        for service in ("segmented-gateway", "ot-adapter")
+    }
+    m4d._run(
+        *prefix,
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--no-build",
+        "segmented-gateway",
+        "ot-adapter",
+    )
+    if await_ready:
+        _await_gateway()
+        after = {
+            service: _container_identity(prefix, service)
+            for service in ("segmented-gateway", "ot-adapter")
+        }
+        health: dict[str, Any] = {}
+    else:
+        after, health = _await_gateway_ot_unavailable(prefix)
+    return {"before": before, "after": after, "health": health}
+
+
+def _local_health_exchange(
+    prefix: tuple[str, ...],
+    *,
+    service: str,
+    port: int,
+) -> dict[str, Any]:
+    completed = m4d._run(
+        *prefix,
+        "exec",
+        "-T",
+        "-e",
+        f"AEGIS_M4G_HEALTH_PORT={port}",
+        service,
+        "python",
+        "-c",
+        _LOCAL_HEALTH_EXCHANGE_CODE,
+    )
+    return _json_object(completed.stdout, label=f"{service} rollback health")
+
+
+def _await_gateway_ot_unavailable(
+    prefix: tuple[str, ...],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    latest_containers: dict[str, dict[str, Any]] = {}
+    latest_health: dict[str, Any] = {}
+    for _ in range(80):
+        latest_containers = {
+            service: _container_identity(prefix, service)
+            for service in ("segmented-gateway", "ot-adapter")
+        }
+        try:
+            latest_health = {
+                "segmented-gateway": _local_health_exchange(
+                    prefix,
+                    service="segmented-gateway",
+                    port=8081,
+                ),
+                "ot-adapter": _local_health_exchange(
+                    prefix,
+                    service="ot-adapter",
+                    port=8083,
+                ),
+            }
+        except m4d.ExperimentError:
+            time.sleep(0.25)
+            continue
+        expected_reasons = {
+            "segmented-gateway": "gateway_runtime_unavailable",
+            "ot-adapter": "ot_runtime_unavailable",
+        }
+        if all(
+            latest_containers[service].get("running") is True
+            and latest_health[service].get("http_status") == 503
+            and isinstance(latest_health[service].get("body"), dict)
+            and latest_health[service]["body"].get("reason") == reason
+            for service, reason in expected_reasons.items()
+        ):
+            return latest_containers, latest_health
+        time.sleep(0.25)
+    raise m4d.ExperimentError(
+        "M4g gateway and OT adapter did not become unavailable under trust rollback"
+    )
+
+
+def _gateway_ot_recreated(
+    snapshots: dict[str, Any],
+) -> bool:
+    before = snapshots.get("before", {})
+    after = snapshots.get("after", {})
+    return all(
+        isinstance(before.get(service), dict)
+        and isinstance(after.get(service), dict)
+        and before[service].get("container_id") != after[service].get("container_id")
+        and before[service].get("started_at") != after[service].get("started_at")
+        for service in ("segmented-gateway", "ot-adapter")
+    )
+
+
+def _gateway_ot_failed_closed(
+    snapshots: dict[str, Any],
+) -> bool:
+    after = snapshots.get("after", {})
+    health = snapshots.get("health", {})
+    expected_reasons = {
+        "segmented-gateway": "gateway_runtime_unavailable",
+        "ot-adapter": "ot_runtime_unavailable",
+    }
+    return (
+        isinstance(after, dict)
+        and isinstance(health, dict)
+        and set(after) == set(expected_reasons)
+        and set(health) == set(expected_reasons)
+        and all(
+            isinstance(after[service], dict)
+            and after[service].get("running") is True
+            and isinstance(health[service], dict)
+            and health[service].get("http_status") == 503
+            and isinstance(health[service].get("body"), dict)
+            and health[service]["body"].get("reason") == reason
+            for service, reason in expected_reasons.items()
+        )
+    )
+
+
+def _rollback_rejected(process: subprocess.CompletedProcess[str]) -> bool:
+    detail = f"{process.stdout}\n{process.stderr}"
+    return process.returncode != 0 and "sequence rolled back" in detail
+
+
+def _restart_durable_bundle_rollback_case(
+    prefix: tuple[str, ...],
+    *,
+    sequence_one_bundle: bytes,
+    sequence_two_bundle: bytes,
+) -> dict[str, Any]:
+    """Prove intact local floors reject signed rollback after process recreation."""
+
+    sequence_two_before_restart = _trust_sequence_snapshot(prefix)
+    intact_restart = _recreate_gateway_ot(prefix)
+    intact_restart_probe = _json_object(
+        _run_agent_probe(prefix).stdout,
+        label="intact-volume restart M4g agent probe",
+    )
+    sequence_two_after_restart = _trust_sequence_snapshot(prefix)
+
+    plant_before = _service_health(prefix, "simulation", 8084)
+    mutation: dict[str, Any] | None = None
+    rollback_restart: dict[str, Any] | None = None
+    agent_probe: subprocess.CompletedProcess[str] | None = None
+    gateway_probe: subprocess.CompletedProcess[str] | None = None
+    ot_probe: subprocess.CompletedProcess[str] | None = None
+    sequence_after_rejection: dict[str, Any] | None = None
+    plant_after: dict[str, Any] | None = None
+    bundle_restored = False
+    recovery_restart: dict[str, Any] | None = None
+    try:
+        mutation = _mutate_bundle(
+            prefix,
+            operation="replace",
+            material=sequence_one_bundle,
+        )
+        rollback_restart = _recreate_gateway_ot(prefix, await_ready=False)
+        agent_probe = _run_agent_probe(prefix, check=False)
+        gateway_probe = _local_trust_verifier_probe(
+            prefix,
+            service="segmented-gateway",
+            identity_prefix="GATEWAY",
+            check=False,
+        )
+        ot_probe = _local_trust_verifier_probe(
+            prefix,
+            service="ot-adapter",
+            identity_prefix="OT",
+            check=False,
+        )
+        sequence_after_rejection = _trust_sequence_snapshot(prefix)
+        plant_after = _service_health(prefix, "simulation", 8084)
+    finally:
+        _mutate_bundle(
+            prefix,
+            operation="replace",
+            material=sequence_two_bundle,
+        )
+        bundle_restored = True
+        recovery_restart = _recreate_gateway_ot(prefix)
+
+    if (
+        mutation is None
+        or rollback_restart is None
+        or agent_probe is None
+        or gateway_probe is None
+        or ot_probe is None
+        or sequence_after_rejection is None
+        or plant_after is None
+        or recovery_restart is None
+    ):
+        raise m4d.ExperimentError(
+            "restart-durable M4g trust-bundle rollback case did not complete"
+        )
+
+    recovery_probe = _json_object(
+        _run_agent_probe(prefix).stdout,
+        label="post-rollback-recovery M4g agent probe",
+    )
+    sequence_after_recovery = _trust_sequence_snapshot(prefix)
+    no_effect = (
+        plant_before.get("state_version") == plant_after.get("state_version")
+        and plant_before.get("state_digest") == plant_after.get("state_digest")
+        and plant_before.get("commit_count") == plant_after.get("commit_count")
+    )
+    verifier_exit_codes = {
+        "agent": agent_probe.returncode,
+        "gateway": gateway_probe.returncode,
+        "ot-adapter": ot_probe.returncode,
+    }
+    verifier_rejections = {
+        "agent": _rollback_rejected(agent_probe),
+        "gateway": _rollback_rejected(gateway_probe),
+        "ot-adapter": _rollback_rejected(ot_probe),
+    }
+    accepted = (
+        _trust_sequence_snapshot_at(sequence_two_before_restart, sequence=2)
+        and _gateway_ot_recreated(intact_restart)
+        and _probe_accepted(intact_restart_probe)
+        and _trust_sequence_snapshot_at(sequence_two_after_restart, sequence=2)
+        and mutation.get("present") is True
+        and _gateway_ot_recreated(rollback_restart)
+        and _gateway_ot_failed_closed(rollback_restart)
+        and all(verifier_rejections.values())
+        and no_effect
+        and _trust_sequence_snapshot_at(sequence_after_rejection, sequence=2)
+        and bundle_restored
+        and _gateway_ot_recreated(recovery_restart)
+        and _probe_accepted(recovery_probe)
+        and _trust_sequence_snapshot_at(sequence_after_recovery, sequence=2)
+    )
+    return {
+        "condition": "signed_sequence_one_after_intact_sequence_two_restart",
+        "sequence_two_before_restart": sequence_two_before_restart,
+        "intact_restart": intact_restart,
+        "intact_restart_probe": intact_restart_probe,
+        "sequence_two_after_restart": sequence_two_after_restart,
+        "mutation": mutation,
+        "rollback_restart": rollback_restart,
+        "verifier_exit_codes": verifier_exit_codes,
+        "verifier_rollback_rejections": verifier_rejections,
+        "verifier_stderr_tails": {
+            "agent": agent_probe.stderr[-4000:],
+            "gateway": gateway_probe.stderr[-4000:],
+            "ot-adapter": ot_probe.stderr[-4000:],
+        },
+        "plant_before": plant_before,
+        "plant_after": plant_after,
+        "effect_absent": no_effect,
+        "sequence_after_rejection": sequence_after_rejection,
+        "bundle_restored": bundle_restored,
+        "recovery_restart": recovery_restart,
+        "recovery_probe": recovery_probe,
+        "sequence_after_recovery": sequence_after_recovery,
+        "accepted": accepted,
+    }
+
+
 def _decode_artifact(snapshot: dict[str, Any], name: str) -> bytes:
     try:
         encoded = snapshot[name]["bytes_base64"]
@@ -1073,10 +1605,93 @@ def _redacted_environment(
     }
 
 
+def _resolved_volume_at(service: dict[str, Any], target: str) -> dict[str, Any] | None:
+    volumes = service.get("volumes")
+    if not isinstance(volumes, list):
+        return None
+    matches = [
+        item
+        for item in volumes
+        if isinstance(item, dict)
+        and item.get("type") == "volume"
+        and item.get("target") == target
+    ]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
+def _trust_sequence_compose_bound(compose: dict[str, Any]) -> bool:
+    services = compose.get("services")
+    if not isinstance(services, dict):
+        return False
+    expected = {
+        "agent-probe": "workload_trust_sequence_agent",
+        "segmented-gateway": "workload_trust_sequence_gateway",
+        "ot-adapter": "workload_trust_sequence_ot",
+    }
+    for service_name, suffix in expected.items():
+        service = services.get(service_name)
+        if not isinstance(service, dict):
+            return False
+        environment = service.get("environment")
+        mount = _resolved_volume_at(service, TRUST_SEQUENCE_DIRECTORY)
+        if (
+            not isinstance(environment, dict)
+            or environment.get("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE")
+            != TRUST_SEQUENCE_STATE_FILE
+            or not isinstance(mount, dict)
+            or not str(mount.get("source", "")).endswith(suffix)
+            or mount.get("read_only", False) is not False
+        ):
+            return False
+
+    initializer = services.get("identity-init")
+    administrator = services.get("identity-admin")
+    if not isinstance(initializer, dict) or not isinstance(administrator, dict):
+        return False
+    initializer_environment = initializer.get("environment")
+    if not isinstance(initializer_environment, dict):
+        return False
+    init_targets = {
+        "workload_trust_sequence_agent": (
+            "/var/lib/aegis-ot/trust-sequence-state/agent",
+            "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+        ),
+        "workload_trust_sequence_gateway": (
+            "/var/lib/aegis-ot/trust-sequence-state/gateway",
+            "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        ),
+        "workload_trust_sequence_ot": (
+            "/var/lib/aegis-ot/trust-sequence-state/ot",
+            "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+        ),
+    }
+    for suffix, (target, setting) in init_targets.items():
+        mount = _resolved_volume_at(initializer, target)
+        if (
+            initializer_environment.get(setting) != target
+            or not isinstance(mount, dict)
+            or not str(mount.get("source", "")).endswith(suffix)
+            or mount.get("read_only", False) is not False
+        ):
+            return False
+    administrator_volumes = administrator.get("volumes", [])
+    if not isinstance(administrator_volumes, list):
+        return False
+    return not any(
+        isinstance(item, dict)
+        and str(item.get("source", "")).endswith(
+            tuple(TRUST_SEQUENCE_VOLUME_SUFFIXES.values())
+        )
+        for item in administrator_volumes
+    )
+
+
 def _campaign(project_name: str, commit: str) -> dict[str, Any]:
     _assert_project_absent(project_name)
     _assert_checkout(commit)
-    source_binding = _assert_source_checkout()
+    source_binding = _source_binding(commit)
     key_directory = Path(tempfile.mkdtemp(prefix="aegis-ot-m4g-keys-"))
     prefix = _compose_prefix(project_name)
     project_created = False
@@ -1134,6 +1749,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 _run_agent_probe(prefix).stdout,
                 label="primary M4g agent probe",
             )
+            trust_sequence_initial = _trust_sequence_snapshot(prefix)
             direct_before_rotation = _rotation_fixture(
                 prefix,
                 FIXED_ROTATION_NONCE,
@@ -1171,11 +1787,17 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 prefix,
                 FIXED_ROTATION_NONCE,
             )
+            trust_sequence_rotated = _trust_sequence_snapshot(prefix)
             replay_after_rotation = _replay_snapshot(prefix)
             health_after_rotation = _health_snapshot(prefix)
 
             initial_bundle = _decode_artifact(identity_initial, "trust-bundle.json")
             rotated_bundle = _decode_artifact(identity_rotated, "trust-bundle.json")
+            restart_durable_rollback = _restart_durable_bundle_rollback_case(
+                prefix,
+                sequence_one_bundle=initial_bundle,
+                sequence_two_bundle=rotated_bundle,
+            )
             fault_cases = {
                 "missing": _bundle_fault_case(
                     prefix,
@@ -1187,12 +1809,6 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                     prefix,
                     condition="corrupt_trust_bundle",
                     fault_material=b"{corrupt",
-                    restore_material=rotated_bundle,
-                ),
-                "rollback": _bundle_fault_case(
-                    prefix,
-                    condition="same_process_trust_bundle_rollback",
-                    fault_material=initial_bundle,
                     restore_material=rotated_bundle,
                 ),
             }
@@ -1250,7 +1866,35 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                     and replay_initialization.get("workload_ledger_mode") == "0600"
                     and replay_initialization.get("semantic_ledger_mode") == "0600"
                 ),
+                "isolated_durable_trust_sequence_state_configured": (
+                    _trust_sequence_compose_bound(compose)
+                    and identity_initialization.get("trust_sequence_directories")
+                    == {
+                        "agent": {
+                            "path": (
+                                "/var/lib/aegis-ot/trust-sequence-state/agent"
+                            ),
+                            "state": "bootstrap_prepared",
+                            "directory_mode": "0700",
+                        },
+                        "gateway": {
+                            "path": (
+                                "/var/lib/aegis-ot/trust-sequence-state/gateway"
+                            ),
+                            "state": "bootstrap_prepared",
+                            "directory_mode": "0700",
+                        },
+                        "ot-adapter": {
+                            "path": "/var/lib/aegis-ot/trust-sequence-state/ot",
+                            "state": "bootstrap_prepared",
+                            "directory_mode": "0700",
+                        },
+                    }
+                ),
                 "primary_agent_campaign_accepted": _probe_accepted(primary_probe),
+                "all_verifiers_persisted_sequence_one": (
+                    _trust_sequence_snapshot_at(trust_sequence_initial, sequence=1)
+                ),
                 "gateway_leaf_rotated_same_subject_and_old_leaf_revoked": (
                     rotation.get("operation") == "rotate"
                     and rotation.get("prior_sequence") == 1
@@ -1271,6 +1915,9 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 "fresh_request_after_rotation_accepted": _probe_accepted(
                     fresh_after_rotation
                 ),
+                "all_verifiers_persisted_sequence_two": (
+                    _trust_sequence_snapshot_at(trust_sequence_rotated, sequence=2)
+                ),
                 "cross_leaf_reused_transport_nonce_rejected": (
                     _cross_leaf_accepted(
                         direct_before_rotation,
@@ -1289,9 +1936,15 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 "bundle_faults_failed_closed_without_effect": all(
                     item.get("accepted") is True for item in fault_cases.values()
                 ),
+                "intact_restart_rejects_signed_sequence_rollback": (
+                    restart_durable_rollback.get("accepted") is True
+                ),
             }
             semantic_projection = {
                 "git_commit": commit,
+                "source_binding_sha256": source_binding[
+                    "source_binding_sha256"
+                ],
                 "normalized_compose_sha256": normalized_compose_sha256,
                 "workload_key_ids": {
                     "authority": workload_key_ids["workload_authority"],
@@ -1341,16 +1994,35 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                     }
                     for name, item in fault_cases.items()
                 },
+                "durable_trust_sequence": {
+                    "sequence_one_floors": _trust_sequence_floors(
+                        trust_sequence_initial
+                    ),
+                    "sequence_two_floors": _trust_sequence_floors(
+                        trust_sequence_rotated
+                    ),
+                    "rollback_rejected": restart_durable_rollback.get("accepted"),
+                    "post_rejection_floors": _trust_sequence_floors(
+                        restart_durable_rollback.get(
+                            "sequence_after_rejection", {}
+                        )
+                    ),
+                    "effect_absent": restart_durable_rollback.get("effect_absent"),
+                    "recovery_accepted": _probe_accepted(
+                        restart_durable_rollback.get("recovery_probe", {})
+                    ),
+                },
                 "acceptance": acceptance,
             }
             evidence = {
-                "schema_version": "m4g-workload-identity-experiment-v1",
+                "schema_version": "m4g-workload-identity-experiment-v2",
                 "generated_at": datetime.now(UTC).isoformat(),
                 "analyst": "Angelis Pseftis",
                 "git_commit": commit,
                 "clean_checkout_start": True,
                 "project_name": project_name,
                 "source_checkout_binding": source_binding,
+                "source_binding": source_binding,
                 "compose_files": list(COMPOSE_FILES),
                 "normalized_compose_sha256": normalized_compose_sha256,
                 "campaign_environment": _redacted_environment(
@@ -1370,6 +2042,7 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 "health_before": health_before,
                 "containers_before_rotation": containers_before,
                 "primary_probe": primary_probe,
+                "trust_sequence_initial": trust_sequence_initial,
                 "rotation_fixture_classification": (
                     "Gateway-internal fresh full-authorization and OT-transport "
                     "fixture; agent ingress is exercised separately by agent-probe"
@@ -1382,9 +2055,11 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 "containers_after_rotation": containers_after,
                 "fresh_probe_after_rotation": fresh_after_rotation,
                 "direct_dispatch_after_rotation": direct_after_rotation,
+                "trust_sequence_rotated": trust_sequence_rotated,
                 "replay_after_rotation": replay_after_rotation,
                 "health_after_rotation": health_after_rotation,
                 "bundle_fault_cases": fault_cases,
+                "restart_durable_bundle_rollback": restart_durable_rollback,
                 "health_final": health_final,
                 "replay_final": replay_final,
                 "acceptance": acceptance,
@@ -1403,8 +2078,9 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                         "or multi-replica validation"
                     ),
                     (
-                        "Same-process signed-bundle rollback rejection, not hostile "
-                        "restart rollback resistance"
+                        "Restart-durable signed-bundle rollback rejection uses intact "
+                        "trusted per-verifier Docker volumes; a hostile host can still "
+                        "roll back or replace those volumes"
                     ),
                     (
                         "Durable stable-subject replay admission, not exactly-once "

@@ -44,6 +44,274 @@ def test_embedded_container_probes_are_valid_python(runner: Any) -> None:
     compile(runner._IDENTITY_SNAPSHOT_CODE, "<m4g-identity-snapshot>", "exec")
     compile(runner._REPLAY_SNAPSHOT_CODE, "<m4g-replay-snapshot>", "exec")
     compile(runner._BUNDLE_MUTATOR_CODE, "<m4g-bundle-mutator>", "exec")
+    compile(
+        runner._TRUST_SEQUENCE_SNAPSHOT_CODE,
+        "<m4g-trust-sequence-snapshot>",
+        "exec",
+    )
+    compile(
+        runner._LOCAL_TRUST_VERIFIER_PROBE_CODE,
+        "<m4g-local-trust-verifier-probe>",
+        "exec",
+    )
+    compile(
+        runner._LOCAL_HEALTH_EXCHANGE_CODE,
+        "<m4g-local-health-exchange>",
+        "exec",
+    )
+
+
+def test_campaign_lifecycle_and_source_binding_cover_durable_trust_state(
+    runner: Any,
+) -> None:
+    assert {
+        "workload_trust_sequence_agent",
+        "workload_trust_sequence_gateway",
+        "workload_trust_sequence_ot",
+    } <= set(runner.PROJECT_VOLUME_SUFFIXES)
+    assert "src/aegis_ot/workload_trust_state.py" in runner.SOURCE_BINDING_FILES
+    assert "docker-compose.identity.yml" in runner.SOURCE_BINDING_FILES
+    assert "scripts/run_m4g_experiment.py" in runner.SOURCE_BINDING_FILES
+
+
+def _trust_sequence_snapshot(sequence: int) -> dict[str, Any]:
+    item = {
+        "directory": {
+            "path": "/var/lib/aegis-ot/trust-sequence",
+            "entries": [".state.json.lock", "state.json"],
+            "mode": "0700",
+            "uid": 65532,
+            "gid": 65532,
+        },
+        "files": {
+            "state.json": {
+                "mode": "0600",
+                "uid": 65532,
+                "gid": 65532,
+                "regular": True,
+                "links": 1,
+                "document": {
+                    "schema_version": "m4g-workload-trust-sequence-state-v1",
+                    "trust_domain": "aegis-ot.m4g.local",
+                    "highest_sequence": sequence,
+                    "highest_bundle_sha256": "a" * 64,
+                },
+            },
+            ".state.json.lock": {
+                "mode": "0600",
+                "uid": 65532,
+                "gid": 65532,
+                "regular": True,
+                "links": 1,
+            },
+        },
+    }
+    return {
+        "agent": json.loads(json.dumps(item)),
+        "gateway": json.loads(json.dumps(item)),
+        "ot-adapter": json.loads(json.dumps(item)),
+    }
+
+
+def test_trust_sequence_snapshot_acceptance_requires_every_private_floor(
+    runner: Any,
+) -> None:
+    snapshot = _trust_sequence_snapshot(2)
+    assert runner._trust_sequence_snapshot_at(snapshot, sequence=2)
+    assert runner._trust_sequence_floors(snapshot) == {
+        "agent": 2,
+        "gateway": 2,
+        "ot-adapter": 2,
+    }
+
+    snapshot["gateway"]["files"]["state.json"]["document"][
+        "highest_sequence"
+    ] = 1
+    assert not runner._trust_sequence_snapshot_at(snapshot, sequence=2)
+    snapshot["gateway"]["files"]["state.json"]["document"][
+        "highest_sequence"
+    ] = 2
+    snapshot["ot-adapter"]["files"][".state.json.lock"]["links"] = 2
+    assert not runner._trust_sequence_snapshot_at(snapshot, sequence=2)
+
+
+def test_resolved_compose_binding_requires_isolated_rw_state_and_no_admin_mount(
+    runner: Any,
+) -> None:
+    runtime_target = "/var/lib/aegis-ot/trust-sequence"
+    state_file = f"{runtime_target}/state.json"
+    compose: dict[str, Any] = {"services": {}}
+    for service, source in {
+        "agent-probe": "m4g_workload_trust_sequence_agent",
+        "segmented-gateway": "m4g_workload_trust_sequence_gateway",
+        "ot-adapter": "m4g_workload_trust_sequence_ot",
+    }.items():
+        compose["services"][service] = {
+            "environment": {
+                "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE": state_file,
+            },
+            "volumes": [
+                {
+                    "type": "volume",
+                    "source": source,
+                    "target": runtime_target,
+                    "read_only": False,
+                }
+            ],
+        }
+    init_targets = {
+        "agent": (
+            "m4g_workload_trust_sequence_agent",
+            "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+        ),
+        "gateway": (
+            "m4g_workload_trust_sequence_gateway",
+            "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+        ),
+        "ot": (
+            "m4g_workload_trust_sequence_ot",
+            "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+        ),
+    }
+    compose["services"]["identity-init"] = {
+        "environment": {
+            setting: f"/var/lib/aegis-ot/trust-sequence-state/{role}"
+            for role, (_, setting) in init_targets.items()
+        },
+        "volumes": [
+            {
+                "type": "volume",
+                "source": source,
+                "target": f"/var/lib/aegis-ot/trust-sequence-state/{role}",
+                "read_only": False,
+            }
+            for role, (source, _) in init_targets.items()
+        ],
+    }
+    compose["services"]["identity-admin"] = {"volumes": []}
+
+    assert runner._trust_sequence_compose_bound(compose)
+    compose["services"]["identity-admin"]["volumes"] = [
+        {
+            "type": "volume",
+            "source": "m4g_workload_trust_sequence_agent",
+            "target": runtime_target,
+        }
+    ]
+    assert not runner._trust_sequence_compose_bound(compose)
+
+
+def test_rollback_rejection_requires_exact_sequence_failure(runner: Any) -> None:
+    rejected = SimpleNamespace(
+        returncode=1,
+        stdout="",
+        stderr="workload trust bundle sequence rolled back",
+    )
+    unrelated = SimpleNamespace(returncode=1, stdout="", stderr="connection failed")
+    successful = SimpleNamespace(
+        returncode=0,
+        stdout="sequence rolled back appeared in a log",
+        stderr="",
+    )
+
+    assert runner._rollback_rejected(rejected)
+    assert not runner._rollback_rejected(unrelated)
+    assert not runner._rollback_rejected(successful)
+
+
+def test_rollback_helpers_use_one_shot_containers_when_runtimes_are_exited(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def command(*args: str, **_: Any) -> SimpleNamespace:
+        calls.append(args)
+        return SimpleNamespace(returncode=1, stdout="{}", stderr="sequence rolled back")
+
+    monkeypatch.setattr(runner.m4d, "_run", command)
+    runner._service_trust_sequence_snapshot(("docker", "compose"), "ot-adapter")
+    runner._local_trust_verifier_probe(
+        ("docker", "compose"),
+        service="segmented-gateway",
+        identity_prefix="GATEWAY",
+        check=False,
+    )
+
+    for invocation in calls:
+        assert "run" in invocation
+        assert "--rm" in invocation
+        assert "--no-deps" in invocation
+        assert "--entrypoint" in invocation
+        assert "exec" not in invocation
+
+
+def test_rollback_recreation_requires_unavailable_health_not_ready_health(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = {
+        "segmented-gateway": {
+            "container_id": "gateway-before",
+            "started_at": "before",
+            "running": True,
+            "exit_code": 0,
+        },
+        "ot-adapter": {
+            "container_id": "ot-before",
+            "started_at": "before",
+            "running": True,
+            "exit_code": 0,
+        },
+    }
+    stopped = {
+        "segmented-gateway": {
+            "container_id": "gateway-after",
+            "started_at": "after",
+            "running": True,
+            "exit_code": 0,
+        },
+        "ot-adapter": {
+            "container_id": "ot-after",
+            "started_at": "after",
+            "running": True,
+            "exit_code": 0,
+        },
+    }
+    unavailable = {
+        "segmented-gateway": {
+            "http_status": 503,
+            "body": {"reason": "gateway_runtime_unavailable"},
+        },
+        "ot-adapter": {
+            "http_status": 503,
+            "body": {"reason": "ot_runtime_unavailable"},
+        },
+    }
+    monkeypatch.setattr(
+        runner,
+        "_container_identity",
+        lambda _prefix, service: before[service],
+    )
+    monkeypatch.setattr(runner.m4d, "_run", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(
+        runner,
+        "_await_gateway_ot_unavailable",
+        lambda _prefix: (stopped, unavailable),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_await_gateway",
+        lambda: pytest.fail("rollback recreation must not await readiness"),
+    )
+
+    snapshots = runner._recreate_gateway_ot(
+        ("docker", "compose"),
+        await_ready=False,
+    )
+
+    assert runner._gateway_ot_recreated(snapshots)
+    assert runner._gateway_ot_failed_closed(snapshots)
 
 
 def test_rotation_fixture_prepares_without_predispatching_transaction(

@@ -65,6 +65,7 @@ from aegis_ot.workload_identity import (
     WorkloadCredential,
     WorkloadTrustBundle,
 )
+from aegis_ot.workload_trust_state import WorkloadTrustSequenceState
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_PROPOSAL_PATH = ROOT / "schemas" / "action-proposal.schema.json"
@@ -117,6 +118,9 @@ MODEL_SCHEMAS: dict[Path, type[BaseModel]] = {
         WorkloadSignedCapabilityResponse
     ),
     ROOT / "schemas" / "m4g-workload-trust-bundle.schema.json": WorkloadTrustBundle,
+    ROOT / "schemas" / "m4g-workload-trust-sequence-state.schema.json": (
+        WorkloadTrustSequenceState
+    ),
     ROOT / "schemas" / "m4b-artifact-descriptor.schema.json": M4bArtifactDescriptor,
     ROOT / "schemas" / "m4b-capability-probe-bundle.schema.json": M4bCapabilityProbeBundle,
     ROOT / "schemas" / "m4b-component-registration.schema.json": M4bComponentRegistration,

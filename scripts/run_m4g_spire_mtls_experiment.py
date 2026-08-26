@@ -168,6 +168,7 @@ SOURCE_BINDING_FILES = (
     "src/aegis_ot/spire_workload_identity.py",
     "src/aegis_ot/workload_identity.py",
     "src/aegis_ot/workload_runtime.py",
+    "src/aegis_ot/workload_trust_state.py",
     "scripts/run_m4g_experiment.py",
     "scripts/run_m4g_spire_mtls_experiment.py",
 )
@@ -183,6 +184,23 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PROJECT_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _OT_EXECUTE_LOG_MARKER = "POST /v1/capability/execute"
 _MTLS_TMPDIR = "/run/aegis-spire-mtls"
+_TRUST_SEQUENCE_DIRECTORY = "/var/lib/aegis-ot/trust-sequence"
+_TRUST_SEQUENCE_STATE_FILE = f"{_TRUST_SEQUENCE_DIRECTORY}/state.json"
+_TRUST_SEQUENCE_VOLUMES = {
+    "agent-probe": "workload_trust_sequence_agent",
+    "segmented-gateway": "workload_trust_sequence_gateway",
+    "ot-adapter": "workload_trust_sequence_ot",
+}
+_TRUST_SEQUENCE_INIT_DIRECTORIES = {
+    "agent-probe": "/var/lib/aegis-ot/trust-sequence-state/agent",
+    "segmented-gateway": "/var/lib/aegis-ot/trust-sequence-state/gateway",
+    "ot-adapter": "/var/lib/aegis-ot/trust-sequence-state/ot",
+}
+_TRUST_SEQUENCE_INIT_ENVIRONMENT = {
+    "agent-probe": "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+    "segmented-gateway": "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+    "ot-adapter": "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+}
 
 _IDENTITY_QUERY_CODE = r"""
 import json
@@ -429,6 +447,160 @@ def _read_only_spire_socket(service: dict[str, Any]) -> bool:
     )
 
 
+def _volume_mounts(service: dict[str, Any], target: str) -> list[dict[str, Any]]:
+    volumes = service.get("volumes")
+    if not isinstance(volumes, list):
+        return []
+    return [
+        item
+        for item in volumes
+        if isinstance(item, dict)
+        and item.get("type") == "volume"
+        and item.get("target") == target
+        and isinstance(item.get("source"), str)
+    ]
+
+
+def _matches_logical_volume(source: object, logical_name: str) -> bool:
+    return isinstance(source, str) and (
+        source == logical_name or source.endswith(f"_{logical_name}")
+    )
+
+
+def _workload_trust_sequence_binding(
+    compose: dict[str, Any],
+    *,
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    runtime_states: dict[str, dict[str, Any]] = {}
+    runtime_sources: dict[str, str | None] = {}
+    for service_name, logical_volume in _TRUST_SEQUENCE_VOLUMES.items():
+        service = _service(compose, service_name)
+        environment = _environment(compose, service_name)
+        mounts = _volume_mounts(service, _TRUST_SEQUENCE_DIRECTORY)
+        mount = mounts[0] if len(mounts) == 1 else {}
+        source = mount.get("source")
+        runtime_sources[service_name] = source if isinstance(source, str) else None
+        runtime_states[service_name] = {
+            "state_file": environment.get("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"),
+            "expected_state_file": _TRUST_SEQUENCE_STATE_FILE,
+            "volume_source": source,
+            "expected_logical_volume": logical_volume,
+            "mount_target": mount.get("target"),
+            "writable": mount.get("read_only") is not True,
+            "matches_expected": (
+                environment.get("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE")
+                == _TRUST_SEQUENCE_STATE_FILE
+                and len(mounts) == 1
+                and source == logical_volume
+                and mount.get("read_only") is not True
+            ),
+        }
+
+    initializer = _service(compose, "identity-init")
+    initializer_environment = _environment(compose, "identity-init")
+    initializer_states: dict[str, dict[str, Any]] = {}
+    for service_name, target in _TRUST_SEQUENCE_INIT_DIRECTORIES.items():
+        mounts = _volume_mounts(initializer, target)
+        mount = mounts[0] if len(mounts) == 1 else {}
+        variable = _TRUST_SEQUENCE_INIT_ENVIRONMENT[service_name]
+        source = mount.get("source")
+        initializer_states[service_name] = {
+            "directory_variable": variable,
+            "configured_directory": initializer_environment.get(variable),
+            "expected_directory": target,
+            "volume_source": source,
+            "runtime_volume_source": runtime_sources[service_name],
+            "writable": mount.get("read_only") is not True,
+            "matches_expected": (
+                initializer_environment.get(variable) == target
+                and len(mounts) == 1
+                and source == runtime_sources[service_name]
+                and mount.get("read_only") is not True
+            ),
+        }
+
+    admin = _service(compose, "identity-admin")
+    admin_environment = _environment(compose, "identity-admin")
+    admin_volumes = admin.get("volumes")
+    admin_mounts = admin_volumes if isinstance(admin_volumes, list) else []
+    protected_sources = {source for source in runtime_sources.values() if source is not None}
+    raw_volume_definitions = compose.get("volumes")
+    volume_definitions = (
+        raw_volume_definitions if isinstance(raw_volume_definitions, dict) else {}
+    )
+    managed_volume_definitions: dict[str, dict[str, Any]] = {}
+    managed_volume_names: set[str] = set()
+    for service_name, logical_volume in _TRUST_SEQUENCE_VOLUMES.items():
+        raw_definition = volume_definitions.get(logical_volume)
+        definition = raw_definition if isinstance(raw_definition, dict) else {}
+        source = runtime_sources[service_name]
+        configured_name = definition.get("name")
+        expected_name = (
+            f"{project_name}_{logical_volume}" if project_name is not None else None
+        )
+        name_matches = (
+            configured_name == expected_name
+            if expected_name is not None
+            else _matches_logical_volume(configured_name, logical_volume)
+        )
+        if isinstance(configured_name, str):
+            managed_volume_names.add(configured_name)
+        managed_volume_definitions[logical_volume] = {
+            "configured_name": configured_name,
+            "expected_name": expected_name,
+            "runtime_volume_source": source,
+            "project_scoped_managed_volume": (
+                source == logical_volume
+                and set(definition) == {"name"}
+                and name_matches
+            ),
+        }
+    all_volumes_project_scoped = (
+        len(managed_volume_names) == len(_TRUST_SEQUENCE_VOLUMES)
+        and all(
+            item["project_scoped_managed_volume"] is True
+            for item in managed_volume_definitions.values()
+        )
+    )
+    identity_admin_excluded = (
+        "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE" not in admin_environment
+        and not any(
+            variable in admin_environment
+            for variable in _TRUST_SEQUENCE_INIT_ENVIRONMENT.values()
+        )
+        and not any(
+            isinstance(item, dict)
+            and (
+                item.get("source") in protected_sources
+                or item.get("target") == _TRUST_SEQUENCE_DIRECTORY
+                or item.get("target") in _TRUST_SEQUENCE_INIT_DIRECTORIES.values()
+            )
+            for item in admin_mounts
+        )
+    )
+    isolated_sources = (
+        len(protected_sources) == len(_TRUST_SEQUENCE_VOLUMES)
+        and all(source is not None for source in runtime_sources.values())
+    )
+    matches_expected = (
+        isolated_sources
+        and all_volumes_project_scoped
+        and all(item["matches_expected"] is True for item in runtime_states.values())
+        and all(item["matches_expected"] is True for item in initializer_states.values())
+        and identity_admin_excluded
+    )
+    return {
+        "runtime_states": runtime_states,
+        "runtime_volume_sources_are_isolated": isolated_sources,
+        "managed_volume_definitions": managed_volume_definitions,
+        "all_volumes_project_scoped_and_managed": all_volumes_project_scoped,
+        "identity_initializer_states": initializer_states,
+        "identity_admin_excluded": identity_admin_excluded,
+        "matches_expected": matches_expected,
+    }
+
+
 def _private_mtls_tmpfs(service: dict[str, Any], expected_user: str) -> bool:
     tmpfs = service.get("tmpfs")
     if not isinstance(tmpfs, list):
@@ -452,7 +624,11 @@ def _private_mtls_tmpfs(service: dict[str, Any], expected_user: str) -> bool:
     return False
 
 
-def _configuration_binding(compose: dict[str, Any]) -> dict[str, Any]:
+def _configuration_binding(
+    compose: dict[str, Any],
+    *,
+    project_name: str | None = None,
+) -> dict[str, Any]:
     pins = {
         "opa.image": _required_string(_service(compose, "opa").get("image"), label="OPA image"),
         "spire-server.image": _required_string(
@@ -604,6 +780,10 @@ def _configuration_binding(compose: dict[str, Any]) -> dict[str, Any]:
             == m4g.AGENT_ACTOR_ID
         ),
     }
+    trust_sequence_state = _workload_trust_sequence_binding(
+        compose,
+        project_name=project_name,
+    )
 
     return {
         "critical_external_references": pins,
@@ -627,6 +807,10 @@ def _configuration_binding(compose: dict[str, Any]) -> dict[str, Any]:
             item["matches_expected"] is True for item in mtls_servers.values()
         ),
         "agent_ingress_boundary": agent_ingress_boundary,
+        "workload_trust_sequence_state": trust_sequence_state,
+        "all_workload_trust_sequence_state_isolated": trust_sequence_state[
+            "matches_expected"
+        ],
     }
 
 
@@ -1121,7 +1305,10 @@ def _campaign(
             if not isinstance(normalized, dict):
                 raise m4d.ExperimentError("normalized Compose configuration failed")
             normalized_compose_sha256 = m4d._canonical_sha256(normalized)
-            configuration_binding = _configuration_binding(compose)
+            configuration_binding = _configuration_binding(
+                compose,
+                project_name=project_name,
+            )
 
             m4d._run(
                 *compose_prefix,
@@ -1213,6 +1400,12 @@ def _campaign(
                     "application_workload_identity_required"
                 ]
                 is True,
+                "workload_trust_sequence_state_isolated_and_durable": (
+                    configuration_binding[
+                        "all_workload_trust_sequence_state_isolated"
+                    ]
+                    is True
+                ),
                 "five_runtime_selector_bindings_match": configuration_binding[
                     "all_workload_bindings_match"
                 ]
@@ -1332,6 +1525,12 @@ def _campaign(
                         "Agent-probe has no SPIRE SVID in this slice. Agent-to-gateway "
                         "traffic remains HTTP and is authenticated by the committed "
                         "authority-signed application workload credential."
+                    ),
+                    (
+                        "Agent, gateway, and OT trust-bundle sequence checkpoints are "
+                        "configured on three isolated writable Compose volumes. The "
+                        "configuration evidence does not by itself establish host-level "
+                        "durability outside this bounded campaign."
                     ),
                     (
                         "Registration deletion established loss of fresh gateway SVID "

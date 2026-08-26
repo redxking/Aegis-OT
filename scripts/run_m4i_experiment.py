@@ -83,6 +83,7 @@ SOURCE_BINDING_FILES = (
     "src/aegis_ot/segmented_capability_transport.py",
     "src/aegis_ot/workload_identity.py",
     "src/aegis_ot/workload_runtime.py",
+    "src/aegis_ot/workload_trust_state.py",
 )
 LOCK_FILE = "requirements.lock"
 M4I_SCHEMA_FILES = (

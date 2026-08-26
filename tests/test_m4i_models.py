@@ -149,11 +149,15 @@ def artifacts(tmp_path: Path) -> M4iArtifacts:
     ).signed(authority)
     bundle_path = tmp_path / "trust-bundle.json"
     bundle_path.write_bytes(canonical_json_file_bytes(bundle))
+    trust_sequence_directory = tmp_path / "trust-sequence"
+    trust_sequence_directory.mkdir(mode=0o700)
+    trust_sequence_directory.chmod(0o700)
     verifier = WorkloadIdentityVerifier(
         trust_root_public_key=authority.public_key(),
         trust_root_key_id=authority_key_id,
         trust_domain=TRUST_DOMAIN,
         trust_bundle_path=bundle_path,
+        trust_sequence_state_path=trust_sequence_directory / "state.json",
     )
 
     lab = build_physical_local_lab(NOW)

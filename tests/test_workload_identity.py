@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import errno
+import json
+import multiprocessing
+import os
+import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -23,6 +29,7 @@ from aegis_ot.workload_identity import (
     WorkloadSigner,
     WorkloadTrustBundle,
     canonical_json_file_bytes,
+    load_signed_workload_credential,
     public_key_base64,
     workload_key_id,
 )
@@ -33,6 +40,7 @@ from aegis_ot.workload_runtime import (
     verifier_from_environment,
     workload_identity_enabled,
 )
+from aegis_ot.workload_trust_state import WorkloadTrustSequenceState
 
 NOW = datetime.now(UTC)
 TRUST_DOMAIN = "aegis-ot.test"
@@ -40,6 +48,42 @@ GATEWAY_SUBJECT = "urn:aegis-ot:test:workload:gateway"
 GATEWAY_AUDIENCE = "aegis-ot:m4g:ot-adapter"
 AGENT_SUBJECT = "urn:aegis-ot:test:workload:agent-probe"
 AGENT_ACTOR_ID = "agent:operator-1"
+
+
+def _restart_verifier_worker(
+    start: Any,
+    results: Any,
+    public_key_raw: bytes,
+    authority_key_id: str,
+    trust_bundle_path: str,
+    trust_sequence_state_path: str,
+    credential_path: str,
+    evaluated_at: datetime,
+) -> None:
+    """Resolve one identity in a fresh interpreter against shared state."""
+
+    start_event = start
+    result_queue = results
+    try:
+        start_event.wait(timeout=10)
+        verifier = WorkloadIdentityVerifier(
+            trust_root_public_key=Ed25519PublicKey.from_public_bytes(public_key_raw),
+            trust_root_key_id=authority_key_id,
+            trust_domain=TRUST_DOMAIN,
+            trust_bundle_path=Path(trust_bundle_path),
+            trust_sequence_state_path=Path(trust_sequence_state_path),
+        )
+        verifier.verify_credential(
+            load_signed_workload_credential(Path(credential_path)),
+            expected_role=WorkloadRole.GATEWAY,
+            expected_audience=GATEWAY_AUDIENCE,
+            expected_subject=GATEWAY_SUBJECT,
+            now=evaluated_at,
+        )
+    except Exception as exc:  # pragma: no cover - returned to the parent assertion
+        result_queue.put(f"{type(exc).__name__}: {exc}")
+    else:
+        result_queue.put("ok")
 
 
 def _private_key_bytes(private_key: Ed25519PrivateKey) -> bytes:
@@ -124,6 +168,7 @@ class IdentityArtifacts:
     authority_key_id: str
     trust_root_path: Path
     trust_bundle_path: Path
+    trust_sequence_state_path: Path
     credential_path: Path
     private_key_path: Path
     leaf_private_key: Ed25519PrivateKey
@@ -135,6 +180,7 @@ class IdentityArtifacts:
             trust_root_key_id=self.authority_key_id,
             trust_domain=TRUST_DOMAIN,
             trust_bundle_path=self.trust_bundle_path,
+            trust_sequence_state_path=self.trust_sequence_state_path,
         )
 
     def binding(self, verifier: WorkloadIdentityVerifier) -> WorkloadCredentialBinding:
@@ -154,6 +200,10 @@ def identity(tmp_path: Path) -> IdentityArtifacts:
     signed_credential = _issue_credential(authority_private_key, leaf_private_key)
     trust_root_path = tmp_path / "authority-public.key"
     trust_bundle_path = tmp_path / "trust-bundle.json"
+    trust_sequence_directory = tmp_path / "trust-sequence"
+    trust_sequence_directory.mkdir(mode=0o700)
+    trust_sequence_directory.chmod(0o700)
+    trust_sequence_state_path = trust_sequence_directory / "state.json"
     credential_path = tmp_path / "gateway-credential.json"
     private_key_path = tmp_path / "gateway-private.key"
     trust_root_path.write_bytes(_public_key_bytes(authority_private_key.public_key()))
@@ -165,6 +215,7 @@ def identity(tmp_path: Path) -> IdentityArtifacts:
         authority_key_id=workload_key_id(authority_private_key.public_key()),
         trust_root_path=trust_root_path,
         trust_bundle_path=trust_bundle_path,
+        trust_sequence_state_path=trust_sequence_state_path,
         credential_path=credential_path,
         private_key_path=private_key_path,
         leaf_private_key=leaf_private_key,
@@ -441,6 +492,329 @@ def test_same_sequence_bundle_equivocation_is_rejected(
         identity.binding(verifier).resolve(now=NOW)
 
 
+def test_trust_sequence_checkpoint_survives_restart_and_accepts_same_or_higher(
+    identity: IdentityArtifacts,
+) -> None:
+    sequence_two = _issue_bundle(
+        identity.authority_private_key,
+        sequence=2,
+        bundle_id="identity-bundle-restart-0002",
+    )
+    _write_identity_model(identity.trust_bundle_path, sequence_two)
+    identity.binding(identity.verifier()).resolve(now=NOW)
+
+    # A fresh verifier accepts the exact observation retained by its predecessor.
+    identity.binding(identity.verifier()).resolve(now=NOW)
+
+    sequence_three = _issue_bundle(
+        identity.authority_private_key,
+        sequence=3,
+        bundle_id="identity-bundle-restart-0003",
+    )
+    _write_identity_model(identity.trust_bundle_path, sequence_three)
+    identity.binding(identity.verifier()).resolve(now=NOW)
+
+    _write_identity_model(identity.trust_bundle_path, sequence_two)
+    with pytest.raises(WorkloadIdentityError, match="sequence rolled back"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_restart_rejects_same_sequence_bundle_equivocation(
+    identity: IdentityArtifacts,
+) -> None:
+    first = _issue_bundle(
+        identity.authority_private_key,
+        sequence=4,
+        bundle_id="identity-bundle-restart-equivocation-a",
+    )
+    _write_identity_model(identity.trust_bundle_path, first)
+    identity.binding(identity.verifier()).resolve(now=NOW)
+
+    second = _issue_bundle(
+        identity.authority_private_key,
+        sequence=4,
+        bundle_id="identity-bundle-restart-equivocation-b",
+    )
+    _write_identity_model(identity.trust_bundle_path, second)
+    with pytest.raises(WorkloadIdentityError, match="sequence was equivocated"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_higher_valid_bundle_is_checkpointed_before_credential_admission(
+    identity: IdentityArtifacts,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    sequence_two = _issue_bundle(
+        identity.authority_private_key,
+        sequence=2,
+        bundle_id="identity-bundle-before-admission-0002",
+    )
+    _write_identity_model(identity.trust_bundle_path, sequence_two)
+    forged_claims = identity.signed_credential.credential.model_copy(
+        update={"subject": "urn:aegis-ot:test:workload:forged-gateway"}
+    )
+    forged = identity.signed_credential.model_copy(update={"credential": forged_claims})
+    with pytest.raises(WorkloadIdentityError, match="issuer or signature"):
+        identity.verifier().verify_credential(
+            forged,
+            expected_role=WorkloadRole.GATEWAY,
+            expected_audience=GATEWAY_AUDIENCE,
+            expected_subject=forged_claims.subject,
+            now=NOW,
+        )
+
+    _write_identity_model(
+        identity.trust_bundle_path,
+        _issue_bundle(
+            identity.authority_private_key,
+            sequence=1,
+            bundle_id="identity-bundle-before-admission-0001",
+        ),
+    )
+    with pytest.raises(WorkloadIdentityError, match="sequence rolled back"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_trust_sequence_checkpoint_is_canonical_private_and_self_checking(
+    identity: IdentityArtifacts,
+) -> None:
+    receipt = identity.verifier().verify_credential_with_receipt(
+        identity.signed_credential,
+        expected_role=WorkloadRole.GATEWAY,
+        expected_audience=GATEWAY_AUDIENCE,
+        expected_subject=GATEWAY_SUBJECT,
+        now=NOW,
+    )
+
+    material = identity.trust_sequence_state_path.read_bytes()
+    payload = json.loads(material)
+    state = WorkloadTrustSequenceState.model_validate(payload)
+    assert set(payload) == {
+        "authority_key_id",
+        "authority_public_key_sha256",
+        "highest_bundle_sha256",
+        "highest_sequence",
+        "integrity_sha256",
+        "schema_version",
+        "trust_domain",
+    }
+    assert state.highest_sequence == receipt.trust_bundle_sequence
+    assert state.highest_bundle_sha256 == receipt.trust_bundle_sha256
+    assert material == canonical_json_file_bytes(state)
+    assert set(identity.trust_sequence_state_path.parent.iterdir()) == {
+        identity.trust_sequence_state_path,
+        identity.trust_sequence_state_path.with_name(".state.json.lock"),
+    }
+    for path in identity.trust_sequence_state_path.parent.iterdir():
+        metadata = path.stat()
+        assert stat.S_IMODE(metadata.st_mode) == 0o600
+        assert metadata.st_nlink == 1
+        assert metadata.st_uid == os.geteuid()
+
+
+@pytest.mark.parametrize("layout", ["state_only", "lock_only", "unexpected"])
+def test_partial_or_unexpected_trust_sequence_layout_fails_closed(
+    identity: IdentityArtifacts,
+    layout: str,
+) -> None:
+    directory = identity.trust_sequence_state_path.parent
+    if layout == "state_only":
+        identity.trust_sequence_state_path.write_bytes(b"{}\n")
+        identity.trust_sequence_state_path.chmod(0o600)
+    elif layout == "lock_only":
+        lock_path = identity.trust_sequence_state_path.with_name(".state.json.lock")
+        lock_path.write_bytes(b"")
+        lock_path.chmod(0o600)
+    else:
+        (directory / "unexpected").write_bytes(b"")
+
+    with pytest.raises(WorkloadIdentityError, match="must both exist|unexpected"):
+        identity.verifier()
+
+
+def test_missing_checkpoint_after_initialization_fails_closed(
+    identity: IdentityArtifacts,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    identity.trust_sequence_state_path.unlink()
+
+    with pytest.raises(WorkloadIdentityError, match="must both exist"):
+        identity.verifier()
+
+
+@pytest.mark.parametrize("target", ["checkpoint", "lock"])
+def test_symlinked_trust_sequence_artifact_fails_closed(
+    identity: IdentityArtifacts,
+    target: str,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    path = (
+        identity.trust_sequence_state_path
+        if target == "checkpoint"
+        else identity.trust_sequence_state_path.with_name(".state.json.lock")
+    )
+    path.unlink()
+    path.symlink_to(identity.trust_bundle_path)
+
+    with pytest.raises(WorkloadIdentityError, match="checkpoint|stable lock"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+@pytest.mark.parametrize("target", ["directory", "checkpoint", "lock"])
+def test_non_private_trust_sequence_mode_fails_closed(
+    identity: IdentityArtifacts,
+    target: str,
+) -> None:
+    if target != "directory":
+        identity.binding(identity.verifier()).resolve(now=NOW)
+    path = {
+        "directory": identity.trust_sequence_state_path.parent,
+        "checkpoint": identity.trust_sequence_state_path,
+        "lock": identity.trust_sequence_state_path.with_name(".state.json.lock"),
+    }[target]
+    path.chmod(0o755 if target == "directory" else 0o644)
+
+    with pytest.raises(WorkloadIdentityError, match="0700|0600"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_trust_sequence_owner_mismatch_fails_closed(
+    identity: IdentityArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_ot import workload_trust_state
+
+    monkeypatch.setattr(workload_trust_state.os, "geteuid", lambda: os.getuid() + 1)
+    with pytest.raises(WorkloadIdentityError, match="owner-matching"):
+        identity.verifier()
+
+
+def test_hard_linked_trust_sequence_checkpoint_fails_closed(
+    identity: IdentityArtifacts,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    os.link(
+        identity.trust_sequence_state_path,
+        identity.trust_sequence_state_path.parent.parent / "linked-state",
+    )
+
+    with pytest.raises(WorkloadIdentityError, match="single-link"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_corrupt_trust_sequence_integrity_digest_fails_closed(
+    identity: IdentityArtifacts,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    payload = json.loads(identity.trust_sequence_state_path.read_bytes())
+    payload["highest_sequence"] = payload["highest_sequence"] + 1
+    identity.trust_sequence_state_path.write_bytes(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+        + b"\n"
+    )
+    identity.trust_sequence_state_path.chmod(0o600)
+
+    with pytest.raises(WorkloadIdentityError, match="checkpoint is invalid"):
+        identity.binding(identity.verifier()).resolve(now=NOW)
+
+
+def test_failed_checkpoint_update_poisons_verifier_instance(
+    identity: IdentityArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_ot import workload_trust_state
+
+    verifier = identity.verifier()
+    identity.binding(verifier).resolve(now=NOW)
+    _write_identity_model(
+        identity.trust_bundle_path,
+        _issue_bundle(
+            identity.authority_private_key,
+            sequence=2,
+            bundle_id="identity-bundle-write-failure-0002",
+        ),
+    )
+    with monkeypatch.context() as context:
+        context.setattr(
+            workload_trust_state.os,
+            "fsync",
+            lambda _descriptor: (_ for _ in ()).throw(OSError("synthetic fsync failure")),
+        )
+        with pytest.raises(WorkloadIdentityError, match="checkpoint update failed"):
+            identity.binding(verifier).resolve(now=NOW)
+
+    with pytest.raises(WorkloadIdentityError, match="instance is poisoned"):
+        identity.binding(verifier).resolve(now=NOW)
+
+
+def test_trust_sequence_lock_wait_is_bounded(
+    identity: IdentityArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aegis_ot import workload_trust_state
+
+    verifier = WorkloadIdentityVerifier(
+        trust_root_public_key=identity.authority_private_key.public_key(),
+        trust_root_key_id=identity.authority_key_id,
+        trust_domain=TRUST_DOMAIN,
+        trust_bundle_path=identity.trust_bundle_path,
+        trust_sequence_state_path=identity.trust_sequence_state_path,
+        trust_sequence_lock_timeout_seconds=0.0,
+    )
+
+    def report_busy(_descriptor: int, _operation: int) -> None:
+        raise BlockingIOError(errno.EAGAIN, "synthetic held lock")
+
+    monkeypatch.setattr(workload_trust_state.fcntl, "flock", report_busy)
+    with pytest.raises(WorkloadIdentityError, match="acquisition timed out"):
+        identity.binding(verifier).resolve(now=NOW)
+
+
+def test_concurrent_restart_verifiers_linearize_shared_checkpoint(
+    identity: IdentityArtifacts,
+) -> None:
+    identity.binding(identity.verifier()).resolve(now=NOW)
+    _write_identity_model(
+        identity.trust_bundle_path,
+        _issue_bundle(
+            identity.authority_private_key,
+            sequence=2,
+            bundle_id="identity-bundle-concurrent-0002",
+        ),
+    )
+    context = multiprocessing.get_context("spawn")
+    start = context.Event()
+    results = context.Queue()
+    arguments = (
+        start,
+        results,
+        _public_key_bytes(identity.authority_private_key.public_key()),
+        identity.authority_key_id,
+        str(identity.trust_bundle_path),
+        str(identity.trust_sequence_state_path),
+        str(identity.credential_path),
+        NOW,
+    )
+    processes = [
+        context.Process(target=_restart_verifier_worker, args=arguments)
+        for _ in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=15)
+
+    assert [process.exitcode for process in processes] == [0, 0]
+    assert sorted(results.get(timeout=2) for _ in processes) == ["ok", "ok"]
+
+
 def test_leaf_rotation_updates_peer_key_and_requires_local_signer_rotation(
     identity: IdentityArtifacts,
 ) -> None:
@@ -493,6 +867,10 @@ def test_environment_builds_and_resolves_local_identity(
     monkeypatch.setenv("AEGIS_WORKLOAD_TRUST_DOMAIN", TRUST_DOMAIN)
     monkeypatch.setenv("AEGIS_WORKLOAD_TRUST_BUNDLE_FILE", str(identity.trust_bundle_path))
     monkeypatch.setenv(
+        "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE",
+        str(identity.trust_sequence_state_path),
+    )
+    monkeypatch.setenv(
         "AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE",
         str(identity.credential_path),
     )
@@ -512,6 +890,26 @@ def test_environment_builds_and_resolves_local_identity(
 
     assert local.resolve().subject == GATEWAY_SUBJECT
     assert local.signer.credential == identity.signed_credential
+
+
+def test_environment_requires_durable_trust_sequence_state_path(
+    identity: IdentityArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE",
+        str(identity.trust_root_path),
+    )
+    monkeypatch.setenv("AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID", identity.authority_key_id)
+    monkeypatch.setenv("AEGIS_WORKLOAD_TRUST_DOMAIN", TRUST_DOMAIN)
+    monkeypatch.setenv("AEGIS_WORKLOAD_TRUST_BUNDLE_FILE", str(identity.trust_bundle_path))
+    monkeypatch.delenv("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE", raising=False)
+
+    with pytest.raises(
+        WorkloadIdentityError,
+        match="AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE",
+    ):
+        verifier_from_environment()
 
 
 def test_agent_environment_requires_actor_binding_at_startup(

@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "description": "Closed, self-checking checkpoint for one pinned workload authority.",
+  "properties": {
+    "authority_key_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Authority Key Id",
+      "type": "string"
+    },
+    "authority_public_key_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authority Public Key Sha256",
+      "type": "string"
+    },
+    "highest_bundle_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Highest Bundle Sha256",
+      "type": "string"
+    },
+    "highest_sequence": {
+      "minimum": 1,
+      "title": "Highest Sequence",
+      "type": "integer"
+    },
+    "integrity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Integrity Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "m4g-workload-trust-sequence-state-v1",
+      "pattern": "^m4g-workload-trust-sequence-state-v1$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "trust_domain": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Trust Domain",
+      "type": "string"
+    }
+  },
+  "required": [
+    "trust_domain",
+    "authority_key_id",
+    "authority_public_key_sha256",
+    "highest_sequence",
+    "highest_bundle_sha256",
+    "integrity_sha256"
+  ],
+  "title": "WorkloadTrustSequenceState",
+  "type": "object"
+}

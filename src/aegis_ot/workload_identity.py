@@ -4,13 +4,15 @@ This module deliberately implements a closed research credential rather than
 claiming X.509, SPIFFE, or platform-attested workload identity.  A pinned
 Ed25519 authority signs both short-lived workload credentials and a versioned
 trust bundle containing the active revocation set.  Verifiers reload the bundle
-for each decision and reject in-process sequence rollback.
+for each decision and reject sequence rollback across process restarts.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -26,6 +28,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .crypto import decode_urlsafe_b64, sign_bytes, verify_bytes
+from .workload_trust_state import (
+    FileWorkloadTrustSequenceStateStore,
+    WorkloadTrustSequenceStateError,
+)
 
 CREDENTIAL_SIGNATURE_DOMAIN = b"aegis-ot:m4g:workload-credential:v2\x00"
 TRUST_BUNDLE_SIGNATURE_DOMAIN = b"aegis-ot:m4g:workload-trust-bundle:v1\x00"
@@ -370,11 +376,35 @@ class WorkloadIdentityVerifier:
     trust_root_key_id: str
     trust_domain: str
     trust_bundle_path: Path
+    trust_sequence_state_path: Path
     maximum_credential_lifetime: timedelta = timedelta(hours=24)
     maximum_bundle_lifetime: timedelta = timedelta(hours=24)
+    trust_sequence_lock_timeout_seconds: float = 2.0
     _highest_sequence: int = field(default=0, init=False, repr=False)
     _highest_sequence_digest: str = field(default="", init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
+    _trust_sequence_store: FileWorkloadTrustSequenceStateStore = field(
+        init=False,
+        repr=False,
+    )
+
+    def __post_init__(self) -> None:
+        public_key_sha256 = hashlib.sha256(
+            self.trust_root_public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+        ).hexdigest()
+        try:
+            self._trust_sequence_store = FileWorkloadTrustSequenceStateStore(
+                self.trust_sequence_state_path,
+                trust_domain=self.trust_domain,
+                authority_key_id=self.trust_root_key_id,
+                authority_public_key_sha256=public_key_sha256,
+                lock_timeout_seconds=self.trust_sequence_lock_timeout_seconds,
+            )
+        except WorkloadTrustSequenceStateError as exc:
+            raise WorkloadTrustStateUnavailable(str(exc)) from exc
 
     def _trusted_bundle(self, now: datetime) -> tuple[WorkloadTrustBundle, str]:
         if now.tzinfo is None or now.utcoffset() is None:
@@ -402,6 +432,14 @@ class WorkloadIdentityVerifier:
                 "workload trust bundle is not currently valid"
             )
         bundle_digest = hashlib.sha256(canonical_json_bytes(bundle)).hexdigest()
+        return bundle, bundle_digest
+
+    @contextmanager
+    def _trusted_bundle_transaction(
+        self,
+        now: datetime,
+    ) -> Iterator[tuple[WorkloadTrustBundle, str]]:
+        bundle, bundle_digest = self._trusted_bundle(now)
         with self._lock:
             if bundle.sequence < self._highest_sequence:
                 raise WorkloadTrustStateUnavailable(
@@ -415,9 +453,16 @@ class WorkloadIdentityVerifier:
                 raise WorkloadTrustStateUnavailable(
                     "workload trust bundle sequence was equivocated"
                 )
-            self._highest_sequence = bundle.sequence
-            self._highest_sequence_digest = bundle_digest
-        return bundle, bundle_digest
+            try:
+                with self._trust_sequence_store.transaction(
+                    sequence=bundle.sequence,
+                    bundle_sha256=bundle_digest,
+                ):
+                    self._highest_sequence = bundle.sequence
+                    self._highest_sequence_digest = bundle_digest
+                    yield bundle, bundle_digest
+            except WorkloadTrustSequenceStateError as exc:
+                raise WorkloadTrustStateUnavailable(str(exc)) from exc
 
     def verify_credential_with_receipt(
         self,
@@ -437,59 +482,65 @@ class WorkloadIdentityVerifier:
                 "workload verification time must be timezone-aware"
             )
         evaluated_at = evaluated_at.astimezone(UTC)
-        bundle, bundle_digest = self._trusted_bundle(evaluated_at)
-        credential = signed.credential
-        if (
-            credential.trust_domain != self.trust_domain
-            or credential.authority_key_id != self.trust_root_key_id
-            or not signed.verify(self.trust_root_public_key)
+        with self._trusted_bundle_transaction(evaluated_at) as (
+            bundle,
+            bundle_digest,
         ):
-            raise WorkloadCredentialRejected(
-                "workload credential issuer or signature is invalid"
+            credential = signed.credential
+            if (
+                credential.trust_domain != self.trust_domain
+                or credential.authority_key_id != self.trust_root_key_id
+                or not signed.verify(self.trust_root_public_key)
+            ):
+                raise WorkloadCredentialRejected(
+                    "workload credential issuer or signature is invalid"
+                )
+            if (
+                credential.expires_at - credential.not_before
+                > self.maximum_credential_lifetime
+            ):
+                raise WorkloadCredentialRejected(
+                    "workload credential lifetime exceeds policy"
+                )
+            if not credential.not_before <= evaluated_at < credential.expires_at:
+                raise WorkloadCredentialRejected(
+                    "workload credential is not currently valid"
+                )
+            if credential.role is not expected_role:
+                raise WorkloadCredentialRejected(
+                    "workload credential role is not authorized"
+                )
+            if expected_subject is not None and credential.subject != expected_subject:
+                raise WorkloadCredentialRejected(
+                    "workload credential subject is not authorized"
+                )
+            if credential.actor_id != expected_actor_id:
+                raise WorkloadCredentialRejected(
+                    "workload credential actor is not authorized"
+                )
+            if expected_audience not in credential.audiences:
+                raise WorkloadCredentialRejected(
+                    "workload credential audience is not authorized"
+                )
+            if any(
+                revoked.credential_id == credential.credential_id
+                for revoked in bundle.revocations
+            ):
+                raise WorkloadCredentialRejected("workload credential is revoked")
+            return WorkloadVerificationReceipt(
+                public_key=credential.public_key,
+                verified_at=evaluated_at,
+                credential_id=credential.credential_id,
+                trust_domain=credential.trust_domain,
+                subject=credential.subject,
+                role=credential.role,
+                actor_id=credential.actor_id,
+                key_id=credential.key_id,
+                authority_key_id=credential.authority_key_id,
+                trust_bundle_id=bundle.bundle_id,
+                trust_bundle_sequence=bundle.sequence,
+                trust_bundle_sha256=bundle_digest,
             )
-        if credential.expires_at - credential.not_before > self.maximum_credential_lifetime:
-            raise WorkloadCredentialRejected(
-                "workload credential lifetime exceeds policy"
-            )
-        if not credential.not_before <= evaluated_at < credential.expires_at:
-            raise WorkloadCredentialRejected(
-                "workload credential is not currently valid"
-            )
-        if credential.role is not expected_role:
-            raise WorkloadCredentialRejected(
-                "workload credential role is not authorized"
-            )
-        if expected_subject is not None and credential.subject != expected_subject:
-            raise WorkloadCredentialRejected(
-                "workload credential subject is not authorized"
-            )
-        if credential.actor_id != expected_actor_id:
-            raise WorkloadCredentialRejected(
-                "workload credential actor is not authorized"
-            )
-        if expected_audience not in credential.audiences:
-            raise WorkloadCredentialRejected(
-                "workload credential audience is not authorized"
-            )
-        if any(
-            revoked.credential_id == credential.credential_id
-            for revoked in bundle.revocations
-        ):
-            raise WorkloadCredentialRejected("workload credential is revoked")
-        return WorkloadVerificationReceipt(
-            public_key=credential.public_key,
-            verified_at=evaluated_at,
-            credential_id=credential.credential_id,
-            trust_domain=credential.trust_domain,
-            subject=credential.subject,
-            role=credential.role,
-            actor_id=credential.actor_id,
-            key_id=credential.key_id,
-            authority_key_id=credential.authority_key_id,
-            trust_bundle_id=bundle.bundle_id,
-            trust_bundle_sequence=bundle.sequence,
-            trust_bundle_sha256=bundle_digest,
-        )
 
     def verify_credential(
         self,
@@ -554,49 +605,52 @@ class WorkloadIdentityVerifier:
                 "historical workload authentication time is in the future"
             )
 
-        bundle, _ = self._trusted_bundle(evaluated_at)
-        credential = signed.credential
-        if (
-            credential.trust_domain != self.trust_domain
-            or credential.authority_key_id != self.trust_root_key_id
-            or not signed.verify(self.trust_root_public_key)
-        ):
-            raise WorkloadCredentialRejected(
-                "historical workload credential issuer or signature is invalid"
-            )
-        if credential.expires_at - credential.not_before > self.maximum_credential_lifetime:
-            raise WorkloadCredentialRejected(
-                "historical workload credential lifetime exceeds policy"
-            )
-        if not credential.not_before <= authenticated_at < credential.expires_at:
-            raise WorkloadCredentialRejected(
-                "workload credential was not valid at historical admission"
-            )
-        if credential.role is not expected_role:
-            raise WorkloadCredentialRejected(
-                "historical workload credential role is not authorized"
-            )
-        if expected_subject is not None and credential.subject != expected_subject:
-            raise WorkloadCredentialRejected(
-                "historical workload credential subject is not authorized"
-            )
-        if credential.actor_id != expected_actor_id:
-            raise WorkloadCredentialRejected(
-                "historical workload credential actor is not authorized"
-            )
-        if expected_audience not in credential.audiences:
-            raise WorkloadCredentialRejected(
-                "historical workload credential audience is not authorized"
-            )
-        if any(
-            revoked.credential_id == credential.credential_id
-            and revoked.revoked_at <= authenticated_at
-            for revoked in bundle.revocations
-        ):
-            raise WorkloadCredentialRejected(
-                "workload credential was revoked at historical admission"
-            )
-        return credential.public_key
+        with self._trusted_bundle_transaction(evaluated_at) as (bundle, _):
+            credential = signed.credential
+            if (
+                credential.trust_domain != self.trust_domain
+                or credential.authority_key_id != self.trust_root_key_id
+                or not signed.verify(self.trust_root_public_key)
+            ):
+                raise WorkloadCredentialRejected(
+                    "historical workload credential issuer or signature is invalid"
+                )
+            if (
+                credential.expires_at - credential.not_before
+                > self.maximum_credential_lifetime
+            ):
+                raise WorkloadCredentialRejected(
+                    "historical workload credential lifetime exceeds policy"
+                )
+            if not credential.not_before <= authenticated_at < credential.expires_at:
+                raise WorkloadCredentialRejected(
+                    "workload credential was not valid at historical admission"
+                )
+            if credential.role is not expected_role:
+                raise WorkloadCredentialRejected(
+                    "historical workload credential role is not authorized"
+                )
+            if expected_subject is not None and credential.subject != expected_subject:
+                raise WorkloadCredentialRejected(
+                    "historical workload credential subject is not authorized"
+                )
+            if credential.actor_id != expected_actor_id:
+                raise WorkloadCredentialRejected(
+                    "historical workload credential actor is not authorized"
+                )
+            if expected_audience not in credential.audiences:
+                raise WorkloadCredentialRejected(
+                    "historical workload credential audience is not authorized"
+                )
+            if any(
+                revoked.credential_id == credential.credential_id
+                and revoked.revoked_at <= authenticated_at
+                for revoked in bundle.revocations
+            ):
+                raise WorkloadCredentialRejected(
+                    "workload credential was revoked at historical admission"
+                )
+            return credential.public_key
 
 
 @dataclass(frozen=True)

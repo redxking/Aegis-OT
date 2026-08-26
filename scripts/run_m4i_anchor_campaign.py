@@ -65,6 +65,7 @@ SOURCE_BINDING_FILES = (
     "src/aegis_ot/physical_models.py",
     "src/aegis_ot/segmented_capability_runtime.py",
     "src/aegis_ot/workload_identity.py",
+    "src/aegis_ot/workload_trust_state.py",
     "tests/test_m4i_anchor_campaign_runner.py",
     "tests/test_m4i_anchor_runtime_admission.py",
     "tests/test_m4i_coordination_anchor.py",

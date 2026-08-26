@@ -220,6 +220,14 @@ MTLS_OUTBOUND_ENVIRONMENTS = {
         "plant": "AEGIS_PLANT_URL",
     },
 }
+TRUST_SEQUENCE_STATE_VARIABLE = "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"
+TRUST_SEQUENCE_STATE_DIRECTORY = "/var/lib/aegis-ot/trust-sequence"
+TRUST_SEQUENCE_STATE_FILE = f"{TRUST_SEQUENCE_STATE_DIRECTORY}/state.json"
+TRUST_SEQUENCE_STATE_MOUNTS = {
+    "agent-probe": "agent-workload-trust-sequence",
+    "segmented-gateway": "gateway-workload-trust-sequence",
+    "ot-adapter": "ot-workload-trust-sequence",
+}
 
 
 class WorkloadContractError(ValueError):
@@ -867,6 +875,32 @@ def _validate_service_inputs(name: str, service: dict[str, Any]) -> None:
         _fail(f"service {name} file input {key} is not backed by a declared mount")
 
 
+def _validate_trust_sequence_state(services: dict[str, dict[str, Any]]) -> None:
+    expected_mounts = {
+        (name, host, TRUST_SEQUENCE_STATE_DIRECTORY)
+        for name, host in TRUST_SEQUENCE_STATE_MOUNTS.items()
+    }
+    protected_hosts = set(TRUST_SEQUENCE_STATE_MOUNTS.values())
+    observed_mounts: set[tuple[str, str, str]] = set()
+    for name, service in services.items():
+        environment = cast(dict[str, str], service["environment"])
+        state_mounts = cast(list[dict[str, str]], service["state_mounts"])
+        expected_host = TRUST_SEQUENCE_STATE_MOUNTS.get(name)
+        if expected_host is None:
+            if TRUST_SEQUENCE_STATE_VARIABLE in environment:
+                _fail(f"service {name} must not consume workload trust-sequence state")
+        elif environment.get(TRUST_SEQUENCE_STATE_VARIABLE) != TRUST_SEQUENCE_STATE_FILE:
+            _fail(f"service {name} trust-sequence state file differs from the exact contract")
+        for mount in state_mounts:
+            if (
+                mount["host"] in protected_hosts
+                or mount["container"] == TRUST_SEQUENCE_STATE_DIRECTORY
+            ):
+                observed_mounts.add((name, mount["host"], mount["container"]))
+    if observed_mounts != expected_mounts:
+        _fail("workload trust-sequence state mounts are missing, shared, or misplaced")
+
+
 def _validate_mtls_edges(
     services: dict[str, dict[str, Any]],
     registrations: dict[str, dict[str, Any]],
@@ -1288,6 +1322,7 @@ def _validate_contract(
         _fail("agent probe does not verify its local SPIRE identity")
     if services["agent-probe"]["host_aliases"] != AGENT_PROBE_BYPASS_ALIASES:
         _fail("agent probe bypass targets differ from the closed topology")
+    _validate_trust_sequence_state(services)
     _validate_mtls_edges(services, registrations, deployment)
     return workload, deployment, topology, bindings
 

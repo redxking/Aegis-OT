@@ -67,6 +67,9 @@ def verifier_from_environment() -> WorkloadIdentityVerifier:
         trust_root_key_id=_required("AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID"),
         trust_domain=_required("AEGIS_WORKLOAD_TRUST_DOMAIN"),
         trust_bundle_path=Path(_required("AEGIS_WORKLOAD_TRUST_BUNDLE_FILE")),
+        trust_sequence_state_path=Path(
+            _required("AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE")
+        ),
     )
 
 

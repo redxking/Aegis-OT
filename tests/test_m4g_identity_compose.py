@@ -47,7 +47,16 @@ def test_identity_administration_is_offline_and_confines_authority_private_key()
     assert initializer["cap_add"] == ["CHOWN"]
     assert initializer["restart"] == "no"
     assert initializer["volumes"] == [
-        "workload_identity:/var/lib/aegis-ot/identity"
+        "workload_identity:/var/lib/aegis-ot/identity",
+        (
+            "workload_trust_sequence_agent:"
+            "/var/lib/aegis-ot/trust-sequence-state/agent"
+        ),
+        (
+            "workload_trust_sequence_gateway:"
+            "/var/lib/aegis-ot/trust-sequence-state/gateway"
+        ),
+        "workload_trust_sequence_ot:/var/lib/aegis-ot/trust-sequence-state/ot",
     ]
 
     expected_environment = {
@@ -58,6 +67,15 @@ def test_identity_administration_is_offline_and_confines_authority_private_key()
         "AEGIS_AGENT_PUBLIC_KEY_FILE": "/run/secrets/agent_public",
         "AEGIS_GATEWAY_PUBLIC_KEY_FILE": "/run/secrets/gateway_public",
         "AEGIS_OT_PUBLIC_KEY_FILE": "/run/secrets/ot_public",
+        "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY": (
+            "/var/lib/aegis-ot/trust-sequence-state/agent"
+        ),
+        "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY": (
+            "/var/lib/aegis-ot/trust-sequence-state/gateway"
+        ),
+        "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY": (
+            "/var/lib/aegis-ot/trust-sequence-state/ot"
+        ),
     }
     for setting, expected in expected_environment.items():
         assert initializer["environment"][setting] == expected
@@ -94,6 +112,9 @@ def test_identity_administration_is_offline_and_confines_authority_private_key()
         "aegis_ot.m4g_identity_admin",
     ]
     assert _secret_names(administrator) == {"workload_authority_private"}
+    assert administrator["volumes"] == [
+        "workload_identity:/var/lib/aegis-ot/identity"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -125,12 +146,36 @@ def test_consequence_path_runtimes_require_identity_with_one_leaf_private_key(
     )
     assert _secret_names(service) == {private_secret}
     assert environment[private_setting] == f"/run/secrets/{private_secret}"
+    assert environment["AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"] == (
+        "/var/lib/aegis-ot/trust-sequence/state.json"
+    )
     assert service["volumes"].count(
         f"workload_identity:{RUNTIME_IDENTITY_PATH}:ro"
     ) == 1
     assert "workload_authority_private" not in _secret_names(service)
     assert all(
         "AUTHORITY_PRIVATE" not in setting for setting in environment
+    )
+
+
+def test_consequence_path_verifiers_use_isolated_writable_sequence_volumes() -> None:
+    expected = {
+        "segmented-gateway": "workload_trust_sequence_gateway",
+        "ot-adapter": "workload_trust_sequence_ot",
+        "agent-probe": "workload_trust_sequence_agent",
+    }
+    for service_name, volume in expected.items():
+        service = _service(service_name)
+        assert f"{volume}:/var/lib/aegis-ot/trust-sequence" in service["volumes"]
+        assert all(
+            not item.startswith(f"{other}:")
+            for other in expected.values()
+            if other != volume
+            for item in service["volumes"]
+        )
+    assert all(
+        "workload_trust_sequence_" not in item
+        for item in _service("identity-admin")["volumes"]
     )
 
 
@@ -187,7 +232,13 @@ def test_workload_replay_initializer_replaces_static_transport_initialization() 
     assert ot["depends_on"]["replay-init"]["condition"] == (
         "service_completed_successfully"
     )
-    assert set(IDENTITY["volumes"]) == {"workload_identity", "workload_replay"}
+    assert set(IDENTITY["volumes"]) == {
+        "workload_identity",
+        "workload_replay",
+        "workload_trust_sequence_agent",
+        "workload_trust_sequence_gateway",
+        "workload_trust_sequence_ot",
+    }
 
 
 def test_probe_waits_for_identity_and_gateway_without_control_network_access() -> None:
@@ -284,6 +335,10 @@ def test_five_layer_compose_config_resolves_identity_and_replay_boundaries(
     assert services["segmented-gateway"]["environment"][
         "AEGIS_WORKLOAD_IDENTITY_MODE"
     ] == "required"
+    for service_name in ("segmented-gateway", "ot-adapter", "agent-probe"):
+        assert services[service_name]["environment"][
+            "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"
+        ] == "/var/lib/aegis-ot/trust-sequence/state.json"
     assert services["ot-adapter"]["environment"][
         "AEGIS_WORKLOAD_REPLAY_LEDGER_FILE"
     ] == "/var/lib/aegis-ot/workload-replay.json"

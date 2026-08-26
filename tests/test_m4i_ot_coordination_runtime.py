@@ -197,11 +197,15 @@ def _identities(tmp_path: Path) -> CoordinationIdentities:
     )
     _write_identity_model(gateway_path, gateway_credential)
     _write_identity_model(local_path, local_credential)
+    trust_sequence_directory = tmp_path / "trust-sequence"
+    trust_sequence_directory.mkdir(mode=0o700)
+    trust_sequence_directory.chmod(0o700)
     verifier = WorkloadIdentityVerifier(
         trust_root_public_key=authority.public_key(),
         trust_root_key_id=workload_key_id(authority.public_key()),
         trust_domain=TRUST_DOMAIN,
         trust_bundle_path=bundle_path,
+        trust_sequence_state_path=trust_sequence_directory / "state.json",
     )
     gateway_binding = WorkloadCredentialBinding(
         verifier=verifier,

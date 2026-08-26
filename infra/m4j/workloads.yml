@@ -296,6 +296,7 @@ services:
       AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
       AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
       AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
       AEGIS_AGENT_ACTOR_ID: agent:operator-1
       AEGIS_AGENT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:agent-probe
       AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/agent.credential.json
@@ -308,7 +309,9 @@ services:
       simulation: 192.168.60.15
     secret_files: [agent.private]
     identity_files: [authority.public, trust-bundle.json, agent.credential.json]
-    state_mounts: []
+    state_mounts:
+      - host: agent-workload-trust-sequence
+        container: /var/lib/aegis-ot/trust-sequence
   segmented-gateway:
     role: gateway
     activation: continuous
@@ -347,6 +350,7 @@ services:
       AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
       AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
       AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
       AEGIS_AGENT_ACTOR_ID: agent:operator-1
       AEGIS_GATEWAY_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:gateway
       AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
@@ -375,6 +379,8 @@ services:
     secret_files: [gateway.private, permit.private, observer.public, candidate.public, plant.public]
     identity_files: [authority.public, trust-bundle.json, gateway.credential.json, ot.credential.json]
     state_mounts:
+      - host: gateway-workload-trust-sequence
+        container: /var/lib/aegis-ot/trust-sequence
       - host: gateway-coordination
         container: /var/lib/aegis-ot/gateway-coordination
   ot-adapter:
@@ -409,6 +415,7 @@ services:
       AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
       AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
       AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE: /var/lib/aegis-ot/trust-sequence/state.json
       AEGIS_GATEWAY_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:gateway
       AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
       AEGIS_OT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:ot-adapter
@@ -433,6 +440,8 @@ services:
     secret_files: [ot.private, permit.public, observer.public, plant.public]
     identity_files: [authority.public, trust-bundle.json, gateway.credential.json, ot.credential.json]
     state_mounts:
+      - host: ot-workload-trust-sequence
+        container: /var/lib/aegis-ot/trust-sequence
       - host: semantic-replay
         container: /var/lib/aegis-ot/semantic-replay
       - host: workload-replay

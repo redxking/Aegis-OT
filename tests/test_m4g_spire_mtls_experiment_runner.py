@@ -31,6 +31,15 @@ def _volume() -> dict[str, Any]:
     }
 
 
+def _state_volume(source: str, target: str) -> dict[str, Any]:
+    return {
+        "type": "volume",
+        "source": source,
+        "target": target,
+        "read_only": False,
+    }
+
+
 def _compose(runner: Any) -> dict[str, Any]:
     services: dict[str, Any] = {
         "opa": {"image": _pinned("opa")},
@@ -47,14 +56,54 @@ def _compose(runner: Any) -> dict[str, Any]:
         },
         "replay-init": {"environment": {"AEGIS_WORKLOAD_IDENTITY_MODE": "required"}},
         "identity-init": {
-            "environment": {"AEGIS_AGENT_ACTOR_ID": "agent:operator-1"}
+            "environment": {
+                "AEGIS_AGENT_ACTOR_ID": "agent:operator-1",
+                "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY": (
+                    "/var/lib/aegis-ot/trust-sequence-state/agent"
+                ),
+                "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY": (
+                    "/var/lib/aegis-ot/trust-sequence-state/gateway"
+                ),
+                "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY": (
+                    "/var/lib/aegis-ot/trust-sequence-state/ot"
+                ),
+            },
+            "volumes": [
+                _state_volume(
+                    "workload_trust_sequence_agent",
+                    "/var/lib/aegis-ot/trust-sequence-state/agent",
+                ),
+                _state_volume(
+                    "workload_trust_sequence_gateway",
+                    "/var/lib/aegis-ot/trust-sequence-state/gateway",
+                ),
+                _state_volume(
+                    "workload_trust_sequence_ot",
+                    "/var/lib/aegis-ot/trust-sequence-state/ot",
+                ),
+            ],
+        },
+        "identity-admin": {
+            "environment": {"AEGIS_AGENT_ACTOR_ID": "agent:operator-1"},
+            "volumes": [
+                _state_volume("test_workload_identity", "/var/lib/aegis-ot/identity")
+            ],
         },
         "agent-probe": {
             "environment": {
                 "AEGIS_WORKLOAD_IDENTITY_MODE": "required",
                 "AEGIS_GATEWAY_URL": "http://segmented-gateway:8081",
                 "AEGIS_AGENT_ACTOR_ID": "agent:operator-1",
-            }
+                "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE": (
+                    "/var/lib/aegis-ot/trust-sequence/state.json"
+                ),
+            },
+            "volumes": [
+                _state_volume(
+                    "workload_trust_sequence_agent",
+                    "/var/lib/aegis-ot/trust-sequence",
+                )
+            ],
         },
     }
     client_peers = {
@@ -135,19 +184,42 @@ def _compose(runner: Any) -> dict[str, Any]:
             environment["AEGIS_SPIRE_MTLS_MODE"] = "required"
         if service in {"segmented-gateway", "ot-adapter"}:
             environment["AEGIS_WORKLOAD_IDENTITY_MODE"] = "required"
+            environment["AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"] = (
+                "/var/lib/aegis-ot/trust-sequence/state.json"
+            )
         if service == "segmented-gateway":
             environment["AEGIS_AGENT_ACTOR_ID"] = "agent:operator-1"
+        volumes = [_volume()]
+        if service in {"segmented-gateway", "ot-adapter"}:
+            suffix = "gateway" if service == "segmented-gateway" else "ot"
+            volumes.append(
+                _state_volume(
+                    f"workload_trust_sequence_{suffix}",
+                    "/var/lib/aegis-ot/trust-sequence",
+                )
+            )
         services[service] = {
             "user": user,
             "entrypoint": entrypoint,
             "environment": environment,
-            "volumes": [_volume()],
+            "volumes": volumes,
             "tmpfs": [
                 "/run/aegis-spire-mtls:rw,noexec,nosuid,nodev,"
                 f"size=1m,mode=0700,uid={uid},gid={gid}"
             ],
         }
-    return {"services": services}
+    return {
+        "services": services,
+        "volumes": {
+            "workload_trust_sequence_agent": {
+                "name": "test_workload_trust_sequence_agent"
+            },
+            "workload_trust_sequence_gateway": {
+                "name": "test_workload_trust_sequence_gateway"
+            },
+            "workload_trust_sequence_ot": {"name": "test_workload_trust_sequence_ot"},
+        },
+    }
 
 
 def _query(
@@ -208,6 +280,36 @@ def test_compose_prefix_closes_exact_six_overlay_order_and_project_scope(
         runner._validate_project_name("../../not-scoped")
 
 
+def test_source_binding_covers_durable_trust_sequence_implementation(runner: Any) -> None:
+    assert "docker-compose.identity.yml" in runner.SOURCE_BINDING_FILES
+    assert "src/aegis_ot/workload_identity.py" in runner.SOURCE_BINDING_FILES
+    assert "src/aegis_ot/workload_runtime.py" in runner.SOURCE_BINDING_FILES
+    assert "src/aegis_ot/workload_trust_state.py" in runner.SOURCE_BINDING_FILES
+
+
+def test_project_lifecycle_inventory_includes_all_labeled_state_volumes(
+    runner: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    volume_names = [
+        "test_workload_trust_sequence_agent",
+        "test_workload_trust_sequence_gateway",
+        "test_workload_trust_sequence_ot",
+    ]
+
+    def run(*args: str, **_kwargs: Any) -> SimpleNamespace:
+        output = "\n".join(volume_names) + "\n" if args[1:3] == ("volume", "ls") else ""
+        return SimpleNamespace(stdout=output, returncode=0)
+
+    monkeypatch.setattr(runner.m4d, "_run", run)
+
+    resources = runner._project_resources("aegis-ot-m4g-spire-mtls-test")
+
+    assert resources["volumes"] == volume_names
+    assert resources["containers"] == []
+    assert resources["networks"] == []
+
+
 def test_embedded_container_probes_are_valid_python(runner: Any) -> None:
     compile(runner._IDENTITY_QUERY_CODE, "<m4g-spire-identity-query>", "exec")
     compile(runner._PREPARE_FRESH_ACTION_CODE, "<m4g-spire-fresh-action>", "exec")
@@ -217,10 +319,28 @@ def test_embedded_container_probes_are_valid_python(runner: Any) -> None:
 def test_configuration_binding_requires_both_modes_exact_users_and_mtls(
     runner: Any,
 ) -> None:
-    binding = runner._configuration_binding(_compose(runner))
+    binding = runner._configuration_binding(_compose(runner), project_name="test")
 
     assert binding["all_critical_external_references_digest_pinned"] is True
     assert binding["application_workload_identity_required"] is True
+    assert binding["all_workload_trust_sequence_state_isolated"] is True
+    trust_sequence = binding["workload_trust_sequence_state"]
+    assert trust_sequence["runtime_volume_sources_are_isolated"] is True
+    assert trust_sequence["all_volumes_project_scoped_and_managed"] is True
+    assert trust_sequence["identity_admin_excluded"] is True
+    assert trust_sequence["matches_expected"] is True
+    assert {
+        item["volume_source"]
+        for item in trust_sequence["runtime_states"].values()
+    } == {
+        "workload_trust_sequence_agent",
+        "workload_trust_sequence_gateway",
+        "workload_trust_sequence_ot",
+    }
+    assert all(
+        item["state_file"] == "/var/lib/aegis-ot/trust-sequence/state.json"
+        for item in trust_sequence["runtime_states"].values()
+    )
     assert binding["all_workload_bindings_match"] is True
     assert binding["all_mtls_client_modes_required"] is True
     assert binding["all_internal_servers_require_spiffe_mtls"] is True
@@ -241,24 +361,41 @@ def test_configuration_binding_requires_both_modes_exact_users_and_mtls(
 
     wrong_mode = _compose(runner)
     wrong_mode["services"]["segmented-gateway"]["environment"]["AEGIS_SPIRE_MTLS_MODE"] = "disabled"
-    assert runner._configuration_binding(wrong_mode)["all_mtls_client_modes_required"] is False
+    assert (
+        runner._configuration_binding(wrong_mode, project_name="test")[
+            "all_mtls_client_modes_required"
+        ]
+        is False
+    )
 
     wrong_peer = _compose(runner)
     wrong_peer["services"]["candidate"]["environment"]["AEGIS_SPIFFE_PEER_IDS"] = json.dumps(
         {"simulation": runner.WORKLOADS["observer"][1]}
     )
-    assert runner._configuration_binding(wrong_peer)["all_mtls_client_modes_required"] is False
+    assert (
+        runner._configuration_binding(wrong_peer, project_name="test")[
+            "all_mtls_client_modes_required"
+        ]
+        is False
+    )
 
     wrong_user = _compose(runner)
     wrong_user["services"]["observer"]["user"] = "65532:65532"
-    assert runner._configuration_binding(wrong_user)["all_workload_bindings_match"] is False
+    assert (
+        runner._configuration_binding(wrong_user, project_name="test")[
+            "all_workload_bindings_match"
+        ]
+        is False
+    )
 
     wrong_actor = _compose(runner)
     wrong_actor["services"]["segmented-gateway"]["environment"][
         "AEGIS_AGENT_ACTOR_ID"
     ] = "agent:other-operator"
     assert (
-        runner._configuration_binding(wrong_actor)["agent_ingress_boundary"][
+        runner._configuration_binding(wrong_actor, project_name="test")[
+            "agent_ingress_boundary"
+        ][
             "matches_expected"
         ]
         is False
@@ -269,9 +406,62 @@ def test_configuration_binding_requires_both_modes_exact_users_and_mtls(
         "AEGIS_AGENT_ACTOR_ID"
     ] = "agent:other-operator"
     assert (
-        runner._configuration_binding(wrong_issuer_actor)["agent_ingress_boundary"][
+        runner._configuration_binding(wrong_issuer_actor, project_name="test")[
+            "agent_ingress_boundary"
+        ][
             "matches_expected"
         ]
+        is False
+    )
+
+    shared_state = _compose(runner)
+    gateway_state_mount = next(
+        mount
+        for mount in shared_state["services"]["segmented-gateway"]["volumes"]
+        if mount["target"] == "/var/lib/aegis-ot/trust-sequence"
+    )
+    gateway_state_mount["source"] = "workload_trust_sequence_agent"
+    assert (
+        runner._configuration_binding(shared_state, project_name="test")[
+            "all_workload_trust_sequence_state_isolated"
+        ]
+        is False
+    )
+
+    missing_state = _compose(runner)
+    missing_state["services"]["ot-adapter"]["environment"].pop(
+        "AEGIS_WORKLOAD_TRUST_SEQUENCE_STATE_FILE"
+    )
+    assert (
+        runner._configuration_binding(missing_state, project_name="test")[
+            "all_workload_trust_sequence_state_isolated"
+        ]
+        is False
+    )
+
+    privileged_admin = _compose(runner)
+    privileged_admin["services"]["identity-admin"]["volumes"].append(
+        _state_volume(
+            "workload_trust_sequence_gateway",
+            "/var/lib/aegis-ot/trust-sequence",
+        )
+    )
+    assert (
+        runner._configuration_binding(privileged_admin, project_name="test")[
+            "workload_trust_sequence_state"
+        ]["identity_admin_excluded"]
+        is False
+    )
+
+    external_state = _compose(runner)
+    external_state["volumes"]["workload_trust_sequence_ot"] = {
+        "external": True,
+        "name": "test_workload_trust_sequence_ot",
+    }
+    assert (
+        runner._configuration_binding(external_state, project_name="test")[
+            "workload_trust_sequence_state"
+        ]["all_volumes_project_scoped_and_managed"]
         is False
     )
 

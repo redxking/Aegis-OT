@@ -52,6 +52,11 @@ CREDENTIAL_FILENAMES = {
     WorkloadRole.GATEWAY: "gateway.credential.json",
     WorkloadRole.OT_ADAPTER: "ot.credential.json",
 }
+TRUST_SEQUENCE_DIRECTORY_ENVIRONMENTS = {
+    "agent": "AEGIS_AGENT_TRUST_SEQUENCE_DIRECTORY",
+    "gateway": "AEGIS_GATEWAY_TRUST_SEQUENCE_DIRECTORY",
+    "ot-adapter": "AEGIS_OT_TRUST_SEQUENCE_DIRECTORY",
+}
 
 
 def _required_environment(name: str) -> str:
@@ -268,6 +273,136 @@ def _assign_runtime_directory(path: Path, *, target_uid: int, target_gid: int) -
         raise RuntimeError("M4g identity directory mode was not set to 0700")
 
 
+def _trust_sequence_directory_state(
+    path: Path,
+    *,
+    target_uid: int,
+    target_gid: int,
+) -> str:
+    """Classify one root without crossing the runtime's DAC boundary."""
+
+    try:
+        directory_stat = path.lstat()
+    except OSError as exc:
+        raise RuntimeError(
+            f"M4g trust-sequence directory is unavailable: {path}"
+        ) from exc
+    if stat.S_ISLNK(directory_stat.st_mode) or not stat.S_ISDIR(
+        directory_stat.st_mode
+    ):
+        raise RuntimeError(f"M4g trust-sequence path is not a directory: {path}")
+    directory_mode = stat.S_IMODE(directory_stat.st_mode)
+    if (
+        directory_stat.st_uid == target_uid
+        and directory_stat.st_gid == target_gid
+        and directory_mode == 0o700
+    ):
+        # CAP_CHOWN does not confer DAC read access. A recreated initializer
+        # therefore cannot enumerate a private runtime-owned root and must not
+        # imply that it validated the persisted layout. Each runtime store
+        # validates its own exact state/lock layout before admitting a bundle.
+        return "runtime_owned_preserved_uninspected"
+    if (
+        directory_stat.st_uid != os.geteuid()
+        or directory_stat.st_gid != os.getegid()
+        or directory_mode & 0o500 != 0o500
+    ):
+        raise RuntimeError(
+            "M4g trust-sequence bootstrap directory has unexpected ownership or "
+            f"mode: {path}"
+        )
+    try:
+        populated = any(path.iterdir())
+    except OSError as exc:
+        raise RuntimeError(
+            f"M4g trust-sequence bootstrap directory cannot be inspected: {path}"
+        ) from exc
+    if populated:
+        raise RuntimeError(
+            "M4g trust-sequence bootstrap directory must be empty before ownership "
+            "transfer: "
+            f"{path}"
+        )
+    return "bootstrap_empty"
+
+
+def _prepare_trust_sequence_directories(
+    *,
+    target_uid: int,
+    target_gid: int,
+) -> dict[str, dict[str, str]]:
+    """Prepare empty roots while respecting private runtime-owned DAC boundaries."""
+
+    configured = {
+        role: os.getenv(environment_name)
+        for role, environment_name in TRUST_SEQUENCE_DIRECTORY_ENVIRONMENTS.items()
+    }
+    present = {role for role, value in configured.items() if value}
+    if not present:
+        # Offline secret-package generation has no runtime state volumes. The
+        # deployment path creates and owns those roots on the target host.
+        return {}
+    if present != set(configured):
+        missing = sorted(set(configured) - present)
+        raise RuntimeError(
+            "M4g trust-sequence directories must be configured all together; "
+            f"missing roles: {', '.join(missing)}"
+        )
+    paths = {
+        role: Path(value)
+        for role, value in configured.items()
+        if value is not None
+    }
+    states: dict[str, str] = {}
+    identities: dict[tuple[int, int], str] = {}
+    for role, path in paths.items():
+        state = _trust_sequence_directory_state(
+            path,
+            target_uid=target_uid,
+            target_gid=target_gid,
+        )
+        directory_stat = path.lstat()
+        identity = (directory_stat.st_dev, directory_stat.st_ino)
+        prior_role = identities.get(identity)
+        if prior_role is not None:
+            raise RuntimeError(
+                "M4g trust-sequence roles must use isolated directories: "
+                f"{prior_role} and {role} share {path}"
+            )
+        identities[identity] = role
+        states[role] = state
+
+    # Mutate only after every root has passed metadata/bootstrap validation.
+    # Runtime-owned roots are never inspected, rewritten, cleared, or repaired.
+    for role, path in paths.items():
+        if states[role] != "bootstrap_empty":
+            continue
+        path.chmod(0o700)
+        os.chown(path, target_uid, target_gid)
+        directory_stat = path.stat()
+        if (
+            directory_stat.st_uid != target_uid
+            or directory_stat.st_gid != target_gid
+            or stat.S_IMODE(directory_stat.st_mode) != 0o700
+        ):
+            raise RuntimeError(
+                f"M4g trust-sequence directory was not assigned privately: {path}"
+            )
+
+    return {
+        role: {
+            "path": str(paths[role]),
+            "state": (
+                "bootstrap_prepared"
+                if states[role] == "bootstrap_empty"
+                else "runtime_owned_preserved_uninspected"
+            ),
+            "directory_mode": "0700",
+        }
+        for role in paths
+    }
+
+
 def _issue_credential(
     *,
     authority_private_key: Ed25519PrivateKey,
@@ -323,14 +458,6 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
     if bundle_lifetime < credential_lifetime:
         raise RuntimeError("workload trust-bundle lifetime must cover credential lifetime")
 
-    identity_directory = Path(_required_environment("AEGIS_WORKLOAD_IDENTITY_DIRECTORY"))
-    _prepare_empty_identity_directory(identity_directory)
-    authority_private_key = _load_authority_private_key(
-        Path(_required_environment("AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE"))
-    )
-    authority_public_key = authority_private_key.public_key()
-    authority_key_id = workload_key_id(authority_public_key)
-    trust_domain = _required_environment("AEGIS_WORKLOAD_TRUST_DOMAIN")
     try:
         target_uid = int(os.getenv("AEGIS_RUNTIME_UID", "65532"))
         target_gid = int(os.getenv("AEGIS_RUNTIME_GID", "65532"))
@@ -338,6 +465,18 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
         raise RuntimeError("M4g runtime UID and GID must be integers") from exc
     if target_uid < 0 or target_gid < 0:
         raise RuntimeError("M4g runtime UID and GID must be nonnegative integers")
+    identity_directory = Path(_required_environment("AEGIS_WORKLOAD_IDENTITY_DIRECTORY"))
+    _prepare_empty_identity_directory(identity_directory)
+    trust_sequence_directories = _prepare_trust_sequence_directories(
+        target_uid=target_uid,
+        target_gid=target_gid,
+    )
+    authority_private_key = _load_authority_private_key(
+        Path(_required_environment("AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE"))
+    )
+    authority_public_key = authority_private_key.public_key()
+    authority_key_id = workload_key_id(authority_public_key)
+    trust_domain = _required_environment("AEGIS_WORKLOAD_TRUST_DOMAIN")
 
     definitions = (
         (
@@ -437,7 +576,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
         raise
 
     return {
-        "schema_version": "m4g-workload-identity-initialization-v1",
+        "schema_version": "m4g-workload-identity-initialization-v2",
         "identity_directory": str(identity_directory),
         "trust_domain": trust_domain,
         "authority_key_id": authority_key_id,
@@ -460,6 +599,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
         "artifact_mode": "0600",
         "runtime_uid": target_uid,
         "runtime_gid": target_gid,
+        "trust_sequence_directories": trust_sequence_directories,
         "authority_private_key_retained": False,
     }
 
