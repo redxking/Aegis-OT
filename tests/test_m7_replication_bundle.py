@@ -270,11 +270,13 @@ def test_bundle_contains_source_derived_spdx_inputs_and_conservative_inventory(
     assert [item["path"] for item in m4g["declared_artifacts"]] == [
         "results/m4g-workload-identity-evidence.json",
         "results/m4g-workload-identity-evidence-v2.json",
+        "results/m4g-workload-identity-evidence-v3.json",
     ]
     assert m4g["artifact_presence_state"] == "no_declared_artifact_present"
     assert [item["path"] for item in m4i["declared_artifacts"]] == [
         "results/m4i-coordination-evidence.json",
         "results/m4i-coordination-evidence-v2.json",
+        "results/m4i-coordination-evidence-v3.json",
     ]
     assert m4i["artifact_presence_state"] == "no_declared_artifact_present"
     assert m8["artifact_presence_state"] == "no_declared_artifact_present"

@@ -148,7 +148,7 @@ name, and a new output path. They refuse to overwrite retained evidence.
 | M4d | `scripts/run_m4d_experiment.py` | Network segmentation, bypass denial, and service loss |
 | M4e | `scripts/run_m4e_experiment.py` | Signed gateway/OT transport and hostile-message cases |
 | M4f | `scripts/run_m4f_experiment.py` | Durable exact-envelope replay across OT-adapter replacement |
-| M4g | `scripts/run_m4g_experiment.py` | Application workload credentials, rotation, and replay attribution |
+| M4g | `scripts/run_m4g_experiment.py` | Application workload credentials, rotation, restart-durable trust-sequence rejection, and replay attribution |
 | M4i | `scripts/run_m4i_experiment.py` | At-most-one commit transmission, query recovery, restart recovery, and fail-closed journal corruption |
 | SPIRE | `scripts/run_m4g_spire_mtls_experiment.py` | X.509-SVID issuance and internal mTLS; no accepted result is retained |
 
@@ -163,11 +163,15 @@ docker compose \
   --profile experiment config --quiet
 ```
 
-The current actor-bound workload-identity and coordination code has accepted
-single-host campaigns at `results/m4g-workload-identity-evidence-v2.json` and
-`results/m4i-coordination-evidence-v2.json`. The unsuffixed files remain as
-immutable historical evidence for the preceding credential contract. These
-results do not establish consensus, a rollback-resistant external anchor,
+The current restart-durable, actor-bound workload-identity and coordination
+code has accepted single-host campaigns at
+`results/m4g-workload-identity-evidence-v3.json` and
+`results/m4i-coordination-evidence-v3.json`. The v2 and unsuffixed files remain
+as immutable historical evidence for the preceding credential contracts. The
+current M4g campaign establishes signed sequence-rollback rejection after
+gateway and OT container recreation only while each verifier's trusted local
+state volume remains intact. These results do not establish hostile-host or
+storage rollback resistance, consensus, a rollback-resistant external anchor,
 multi-host deployment, or exactly-once-effect behavior. The
 [M4j lab guide](docs/reproducibility/M4J_LAB.md) provides the compatible-host
 deployment and live-probe sequence.
@@ -237,7 +241,7 @@ Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, 
 | M3 physical-model path | Primary and local-reproduction packages | Loopback PyModbus, pandapower, signed permit, acknowledgment, and replay behavior | Physical PLC, HIL, field, or latency claims |
 | M4b-M4c capability path | Root-signed packages and fault campaigns | Same-host capability separation, consequence checks, replay, contradiction, and unknown-effect handling | Independent sensing, hostile-host resistance, or failure-rate estimates |
 | M4d-M4f segmented path | Reproduced Docker experiment reports | Network membership, bypass denial, signed transport, and bounded durable replay | Multi-host isolation, exactly-once effects, or rollback resistance |
-| M4g identity path | Accepted application-credential campaign | Workload credential rejection, rotation, and stable replay attribution | Retained SPIRE/mTLS acceptance, protected key storage, or external validation |
+| M4g identity path | Accepted application-credential and intact-volume restart campaign | Workload credential rejection, rotation, stable replay attribution, and signed sequence rollback rejection after container recreation | Hostile-host/storage rollback resistance, protected key storage, multi-host execution, or external validation |
 | M4i coordination | Accepted single-host coordination and recovery campaign | At-most-one commit transmission in the tested flow, query recovery, restart recovery, and fail-closed corrupt state | Consensus, hostile-host rollback resistance, independently anchored state, or exactly-once effects |
 | M4j six-host deployment | Exact-source builder, six-role provisioning, SPIRE registration, workload deployer, signed probe, and network acceptance runner | A runnable compatible-host lab contract | A retained live six-host result, hostile-hypervisor resistance, or production readiness |
 | M5 compromise and degraded operation | Deterministic admission, quarantine, recovery, and degraded-operation code and runners | Implemented fail-closed modeled behavior | Operational mission-continuity evidence or external validation |

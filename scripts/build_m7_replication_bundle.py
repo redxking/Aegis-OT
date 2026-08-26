@@ -212,6 +212,7 @@ MILESTONE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "results/m4g-workload-identity-evidence.json",
             "results/m4g-workload-identity-evidence-v2.json",
+            "results/m4g-workload-identity-evidence-v3.json",
         ),
     ),
     (
@@ -225,6 +226,7 @@ MILESTONE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "results/m4i-coordination-evidence.json",
             "results/m4i-coordination-evidence-v2.json",
+            "results/m4i-coordination-evidence-v3.json",
         ),
     ),
     (
