@@ -274,6 +274,7 @@ def _issue_credential(
     trust_domain: str,
     subject: str,
     role: WorkloadRole,
+    actor_id: str | None,
     audiences: tuple[str, ...],
     public_key: Ed25519PublicKey,
     issued_at: datetime,
@@ -285,6 +286,7 @@ def _issue_credential(
         trust_domain=trust_domain,
         subject=subject,
         role=role,
+        actor_id=actor_id,
         key_id=workload_key_id(public_key),
         public_key_b64=public_key_base64(public_key),
         authority_key_id=workload_key_id(authority_public_key),
@@ -303,6 +305,7 @@ def _credential_summary(path: Path, signed: SignedWorkloadCredential) -> dict[st
         "credential_id": credential.credential_id,
         "subject": credential.subject,
         "role": credential.role.value,
+        "actor_id": credential.actor_id,
         "key_id": credential.key_id,
         "audiences": list(credential.audiences),
         "expires_at": credential.expires_at.isoformat(),
@@ -343,6 +346,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
                 Path(_required_environment("AEGIS_AGENT_PUBLIC_KEY_FILE"))
             ),
             _required_environment("AEGIS_AGENT_WORKLOAD_SUBJECT"),
+            _required_environment("AEGIS_AGENT_ACTOR_ID"),
             (GATEWAY_CAPABILITY_AUDIENCE,),
         ),
         (
@@ -351,6 +355,7 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
                 Path(_required_environment("AEGIS_GATEWAY_PUBLIC_KEY_FILE"))
             ),
             _required_environment("AEGIS_GATEWAY_WORKLOAD_SUBJECT"),
+            None,
             (OT_CAPABILITY_AUDIENCE, EFFECT_COORDINATOR_AUDIENCE),
         ),
         (
@@ -359,20 +364,22 @@ def initialize(*, now: datetime | None = None) -> dict[str, Any]:
                 Path(_required_environment("AEGIS_OT_PUBLIC_KEY_FILE"))
             ),
             _required_environment("AEGIS_OT_WORKLOAD_SUBJECT"),
+            None,
             (GATEWAY_CAPABILITY_AUDIENCE, GATEWAY_COORDINATION_AUDIENCE),
         ),
     )
     _require_distinct_identity_keys(
         authority_public_key,
-        {role: public_key for role, public_key, _, _ in definitions},
+        {role: public_key for role, public_key, _, _, _ in definitions},
     )
     credentials: dict[WorkloadRole, SignedWorkloadCredential] = {}
-    for role, public_key, subject, audiences in definitions:
+    for role, public_key, subject, actor_id, audiences in definitions:
         credentials[role] = _issue_credential(
             authority_private_key=authority_private_key,
             trust_domain=trust_domain,
             subject=subject,
             role=role,
+            actor_id=actor_id,
             audiences=audiences,
             public_key=public_key,
             issued_at=issued_at,

@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .crypto import decode_urlsafe_b64, sign_bytes, verify_bytes
 
-CREDENTIAL_SIGNATURE_DOMAIN = b"aegis-ot:m4g:workload-credential:v1\x00"
+CREDENTIAL_SIGNATURE_DOMAIN = b"aegis-ot:m4g:workload-credential:v2\x00"
 TRUST_BUNDLE_SIGNATURE_DOMAIN = b"aegis-ot:m4g:workload-trust-bundle:v1\x00"
 MAX_IDENTITY_FILE_BYTES = 262_144
 
@@ -157,13 +157,14 @@ class WorkloadCredential(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = Field(
-        default="m4g-workload-credential-v1",
-        pattern=r"^m4g-workload-credential-v1$",
+        default="m4g-workload-credential-v2",
+        pattern=r"^m4g-workload-credential-v2$",
     )
     credential_id: str = Field(min_length=16, max_length=128)
     trust_domain: str = Field(min_length=3, max_length=128)
     subject: str = Field(min_length=3, max_length=256)
     role: WorkloadRole
+    actor_id: str | None = Field(min_length=1, max_length=256)
     key_id: str = Field(min_length=3, max_length=128)
     public_key_b64: str = Field(min_length=44, max_length=44)
     authority_key_id: str = Field(min_length=3, max_length=128)
@@ -182,6 +183,13 @@ class WorkloadCredential(BaseModel):
     @classmethod
     def validate_identity_text(cls, value: str, info: Any) -> str:
         return _validate_identity_text(str(info.field_name), value)
+
+    @field_validator("actor_id")
+    @classmethod
+    def validate_actor_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _validate_identity_text("actor_id", value)
 
     @field_validator("public_key_b64")
     @classmethod
@@ -212,6 +220,11 @@ class WorkloadCredential(BaseModel):
             raise ValueError("workload credential key ID does not match its public key")
         if self.key_id == self.authority_key_id:
             raise ValueError("workload leaf key must differ from the authority key")
+        if (self.role is WorkloadRole.AGENT) != (self.actor_id is not None):
+            raise ValueError(
+                "agent workload credentials require one actor ID and non-agent "
+                "credentials require a null actor ID"
+            )
         return self
 
     @property
@@ -413,6 +426,7 @@ class WorkloadIdentityVerifier:
         expected_role: WorkloadRole,
         expected_audience: str,
         expected_subject: str | None = None,
+        expected_actor_id: str | None = None,
         now: datetime | None = None,
     ) -> WorkloadVerificationReceipt:
         """Verify one credential and return non-secret admission provenance."""
@@ -449,6 +463,10 @@ class WorkloadIdentityVerifier:
             raise WorkloadCredentialRejected(
                 "workload credential subject is not authorized"
             )
+        if credential.actor_id != expected_actor_id:
+            raise WorkloadCredentialRejected(
+                "workload credential actor is not authorized"
+            )
         if expected_audience not in credential.audiences:
             raise WorkloadCredentialRejected(
                 "workload credential audience is not authorized"
@@ -465,6 +483,7 @@ class WorkloadIdentityVerifier:
             trust_domain=credential.trust_domain,
             subject=credential.subject,
             role=credential.role,
+            actor_id=credential.actor_id,
             key_id=credential.key_id,
             authority_key_id=credential.authority_key_id,
             trust_bundle_id=bundle.bundle_id,
@@ -479,6 +498,7 @@ class WorkloadIdentityVerifier:
         expected_role: WorkloadRole,
         expected_audience: str,
         expected_subject: str | None = None,
+        expected_actor_id: str | None = None,
         now: datetime | None = None,
     ) -> Ed25519PublicKey:
         return self.verify_credential_with_receipt(
@@ -486,6 +506,7 @@ class WorkloadIdentityVerifier:
             expected_role=expected_role,
             expected_audience=expected_audience,
             expected_subject=expected_subject,
+            expected_actor_id=expected_actor_id,
             now=now,
         ).public_key
 
@@ -496,6 +517,7 @@ class WorkloadIdentityVerifier:
         expected_role: WorkloadRole,
         expected_audience: str,
         expected_subject: str | None = None,
+        expected_actor_id: str | None = None,
         authenticated_at: datetime,
         now: datetime | None = None,
         maximum_future_skew: timedelta = timedelta(0),
@@ -558,6 +580,10 @@ class WorkloadIdentityVerifier:
             raise WorkloadCredentialRejected(
                 "historical workload credential subject is not authorized"
             )
+        if credential.actor_id != expected_actor_id:
+            raise WorkloadCredentialRejected(
+                "historical workload credential actor is not authorized"
+            )
         if expected_audience not in credential.audiences:
             raise WorkloadCredentialRejected(
                 "historical workload credential audience is not authorized"
@@ -583,6 +609,7 @@ class WorkloadVerificationReceipt:
     trust_domain: str
     subject: str
     role: WorkloadRole
+    actor_id: str | None
     key_id: str
     authority_key_id: str
     trust_bundle_id: str
@@ -596,6 +623,7 @@ class WorkloadVerificationReceipt:
             "trust_domain": self.trust_domain,
             "subject": self.subject,
             "role": self.role.value,
+            "actor_id": self.actor_id,
             "key_id": self.key_id,
             "authority_key_id": self.authority_key_id,
             "trust_bundle_id": self.trust_bundle_id,
@@ -628,6 +656,7 @@ class WorkloadCredentialBinding:
     expected_role: WorkloadRole
     expected_audience: str
     expected_subject: str
+    expected_actor_id: str | None = None
 
     def resolve(self, *, now: datetime | None = None) -> ResolvedWorkloadIdentity:
         credential = load_signed_workload_credential(self.credential_path)
@@ -636,6 +665,7 @@ class WorkloadCredentialBinding:
             expected_role=self.expected_role,
             expected_audience=self.expected_audience,
             expected_subject=self.expected_subject,
+            expected_actor_id=self.expected_actor_id,
             now=now,
         )
         return ResolvedWorkloadIdentity(

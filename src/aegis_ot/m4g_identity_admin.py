@@ -283,6 +283,7 @@ def rotate_credential(
             trust_domain=credential.trust_domain,
             subject=credential.subject,
             role=credential.role,
+            actor_id=credential.actor_id,
             audiences=credential.audiences,
             public_key=new_public_key,
             issued_at=issued_at,

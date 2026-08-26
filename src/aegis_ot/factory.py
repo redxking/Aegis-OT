@@ -27,7 +27,17 @@ class LocalLab:
     supervisor_private_key: Ed25519PrivateKey
 
 
-def build_local_lab(now: datetime | None = None) -> LocalLab:
+def build_local_lab(
+    now: datetime | None = None,
+    *,
+    agent_actor_id: str = "agent:operator-1",
+) -> LocalLab:
+    if (
+        not agent_actor_id
+        or agent_actor_id != agent_actor_id.strip()
+        or any(character.isspace() for character in agent_actor_id)
+    ):
+        raise ValueError("agent actor ID must be non-empty and contain no whitespace")
     reference_time = now or datetime.now(UTC)
     root_private, root_public = generate_keypair()
     supervisor_private, supervisor_public = generate_keypair()
@@ -46,7 +56,7 @@ def build_local_lab(now: datetime | None = None) -> LocalLab:
     leaf = DelegationGrant(
         grant_id="grant-leaf",
         issuer_id="agent:supervisor",
-        subject_id="agent:operator-1",
+        subject_id=agent_actor_id,
         mission_id="microgrid-containment",
         resources=frozenset({"feeder-1", "battery-1"}),
         operations=frozenset({Operation.ISOLATE_ASSET, Operation.DISPATCH_BATTERY}),
@@ -64,7 +74,7 @@ def build_local_lab(now: datetime | None = None) -> LocalLab:
         },
     )
     gateway = AegisGateway(
-        identity=AllowlistIdentityVerifier(frozenset({"agent:operator-1"})),
+        identity=AllowlistIdentityVerifier(frozenset({agent_actor_id})),
         delegation=validator,
         policy=ContextualPolicy(),
         safety=SafetyKernel(),

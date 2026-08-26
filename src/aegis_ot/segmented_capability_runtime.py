@@ -2240,6 +2240,7 @@ class CapabilityGatewayRuntime:
                     expected_role=WorkloadRole.AGENT,
                     expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
                     expected_subject=agent_subject,
+                    expected_actor_id=request.request.proposal.actor_id,
                     now=evaluated_at,
                 )
             except WorkloadCredentialRejected as exc:
@@ -2426,6 +2427,7 @@ class CapabilityGatewayRuntime:
                     expected_role=WorkloadRole.AGENT,
                     expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
                     expected_subject=self.agent_workload_subject,
+                    expected_actor_id=action.proposal.actor_id,
                     now=evaluated_at,
                 )
             except WorkloadCredentialRejected as exc:
@@ -3154,7 +3156,13 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
             "ot": discovery.ot.public_key,
         }
     )
-    authorization = build_local_lab()
+    authorization = build_local_lab(
+        agent_actor_id=(
+            _expected_environment("AEGIS_AGENT_ACTOR_ID")
+            if identity_required
+            else "agent:operator-1"
+        )
+    )
     authorization.gateway.degraded_operation = degraded_operation
     opa_url = os.getenv("AEGIS_OPA_URL", "http://opa:8181")
     authorization.gateway.policy = OpaBackedPolicy(

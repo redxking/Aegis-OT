@@ -180,6 +180,7 @@ def _configure_required_gateway(
     monkeypatch.setenv("AEGIS_GATEWAY_WORKLOAD_SUBJECT", GATEWAY_SUBJECT)
     monkeypatch.setenv("AEGIS_OT_WORKLOAD_SUBJECT", OT_SUBJECT)
     monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", AGENT_SUBJECT)
+    monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", "agent:operator-1")
 
     journal_directory = tmp_path / "gateway-coordination"
     journal_directory.mkdir(mode=0o700)

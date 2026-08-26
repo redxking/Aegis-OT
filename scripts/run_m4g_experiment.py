@@ -72,6 +72,7 @@ PROJECT_VOLUME_SUFFIXES = (
     "transport_probe",
 )
 TRUST_DOMAIN = "aegis-ot.m4g.local"
+AGENT_ACTOR_ID = "agent:operator-1"
 AGENT_SUBJECT = "urn:aegis-ot:m4g:workload:agent-probe"
 GATEWAY_SUBJECT = "urn:aegis-ot:m4g:workload:gateway"
 OT_SUBJECT = "urn:aegis-ot:m4g:workload:ot-adapter"
@@ -223,6 +224,7 @@ def _campaign_environment(
         "AEGIS_WORKLOAD_TRUST_DOMAIN": TRUST_DOMAIN,
         "AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID": key_ids["workload_authority"],
         "AEGIS_OT_WORKLOAD_KEY_ID": key_ids["ot"],
+        "AEGIS_AGENT_ACTOR_ID": AGENT_ACTOR_ID,
         "AEGIS_AGENT_WORKLOAD_SUBJECT": AGENT_SUBJECT,
         "AEGIS_GATEWAY_WORKLOAD_SUBJECT": GATEWAY_SUBJECT,
         "AEGIS_OT_WORKLOAD_SUBJECT": OT_SUBJECT,
@@ -622,7 +624,7 @@ action = CapabilityActionRequest(
     correlation_id=correlation_id,
     proposal=ActionProposal(
         proposal_id=f'm4g-rotation-fixture-{uuid4()}',
-        actor_id='agent:operator-1',
+        actor_id=os.environ['AEGIS_AGENT_ACTOR_ID'],
         mission_id='microgrid-containment',
         resource='feeder-1',
         operation=Operation.ISOLATE_ASSET,

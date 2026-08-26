@@ -296,6 +296,7 @@ services:
       AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
       AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
       AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_AGENT_ACTOR_ID: agent:operator-1
       AEGIS_AGENT_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:agent-probe
       AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/agent.credential.json
       AEGIS_AGENT_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/agent.private
@@ -346,6 +347,7 @@ services:
       AEGIS_WORKLOAD_TRUST_ROOT_KEY_ID: ${secrets.key_ids.workload_authority}
       AEGIS_WORKLOAD_TRUST_ROOT_PUBLIC_KEY_FILE: /run/aegis-identity/authority.public
       AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
+      AEGIS_AGENT_ACTOR_ID: agent:operator-1
       AEGIS_GATEWAY_WORKLOAD_SUBJECT: urn:aegis-ot:m4g:workload:gateway
       AEGIS_GATEWAY_WORKLOAD_CREDENTIAL_FILE: /run/aegis-identity/gateway.credential.json
       AEGIS_GATEWAY_WORKLOAD_PRIVATE_KEY_FILE: /run/secrets/gateway.private

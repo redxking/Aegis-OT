@@ -46,10 +46,14 @@ def _compose(runner: Any) -> dict[str, Any]:
             }
         },
         "replay-init": {"environment": {"AEGIS_WORKLOAD_IDENTITY_MODE": "required"}},
+        "identity-init": {
+            "environment": {"AEGIS_AGENT_ACTOR_ID": "agent:operator-1"}
+        },
         "agent-probe": {
             "environment": {
                 "AEGIS_WORKLOAD_IDENTITY_MODE": "required",
                 "AEGIS_GATEWAY_URL": "http://segmented-gateway:8081",
+                "AEGIS_AGENT_ACTOR_ID": "agent:operator-1",
             }
         },
     }
@@ -131,6 +135,8 @@ def _compose(runner: Any) -> dict[str, Any]:
             environment["AEGIS_SPIRE_MTLS_MODE"] = "required"
         if service in {"segmented-gateway", "ot-adapter"}:
             environment["AEGIS_WORKLOAD_IDENTITY_MODE"] = "required"
+        if service == "segmented-gateway":
+            environment["AEGIS_AGENT_ACTOR_ID"] = "agent:operator-1"
         services[service] = {
             "user": user,
             "entrypoint": entrypoint,
@@ -227,6 +233,9 @@ def test_configuration_binding_requires_both_modes_exact_users_and_mtls(
         "agent_to_gateway_application_authentication": (
             "authority-signed M4g workload capability action"
         ),
+        "credential_issuer_actor_id": "agent:operator-1",
+        "agent_proposal_actor_id": "agent:operator-1",
+        "gateway_authorized_actor_id": "agent:operator-1",
         "matches_expected": True,
     }
 
@@ -243,6 +252,28 @@ def test_configuration_binding_requires_both_modes_exact_users_and_mtls(
     wrong_user = _compose(runner)
     wrong_user["services"]["observer"]["user"] = "65532:65532"
     assert runner._configuration_binding(wrong_user)["all_workload_bindings_match"] is False
+
+    wrong_actor = _compose(runner)
+    wrong_actor["services"]["segmented-gateway"]["environment"][
+        "AEGIS_AGENT_ACTOR_ID"
+    ] = "agent:other-operator"
+    assert (
+        runner._configuration_binding(wrong_actor)["agent_ingress_boundary"][
+            "matches_expected"
+        ]
+        is False
+    )
+
+    wrong_issuer_actor = _compose(runner)
+    wrong_issuer_actor["services"]["identity-init"]["environment"][
+        "AEGIS_AGENT_ACTOR_ID"
+    ] = "agent:other-operator"
+    assert (
+        runner._configuration_binding(wrong_issuer_actor)["agent_ingress_boundary"][
+            "matches_expected"
+        ]
+        is False
+    )
 
 
 def test_identity_query_uses_full_uid_gid_and_retains_no_certificate_body(

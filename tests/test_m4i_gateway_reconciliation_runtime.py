@@ -17,6 +17,7 @@ from test_m4i_coordination_transport import (
     _port_harness,
 )
 from test_m4i_models import (
+    AGENT_ACTOR_ID,
     AGENT_SUBJECT,
     GATEWAY_SUBJECT,
     NOW,
@@ -140,6 +141,7 @@ def _agent_signer(
     artifacts: M4iArtifacts,
     *,
     subject: str = AGENT_SUBJECT,
+    actor_id: str = AGENT_ACTOR_ID,
     credential_id: str = "credential-agent-reconciliation-0001",
 ) -> WorkloadSigner:
     private_key = Ed25519PrivateKey.generate()
@@ -149,6 +151,7 @@ def _agent_signer(
         credential_id=credential_id,
         subject=subject,
         role=WorkloadRole.AGENT,
+        actor_id=actor_id,
         audience=GATEWAY_CAPABILITY_AUDIENCE,
     )
     return WorkloadSigner(credential, private_key)
@@ -274,6 +277,7 @@ def test_lost_commit_reconciles_once_records_exact_evidence_and_reopens(
             expected_role=WorkloadRole.AGENT,
             expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
             expected_subject=AGENT_SUBJECT,
+            expected_actor_id=AGENT_ACTOR_ID,
             now=proof.issued_at,
         ).evidence_fields(),
     }
@@ -464,7 +468,11 @@ def test_reconciliation_api_is_strict_and_maps_identity_lookup_and_precommit(
         gateway.runtime,
         _reconciliation(
             m4i_artifacts,
-            signer,
+            _agent_signer(
+                m4i_artifacts,
+                actor_id="agent:unrecorded-operator",
+                credential_id="credential-agent-unrecorded-0003",
+            ),
             nonce="agent-reconciliation-missing-nonce-0005",
             issued_at=issued_at,
             action=missing_action,
@@ -498,7 +506,11 @@ def test_reconciliation_api_is_strict_and_maps_identity_lookup_and_precommit(
     )
     fresh_action_proof = WorkloadAuthenticatedCapabilityAction.issue(
         request=fresh_action,
-        signer=signer,
+        signer=_agent_signer(
+            m4i_artifacts,
+            actor_id="agent:fresh-operator",
+            credential_id="credential-agent-fresh-operator-0004",
+        ),
         request_nonce=fresh_proposal.nonce,
         issued_at=issued_at,
         expires_at=issued_at + timedelta(seconds=30),

@@ -976,6 +976,7 @@ def _validate_mtls_edges(
     agent = services["agent-probe"]
     agent_environment = cast(dict[str, str], agent["environment"])
     gateway = services["segmented-gateway"]
+    gateway_environment = cast(dict[str, str], gateway["environment"])
     if (
         agent_environment.get("AEGIS_GATEWAY_URL")
         != "https://segmented-gateway.m4j.internal:8081"
@@ -984,6 +985,8 @@ def _validate_mtls_edges(
         or agent_environment.get("AEGIS_SPIRE_MTLS_MODE") != "required"
         or agent_environment.get("AEGIS_SPIRE_MTLS_TMPDIR")
         != "/run/aegis-spire-mtls"
+        or agent_environment.get("AEGIS_AGENT_ACTOR_ID") != "agent:operator-1"
+        or gateway_environment.get("AEGIS_AGENT_ACTOR_ID") != "agent:operator-1"
         or agent_environment.get("AEGIS_SPIFFE_PEER_IDS")
         != _canonical_bytes(
             {
@@ -1688,6 +1691,7 @@ def _validate_credential(
     public_key: Ed25519PublicKey,
     role: WorkloadRole,
     subject: str,
+    actor_id: str | None,
     audiences: tuple[str, ...],
     now: datetime,
 ) -> SignedWorkloadCredential:
@@ -1698,6 +1702,7 @@ def _validate_credential(
         or claims.trust_domain != "aegis-ot.m4g.local"
         or claims.role is not role
         or claims.subject != subject
+        or claims.actor_id != actor_id
         or claims.audiences != tuple(sorted(audiences))
         or claims.key_id != workload_key_id(public_key)
         or claims.not_before > now
@@ -1826,6 +1831,7 @@ def _validate_secrets(secret_directory: Path, expected_commit: str) -> dict[str,
             public_key=keys["agent"],
             role=WorkloadRole.AGENT,
             subject="urn:aegis-ot:m4g:workload:agent-probe",
+            actor_id="agent:operator-1",
             audiences=(GATEWAY_CAPABILITY_AUDIENCE,),
             now=now,
         ),
@@ -1835,6 +1841,7 @@ def _validate_secrets(secret_directory: Path, expected_commit: str) -> dict[str,
             public_key=keys["gateway"],
             role=WorkloadRole.GATEWAY,
             subject="urn:aegis-ot:m4g:workload:gateway",
+            actor_id=None,
             audiences=(OT_CAPABILITY_AUDIENCE, EFFECT_COORDINATOR_AUDIENCE),
             now=now,
         ),
@@ -1844,6 +1851,7 @@ def _validate_secrets(secret_directory: Path, expected_commit: str) -> dict[str,
             public_key=keys["ot"],
             role=WorkloadRole.OT_ADAPTER,
             subject="urn:aegis-ot:m4g:workload:ot-adapter",
+            actor_id=None,
             audiences=(GATEWAY_CAPABILITY_AUDIENCE, GATEWAY_COORDINATION_AUDIENCE),
             now=now,
         ),

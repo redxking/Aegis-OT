@@ -129,6 +129,20 @@ def _gateway_url() -> str:
     ).rstrip("/")
 
 
+def _agent_actor_id() -> str:
+    value = os.getenv("AEGIS_AGENT_ACTOR_ID")
+    if (
+        value is None
+        or not value
+        or value != value.strip()
+        or any(character.isspace() for character in value)
+    ):
+        raise RuntimeError(
+            "AEGIS_AGENT_ACTOR_ID is required and must contain no whitespace"
+        )
+    return value
+
+
 def _await_gateway(url: str, attempts: int = 80) -> dict[str, Any]:
     for _ in range(attempts):
         try:
@@ -162,7 +176,7 @@ def _request(
 ) -> CapabilityActionRequest:
     proposal = ActionProposal(
         proposal_id=proposal_id,
-        actor_id="agent:operator-1",
+        actor_id=_agent_actor_id(),
         mission_id="microgrid-containment",
         resource="feeder-1",
         operation=Operation.ISOLATE_ASSET,

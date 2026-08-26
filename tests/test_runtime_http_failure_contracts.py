@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from test_m4g_runtime import RuntimeArtifacts
 from test_m4g_runtime import artifacts as runtime_artifacts_fixture
 from test_m4i_models import (
+    AGENT_ACTOR_ID,
     AGENT_SUBJECT,
     NOW,
     M4iArtifacts,
@@ -68,6 +69,7 @@ def _requests(artifacts: M4iArtifacts) -> dict[str, Any]:
             credential_id="credential-runtime-http-agent-0001",
             subject=AGENT_SUBJECT,
             role=WorkloadRole.AGENT,
+            actor_id=AGENT_ACTOR_ID,
             audience=GATEWAY_CAPABILITY_AUDIENCE,
         ),
         agent_private,

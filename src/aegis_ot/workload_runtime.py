@@ -83,6 +83,11 @@ def credential_binding_from_environment(
         expected_role=role,
         expected_audience=audience,
         expected_subject=_required(f"AEGIS_{prefix}_WORKLOAD_SUBJECT"),
+        expected_actor_id=(
+            _required(f"AEGIS_{prefix}_ACTOR_ID")
+            if role is WorkloadRole.AGENT
+            else None
+        ),
     )
 
 

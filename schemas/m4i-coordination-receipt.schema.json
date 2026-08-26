@@ -1219,6 +1219,19 @@
       "additionalProperties": false,
       "description": "Closed claims signed by the configured research identity authority.",
       "properties": {
+        "actor_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Actor Id"
+        },
         "audiences": {
           "items": {
             "type": "string"
@@ -1271,8 +1284,8 @@
           "$ref": "#/$defs/WorkloadRole"
         },
         "schema_version": {
-          "default": "m4g-workload-credential-v1",
-          "pattern": "^m4g-workload-credential-v1$",
+          "default": "m4g-workload-credential-v2",
+          "pattern": "^m4g-workload-credential-v2$",
           "title": "Schema Version",
           "type": "string"
         },
@@ -1294,6 +1307,7 @@
         "trust_domain",
         "subject",
         "role",
+        "actor_id",
         "key_id",
         "public_key_b64",
         "authority_key_id",

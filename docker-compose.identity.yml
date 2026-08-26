@@ -6,6 +6,7 @@ x-m4g-workload-common: &m4g-workload-common
   AEGIS_WORKLOAD_TRUST_BUNDLE_FILE: /run/aegis-identity/trust-bundle.json
 
 x-m4g-workload-subjects: &m4g-workload-subjects
+  AEGIS_AGENT_ACTOR_ID: "${AEGIS_AGENT_ACTOR_ID:-agent:operator-1}"
   AEGIS_AGENT_WORKLOAD_SUBJECT: "${AEGIS_AGENT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:agent-probe}"
   AEGIS_GATEWAY_WORKLOAD_SUBJECT: "${AEGIS_GATEWAY_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:gateway}"
   AEGIS_OT_WORKLOAD_SUBJECT: "${AEGIS_OT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:ot-adapter}"

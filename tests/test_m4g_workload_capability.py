@@ -55,6 +55,7 @@ from aegis_ot.workload_runtime import LocalWorkloadIdentity
 AGENT_SUBJECT = "urn:aegis-ot:test:workload:agent-probe"
 GATEWAY_SUBJECT = "urn:aegis-ot:test:workload:gateway"
 OT_SUBJECT = "urn:aegis-ot:test:workload:ot-adapter"
+AGENT_ACTOR_ID = "agent:operator-1"
 
 _runtime_fixtures = import_module("test_m4g_runtime")
 NOW = cast(datetime, _runtime_fixtures.NOW)
@@ -88,6 +89,7 @@ def _credential(
         credential_id=credential_id,
         subject=subject,
         role=role,
+        actor_id=AGENT_ACTOR_ID if role is WorkloadRole.AGENT else None,
         audiences=(audience,),
         issued_at=NOW - timedelta(minutes=10),
         not_before=NOW - timedelta(minutes=9),
@@ -299,8 +301,31 @@ def test_gateway_endpoint_admits_valid_agent_workload_action(
     admission = runtime.authorization.gateway.evidence.records[0]
     assert admission.payload["event_type"] == "workload_identity_admission"
     assert admission.payload["subject"] == AGENT_SUBJECT
+    assert admission.payload["actor_id"] == AGENT_ACTOR_ID
     assert admission.payload["trust_bundle_sequence"] == 1
     assert "private" not in str(admission.payload).lower()
+
+
+def test_agent_workload_credential_cannot_sign_for_another_actor(
+    artifacts: Any,
+    identities: CapabilityIdentities,
+) -> None:
+    impersonated = artifacts.request.model_copy(
+        update={
+            "proposal": artifacts.request.proposal.model_copy(
+                update={"actor_id": "agent:impersonated-operator"}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="credential actor must match"):
+        WorkloadAuthenticatedCapabilityAction.issue(
+            request=impersonated,
+            signer=identities.agent_signer,
+            request_nonce=impersonated.proposal.nonce,
+            issued_at=NOW - timedelta(seconds=1),
+            expires_at=NOW + timedelta(seconds=30),
+        )
 
 
 @pytest.mark.parametrize("failure", ["invalid-proof", "revoked-credential"])

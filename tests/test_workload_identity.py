@@ -28,6 +28,7 @@ from aegis_ot.workload_identity import (
 )
 from aegis_ot.workload_runtime import (
     LocalWorkloadIdentity,
+    credential_binding_from_environment,
     local_identity_from_environment,
     verifier_from_environment,
     workload_identity_enabled,
@@ -37,6 +38,8 @@ NOW = datetime.now(UTC)
 TRUST_DOMAIN = "aegis-ot.test"
 GATEWAY_SUBJECT = "urn:aegis-ot:test:workload:gateway"
 GATEWAY_AUDIENCE = "aegis-ot:m4g:ot-adapter"
+AGENT_SUBJECT = "urn:aegis-ot:test:workload:agent-probe"
+AGENT_ACTOR_ID = "agent:operator-1"
 
 
 def _private_key_bytes(private_key: Ed25519PrivateKey) -> bytes:
@@ -61,6 +64,7 @@ def _issue_credential(
     credential_id: str = "credential-gateway-0001",
     subject: str = GATEWAY_SUBJECT,
     role: WorkloadRole = WorkloadRole.GATEWAY,
+    actor_id: str | None = None,
     audiences: tuple[str, ...] = (GATEWAY_AUDIENCE,),
     issued_at: datetime = NOW - timedelta(minutes=5),
     not_before: datetime = NOW - timedelta(minutes=4),
@@ -73,6 +77,7 @@ def _issue_credential(
         trust_domain=TRUST_DOMAIN,
         subject=subject,
         role=role,
+        actor_id=actor_id,
         key_id=workload_key_id(leaf_public_key),
         public_key_b64=public_key_base64(leaf_public_key),
         authority_key_id=authority_key_id,
@@ -184,6 +189,88 @@ def test_credential_rejects_authority_key_as_workload_leaf() -> None:
 
     with pytest.raises(ValueError, match="leaf key must differ from the authority"):
         _issue_credential(authority, authority)
+
+
+@pytest.mark.parametrize(
+    ("role", "actor_id"),
+    [
+        (WorkloadRole.AGENT, None),
+        (WorkloadRole.GATEWAY, AGENT_ACTOR_ID),
+        (WorkloadRole.OT_ADAPTER, AGENT_ACTOR_ID),
+    ],
+)
+def test_credential_actor_claim_is_exactly_scoped_to_agent_role(
+    role: WorkloadRole,
+    actor_id: str | None,
+) -> None:
+    with pytest.raises(ValueError, match="agent workload credentials require one actor"):
+        _issue_credential(
+            Ed25519PrivateKey.generate(),
+            Ed25519PrivateKey.generate(),
+            role=role,
+            actor_id=actor_id,
+        )
+
+
+def test_agent_actor_binding_verifies_exactly_and_is_retained_in_evidence(
+    identity: IdentityArtifacts,
+) -> None:
+    agent_private = Ed25519PrivateKey.generate()
+    credential = _issue_credential(
+        identity.authority_private_key,
+        agent_private,
+        credential_id="credential-agent-actor-bound-0001",
+        subject=AGENT_SUBJECT,
+        role=WorkloadRole.AGENT,
+        actor_id=AGENT_ACTOR_ID,
+    )
+    receipt = identity.verifier().verify_credential_with_receipt(
+        credential,
+        expected_role=WorkloadRole.AGENT,
+        expected_audience=GATEWAY_AUDIENCE,
+        expected_subject=AGENT_SUBJECT,
+        expected_actor_id=AGENT_ACTOR_ID,
+        now=NOW,
+    )
+
+    assert receipt.actor_id == AGENT_ACTOR_ID
+    assert receipt.evidence_fields()["actor_id"] == AGENT_ACTOR_ID
+    with pytest.raises(WorkloadIdentityError, match="actor is not authorized"):
+        identity.verifier().verify_credential(
+            credential,
+            expected_role=WorkloadRole.AGENT,
+            expected_audience=GATEWAY_AUDIENCE,
+            expected_subject=AGENT_SUBJECT,
+            expected_actor_id="agent:impersonated-operator",
+            now=NOW,
+        )
+
+
+def test_tampering_agent_actor_invalidates_authority_signature(
+    identity: IdentityArtifacts,
+) -> None:
+    credential = _issue_credential(
+        identity.authority_private_key,
+        Ed25519PrivateKey.generate(),
+        credential_id="credential-agent-actor-tamper-0001",
+        subject=AGENT_SUBJECT,
+        role=WorkloadRole.AGENT,
+        actor_id=AGENT_ACTOR_ID,
+    )
+    claims = credential.credential.model_copy(
+        update={"actor_id": "agent:impersonated-operator"}
+    )
+    tampered = credential.model_copy(update={"credential": claims})
+
+    with pytest.raises(WorkloadIdentityError, match="issuer or signature"):
+        identity.verifier().verify_credential(
+            tampered,
+            expected_role=WorkloadRole.AGENT,
+            expected_audience=GATEWAY_AUDIENCE,
+            expected_subject=AGENT_SUBJECT,
+            expected_actor_id="agent:impersonated-operator",
+            now=NOW,
+        )
 
 
 def test_forged_credential_is_rejected(identity: IdentityArtifacts) -> None:
@@ -425,6 +512,26 @@ def test_environment_builds_and_resolves_local_identity(
 
     assert local.resolve().subject == GATEWAY_SUBJECT
     assert local.signer.credential == identity.signed_credential
+
+
+def test_agent_environment_requires_actor_binding_at_startup(
+    identity: IdentityArtifacts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "AEGIS_AGENT_WORKLOAD_CREDENTIAL_FILE",
+        str(identity.credential_path),
+    )
+    monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", AGENT_SUBJECT)
+    monkeypatch.delenv("AEGIS_AGENT_ACTOR_ID", raising=False)
+
+    with pytest.raises(WorkloadIdentityError, match="AEGIS_AGENT_ACTOR_ID"):
+        credential_binding_from_environment(
+            identity.verifier(),
+            "AGENT",
+            role=WorkloadRole.AGENT,
+            audience=GATEWAY_AUDIENCE,
+        )
 
 
 @pytest.mark.parametrize(

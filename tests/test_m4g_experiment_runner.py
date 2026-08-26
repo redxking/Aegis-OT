@@ -100,6 +100,7 @@ def test_campaign_environment_exports_revision_exact_paths_and_derived_ids(
         "workload_authority"
     ]
     assert environment["AEGIS_OT_WORKLOAD_KEY_ID"] == key_ids["ot"]
+    assert environment["AEGIS_AGENT_ACTOR_ID"] == "agent:operator-1"
     assert environment["AEGIS_GATEWAY_WORKLOAD_SUBJECT"] == runner.GATEWAY_SUBJECT
     assert environment["AEGIS_WORKLOAD_AUTHORITY_PRIVATE_KEY_FILE"] == str(
         paths["workload_authority_private"]

@@ -478,6 +478,10 @@ class WorkloadAuthenticatedCapabilityAction(_StrictFrozenModel):
         _validate_window(self.issued_at, self.expires_at, label="agent action proof")
         if self.request_nonce != self.request.proposal.nonce:
             raise ValueError("agent proof nonce must match the proposal replay nonce")
+        if self.sender_credential.credential.actor_id != self.request.proposal.actor_id:
+            raise ValueError(
+                "agent workload credential actor must match the proposal actor"
+            )
         return self
 
     def signing_payload(self) -> bytes:

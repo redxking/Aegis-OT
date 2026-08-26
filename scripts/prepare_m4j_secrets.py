@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = "aegis-ot-m4j-deployment-secrets-v1"
 MANIFEST_NAME = "secrets-manifest.json"
 TRUST_DOMAIN = "aegis-ot.m4g.local"
+AGENT_ACTOR_ID = "agent:operator-1"
 GIT_OBJECT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 KEY_NAMES = (
     "workload_authority",
@@ -227,6 +228,7 @@ def create_secret_package(
             "AEGIS_GATEWAY_PUBLIC_KEY_FILE": str(destination / "gateway.public"),
             "AEGIS_OT_PUBLIC_KEY_FILE": str(destination / "ot.public"),
             "AEGIS_WORKLOAD_TRUST_DOMAIN": TRUST_DOMAIN,
+            "AEGIS_AGENT_ACTOR_ID": AGENT_ACTOR_ID,
             "AEGIS_AGENT_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:agent-probe",
             "AEGIS_GATEWAY_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:gateway",
             "AEGIS_OT_WORKLOAD_SUBJECT": "urn:aegis-ot:m4g:workload:ot-adapter",

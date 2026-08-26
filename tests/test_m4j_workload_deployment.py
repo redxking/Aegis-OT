@@ -199,6 +199,25 @@ def test_contract_rejects_broadened_spiffe_peer_or_client_mapping(
         _validate_mutation(compiler, tmp_path, workload)
 
 
+@pytest.mark.parametrize("service", ["agent-probe", "segmented-gateway"])
+@pytest.mark.parametrize("value", [None, "agent:other-operator"])
+def test_contract_rejects_missing_or_mismatched_agent_actor_binding(
+    compiler: ModuleType,
+    tmp_path: Path,
+    service: str,
+    value: str | None,
+) -> None:
+    workload = _workload_document()
+    environment = workload["services"][service]["environment"]
+    if value is None:
+        environment.pop("AEGIS_AGENT_ACTOR_ID")
+    else:
+        environment["AEGIS_AGENT_ACTOR_ID"] = value
+
+    with pytest.raises(compiler.WorkloadContractError, match="SPIRE mTLS"):
+        _validate_mutation(compiler, tmp_path, workload)
+
+
 def test_inventory_is_source_bound_and_ansible_environment_is_closed(
     deployer: ModuleType,
     tmp_path: Path,
@@ -1945,6 +1964,8 @@ def test_runtime_contract_pins_orchestrator_images_and_probe_transport(
     gateway = workload["services"]["segmented-gateway"]
     assert agent["environment"]["AEGIS_GATEWAY_URL"].startswith("https://")
     assert agent["environment"]["AEGIS_SPIRE_MTLS_MODE"] == "required"
+    assert agent["environment"]["AEGIS_AGENT_ACTOR_ID"] == "agent:operator-1"
+    assert gateway["environment"]["AEGIS_AGENT_ACTOR_ID"] == "agent:operator-1"
     assert gateway["command"].count("--allowed-client-spiffe-id") == 1
     assert "aegis_ot.spire_mtls" in gateway["command"]
 

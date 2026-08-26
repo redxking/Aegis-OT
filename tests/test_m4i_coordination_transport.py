@@ -865,6 +865,7 @@ def test_recovery_query_accepts_current_rotated_ot_identity_with_old_acceptance(
         credential_id="credential-ot-coordinator-rotated-0002",
         subject=COORDINATOR_SUBJECT,
         role=WorkloadRole.OT_ADAPTER,
+        actor_id=None,
         audience=GATEWAY_COORDINATION_AUDIENCE,
     )
     acceptance = harness.exchange.acceptance
@@ -945,6 +946,7 @@ def test_terminal_restart_reverifies_old_outcome_across_current_ot_rotation(
         credential_id="credential-ot-terminal-restart-rotated-0003",
         subject=COORDINATOR_SUBJECT,
         role=WorkloadRole.OT_ADAPTER,
+        actor_id=None,
         audience=GATEWAY_COORDINATION_AUDIENCE,
     )
     _write_bundle(

@@ -13,6 +13,12 @@ from aegis_ot.physical_factory import build_physical_local_lab
 from aegis_ot.segmented_runtime import ServiceExchangeError
 
 NOW = datetime(2026, 8, 25, 20, 0, tzinfo=UTC)
+AGENT_ACTOR_ID = "agent:operator-1"
+
+
+@pytest.fixture(autouse=True)
+def _configured_agent_actor(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", AGENT_ACTOR_ID)
 
 
 def _observation() -> SignedObservationEnvelope:
@@ -149,7 +155,26 @@ def test_request_binds_proposal_to_exact_observation(monkeypatch: pytest.MonkeyP
     assert request.proposal.observed_state_version == observation.snapshot.state_version
     assert request.proposal.observed_at == observation.snapshot.observed_at
     assert request.proposal.nonce == "fixed-proposal-nonce"
+    assert request.proposal.actor_id == AGENT_ACTOR_ID
     assert request.proposal.parameters == {"critical_load_impact_pct": 5.0}
+
+
+@pytest.mark.parametrize("value", [None, "", " agent:operator-1", "agent:operator 1"])
+def test_request_rejects_missing_or_invalid_agent_actor_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str | None,
+) -> None:
+    if value is None:
+        monkeypatch.delenv("AEGIS_AGENT_ACTOR_ID", raising=False)
+    else:
+        monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", value)
+
+    with pytest.raises(RuntimeError, match="AEGIS_AGENT_ACTOR_ID"):
+        m4g_probe._request(
+            _observation(),
+            proposal_id="m4g-probe-invalid-actor-0001",
+            critical_load_impact_pct=5.0,
+        )
 
 
 def test_execute_posts_exact_request_and_parses_terminal_result(

@@ -92,6 +92,7 @@ def _credential_public_key(
     expected_role: WorkloadRole,
     expected_audience: str,
     expected_subject: str,
+    expected_actor_id: str | None = None,
     evaluated_at: datetime,
 ) -> Ed25519PublicKey | None:
     try:
@@ -100,6 +101,7 @@ def _credential_public_key(
             expected_role=expected_role,
             expected_audience=expected_audience,
             expected_subject=expected_subject,
+            expected_actor_id=expected_actor_id,
             now=evaluated_at,
         )
     except WorkloadIdentityError:
@@ -346,6 +348,10 @@ class WorkloadAuthenticatedEffectReconciliation(_ClosedModel):
             raise ValueError("effect reconciliation requires an agent workload credential")
         if self.audience not in credential.audiences:
             raise ValueError("effect reconciliation audience is not authorized")
+        if credential.actor_id != self.request.proposal.actor_id:
+            raise ValueError(
+                "agent workload credential actor must match the reconciliation actor"
+            )
         if not _credential_claim_valid_at(self.sender_credential, self.issued_at):
             raise ValueError("effect reconciliation credential is not valid at issuance")
         return self
@@ -413,6 +419,7 @@ class WorkloadAuthenticatedEffectReconciliation(_ClosedModel):
             expected_role=WorkloadRole.AGENT,
             expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
             expected_subject=expected_agent_subject,
+            expected_actor_id=self.request.proposal.actor_id,
             evaluated_at=evaluated_at,
         )
         return (

@@ -3,6 +3,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
+import pytest
+
+from aegis_ot.factory import build_local_lab
 from aegis_ot.lab import SimulatedCommandAdapter
 from aegis_ot.models import DecisionOutcome
 from aegis_ot.policy import ContextualPolicy
@@ -35,6 +38,28 @@ def test_unknown_identity_cannot_poison_authenticated_nonce(lab, proposal, state
     assert "identity_not_verified" in rejected.reasons
     assert "replayed_nonce" not in rejected.reasons
     assert permitted.outcome is DecisionOutcome.PERMIT
+
+
+def test_local_lab_binds_delegation_and_allowlist_to_configured_agent_actor(
+    proposal,
+    state,
+    now,
+) -> None:
+    actor_id = "agent:configured-operator"
+    lab = build_local_lab(now, agent_actor_id=actor_id)
+    configured = proposal.model_copy(update={"actor_id": actor_id})
+
+    assert lab.leaf_grant.subject_id == actor_id
+    assert lab.gateway.decide(configured, state, now).outcome is DecisionOutcome.PERMIT
+
+
+@pytest.mark.parametrize("actor_id", ["", " agent:operator-1", "agent:operator 1"])
+def test_local_lab_rejects_invalid_agent_actor_configuration(
+    actor_id: str,
+    now,
+) -> None:
+    with pytest.raises(ValueError, match="agent actor ID"):
+        build_local_lab(now, agent_actor_id=actor_id)
 
 
 def test_stale_state_is_denied(lab, proposal, state, now) -> None:

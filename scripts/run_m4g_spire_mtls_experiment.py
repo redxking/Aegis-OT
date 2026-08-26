@@ -157,7 +157,11 @@ SOURCE_BINDING_FILES = (
     "infra/spire/server.conf",
     "pyproject.toml",
     "requirements.lock",
+    "src/aegis_ot/factory.py",
+    "src/aegis_ot/m4g_identity_admin.py",
+    "src/aegis_ot/m4g_identity_init.py",
     "src/aegis_ot/m4g_probe.py",
+    "src/aegis_ot/segmented_capability_models.py",
     "src/aegis_ot/segmented_capability_runtime.py",
     "src/aegis_ot/segmented_capability_transport.py",
     "src/aegis_ot/spire_mtls.py",
@@ -564,6 +568,8 @@ def _configuration_binding(compose: dict[str, Any]) -> dict[str, Any]:
 
     agent_service = _service(compose, "agent-probe")
     agent_environment = _environment(compose, "agent-probe")
+    gateway_environment = _environment(compose, "segmented-gateway")
+    identity_init_environment = _environment(compose, "identity-init")
     gateway_url = agent_environment.get("AEGIS_GATEWAY_URL")
     agent_has_spire_identity = (
         bool(agent_environment.get("AEGIS_SPIFFE_ID"))
@@ -579,11 +585,23 @@ def _configuration_binding(compose: dict[str, Any]) -> dict[str, Any]:
         "agent_to_gateway_application_authentication": (
             "authority-signed M4g workload capability action"
         ),
+        "credential_issuer_actor_id": identity_init_environment.get(
+            "AEGIS_AGENT_ACTOR_ID"
+        ),
+        "agent_proposal_actor_id": agent_environment.get("AEGIS_AGENT_ACTOR_ID"),
+        "gateway_authorized_actor_id": gateway_environment.get(
+            "AEGIS_AGENT_ACTOR_ID"
+        ),
         "matches_expected": (
             agent_has_spire_identity is False
             and isinstance(gateway_url, str)
             and gateway_url.startswith("http://")
             and agent_environment.get("AEGIS_WORKLOAD_IDENTITY_MODE") == "required"
+            and identity_init_environment.get("AEGIS_AGENT_ACTOR_ID")
+            == m4g.AGENT_ACTOR_ID
+            and agent_environment.get("AEGIS_AGENT_ACTOR_ID") == m4g.AGENT_ACTOR_ID
+            and gateway_environment.get("AEGIS_AGENT_ACTOR_ID")
+            == m4g.AGENT_ACTOR_ID
         ),
     }
 

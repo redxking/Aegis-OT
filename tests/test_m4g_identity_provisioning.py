@@ -31,6 +31,7 @@ from aegis_ot.workload_identity import (
 
 NOW = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
 TRUST_DOMAIN = "research.aegis-ot.test"
+AGENT_ACTOR_ID = "agent:operator-1"
 
 
 @pytest.mark.parametrize(("is_directory", "mode"), [(False, 0o600), (True, 0o700)])
@@ -131,6 +132,7 @@ def _provision(
     for name, path in environment.items():
         monkeypatch.setenv(name, str(path))
     monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", "agent/probe-1")
+    monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", AGENT_ACTOR_ID)
     monkeypatch.setenv("AEGIS_GATEWAY_WORKLOAD_SUBJECT", "gateway/control-1")
     monkeypatch.setenv("AEGIS_OT_WORKLOAD_SUBJECT", "ot-adapter/plc-1")
     monkeypatch.setenv("AEGIS_RUNTIME_UID", str(os.getuid()))
@@ -181,6 +183,7 @@ def _configure_uninitialized_identity(
     for name, path in environment.items():
         monkeypatch.setenv(name, str(path))
     monkeypatch.setenv("AEGIS_AGENT_WORKLOAD_SUBJECT", "agent/probe-1")
+    monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", AGENT_ACTOR_ID)
     monkeypatch.setenv("AEGIS_GATEWAY_WORKLOAD_SUBJECT", "gateway/control-1")
     monkeypatch.setenv("AEGIS_OT_WORKLOAD_SUBJECT", "ot-adapter/plc-1")
     monkeypatch.setenv("AEGIS_RUNTIME_UID", str(os.getuid()))
@@ -212,29 +215,33 @@ def test_initializer_certifies_existing_leaf_keys_without_retaining_authority_pr
             "agent.credential.json",
             WorkloadRole.AGENT,
             "agent/probe-1",
+            AGENT_ACTOR_ID,
             GATEWAY_CAPABILITY_AUDIENCE,
         ),
         (
             "gateway.credential.json",
             WorkloadRole.GATEWAY,
             "gateway/control-1",
+            None,
             OT_CAPABILITY_AUDIENCE,
         ),
         (
             "ot.credential.json",
             WorkloadRole.OT_ADAPTER,
             "ot-adapter/plc-1",
+            None,
             GATEWAY_CAPABILITY_AUDIENCE,
         ),
     )
     verifier = _verifier(provisioned)
-    for filename, role, subject, audience in definitions:
+    for filename, role, subject, actor_id, audience in definitions:
         path = provisioned.directory / filename
         signed = load_signed_workload_credential(path)
         verified_key = verifier.verify_credential(
             signed,
             expected_role=role,
             expected_subject=subject,
+            expected_actor_id=actor_id,
             expected_audience=audience,
             now=NOW,
         )
@@ -242,6 +249,10 @@ def test_initializer_certifies_existing_leaf_keys_without_retaining_authority_pr
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         assert path.stat().st_uid == os.getuid()
         assert path.stat().st_gid == os.getgid()
+
+    assert provisioned.summary["credentials"]["agent"]["actor_id"] == AGENT_ACTOR_ID
+    assert provisioned.summary["credentials"]["gateway"]["actor_id"] is None
+    assert provisioned.summary["credentials"]["ot-adapter"]["actor_id"] is None
 
     for path in provisioned.directory.iterdir():
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -344,6 +355,7 @@ def test_admin_rotation_preserves_identity_claims_and_revokes_predecessor_at_n_p
     assert rotated.credential.credential_id != old_credential.credential.credential_id
     assert rotated.credential.subject == old_credential.credential.subject
     assert rotated.credential.role == old_credential.credential.role
+    assert rotated.credential.actor_id == old_credential.credential.actor_id
     assert rotated.credential.audiences == old_credential.credential.audiences
     assert rotated.credential.public_key.public_bytes_raw() == _raw_public(rotated_leaf)
     assert credential_path.stat().st_uid == old_stat.st_uid
@@ -367,6 +379,41 @@ def test_admin_rotation_preserves_identity_claims_and_revokes_predecessor_at_n_p
             now=rotated_at,
         )
     assert not any("private" in path.name for path in provisioned.directory.iterdir())
+
+
+def test_admin_rotation_preserves_agent_actor_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provisioned = _provision(tmp_path, monkeypatch)
+    bundle_path = provisioned.directory / "trust-bundle.json"
+    credential_path = provisioned.directory / "agent.credential.json"
+    predecessor = load_signed_workload_credential(credential_path)
+    rotated_leaf = Ed25519PrivateKey.generate()
+    rotated_public_path = tmp_path / "agent-rotated.public"
+    rotated_public_path.write_bytes(_raw_public(rotated_leaf))
+    rotated_at = NOW + timedelta(minutes=5)
+
+    rotate_credential(
+        authority_private_key_path=provisioned.authority_path,
+        bundle_path=bundle_path,
+        credential_path=credential_path,
+        leaf_public_key_path=rotated_public_path,
+        expected_sequence=1,
+        now=rotated_at,
+    )
+
+    rotated = load_signed_workload_credential(credential_path)
+    assert predecessor.credential.actor_id == AGENT_ACTOR_ID
+    assert rotated.credential.actor_id == AGENT_ACTOR_ID
+    _verifier(provisioned).verify_credential(
+        rotated,
+        expected_role=WorkloadRole.AGENT,
+        expected_subject="agent/probe-1",
+        expected_actor_id=AGENT_ACTOR_ID,
+        expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
+        now=rotated_at,
+    )
 
 
 @pytest.mark.parametrize(
@@ -548,6 +595,7 @@ def test_admin_revocation_is_sequence_checked_authority_signed_and_idempotently_
             signed,
             expected_role=WorkloadRole.AGENT,
             expected_subject="agent/probe-1",
+            expected_actor_id=AGENT_ACTOR_ID,
             expected_audience=GATEWAY_CAPABILITY_AUDIENCE,
             now=NOW + timedelta(minutes=1),
         )

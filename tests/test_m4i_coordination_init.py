@@ -231,6 +231,7 @@ def test_identity_initializer_adds_m4i_audiences_without_removing_m4g_audiences(
         "AEGIS_AGENT_PUBLIC_KEY_FILE": public_paths["agent"],
         "AEGIS_GATEWAY_PUBLIC_KEY_FILE": public_paths["gateway"],
         "AEGIS_OT_PUBLIC_KEY_FILE": public_paths["ot"],
+        "AEGIS_AGENT_ACTOR_ID": "agent:operator-1",
         "AEGIS_AGENT_WORKLOAD_SUBJECT": "agent/probe",
         "AEGIS_GATEWAY_WORKLOAD_SUBJECT": "gateway/control",
         "AEGIS_OT_WORKLOAD_SUBJECT": "ot/effect-coordinator",
@@ -256,4 +257,5 @@ def test_identity_initializer_adds_m4i_audiences_without_removing_m4g_audiences(
         GATEWAY_COORDINATION_AUDIENCE,
     }
     assert agent.credential.role is WorkloadRole.AGENT
+    assert agent.credential.actor_id == "agent:operator-1"
     assert agent.credential.audiences == (GATEWAY_CAPABILITY_AUDIENCE,)

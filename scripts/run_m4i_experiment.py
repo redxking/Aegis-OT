@@ -72,12 +72,17 @@ SOURCE_BINDING_FILES = (
     "src/aegis_ot/coordination_journal.py",
     "src/aegis_ot/coordination_models.py",
     "src/aegis_ot/coordination_recovery.py",
+    "src/aegis_ot/factory.py",
     "src/aegis_ot/m4g_probe.py",
+    "src/aegis_ot/m4g_identity_init.py",
     "src/aegis_ot/m4i_coordination_init.py",
     "src/aegis_ot/pandapower_plant.py",
     "src/aegis_ot/plant_checkpoint.py",
+    "src/aegis_ot/segmented_capability_models.py",
     "src/aegis_ot/segmented_capability_runtime.py",
     "src/aegis_ot/segmented_capability_transport.py",
+    "src/aegis_ot/workload_identity.py",
+    "src/aegis_ot/workload_runtime.py",
 )
 LOCK_FILE = "requirements.lock"
 M4I_SCHEMA_FILES = (

@@ -62,6 +62,7 @@ def test_identity_administration_is_offline_and_confines_authority_private_key()
     for setting, expected in expected_environment.items():
         assert initializer["environment"][setting] == expected
     assert {
+        "AEGIS_AGENT_ACTOR_ID",
         "AEGIS_AGENT_WORKLOAD_SUBJECT",
         "AEGIS_GATEWAY_WORKLOAD_SUBJECT",
         "AEGIS_OT_WORKLOAD_SUBJECT",
@@ -156,6 +157,10 @@ def test_runtime_credential_bindings_match_agent_gateway_ot_roles() -> None:
     assert agent["AEGIS_AGENT_WORKLOAD_SUBJECT"] == (
         "${AEGIS_AGENT_WORKLOAD_SUBJECT:-urn:aegis-ot:m4g:workload:agent-probe}"
     )
+    assert agent["AEGIS_AGENT_ACTOR_ID"] == (
+        "${AEGIS_AGENT_ACTOR_ID:-agent:operator-1}"
+    )
+    assert gateway["AEGIS_AGENT_ACTOR_ID"] == agent["AEGIS_AGENT_ACTOR_ID"]
 
 
 def test_workload_replay_initializer_replaces_static_transport_initialization() -> None:

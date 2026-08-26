@@ -137,6 +137,7 @@ def test_gateway_builder_keeps_application_workload_port_and_adds_mtls_exchange(
         "AEGIS_AGENT_WORKLOAD_SUBJECT",
         "urn:aegis-ot:m4g:test:agent",
     )
+    monkeypatch.setenv("AEGIS_AGENT_ACTOR_ID", "agent:operator-1")
     monkeypatch.setattr(runtime_module, "workload_identity_enabled", lambda: True)
     monkeypatch.setattr(
         runtime_module,

@@ -64,6 +64,7 @@ NOW = datetime(2026, 8, 25, 15, 0, tzinfo=UTC)
 GATEWAY_SUBJECT = "spiffe://aegis-ot.test/workload/gateway"
 COORDINATOR_SUBJECT = "spiffe://aegis-ot.test/workload/ot-adapter"
 AGENT_SUBJECT = "spiffe://aegis-ot.test/workload/agent"
+AGENT_ACTOR_ID = "agent:operator-1"
 TRUST_DOMAIN = "aegis-ot.test"
 PLC_BOOT_EPOCH = "m4i-plc-boot-epoch-0001"
 
@@ -75,6 +76,7 @@ def _issue_credential(
     credential_id: str,
     subject: str,
     role: WorkloadRole,
+    actor_id: str | None,
     audience: str,
     issued_at: datetime = NOW - timedelta(minutes=5),
     not_before: datetime = NOW - timedelta(minutes=4),
@@ -87,6 +89,7 @@ def _issue_credential(
         trust_domain=TRUST_DOMAIN,
         subject=subject,
         role=role,
+        actor_id=actor_id,
         key_id=workload_key_id(public_key),
         public_key_b64=public_key_base64(public_key),
         authority_key_id=authority_key_id,
@@ -122,6 +125,7 @@ def artifacts(tmp_path: Path) -> M4iArtifacts:
         credential_id="credential-gateway-m4i-0001",
         subject=GATEWAY_SUBJECT,
         role=WorkloadRole.GATEWAY,
+        actor_id=None,
         audience=EFFECT_COORDINATOR_AUDIENCE,
     )
     coordinator_credential = _issue_credential(
@@ -130,6 +134,7 @@ def artifacts(tmp_path: Path) -> M4iArtifacts:
         credential_id="credential-ot-coordinator-0001",
         subject=COORDINATOR_SUBJECT,
         role=WorkloadRole.OT_ADAPTER,
+        actor_id=None,
         audience=GATEWAY_COORDINATION_AUDIENCE,
     )
     authority_key_id = workload_key_id(authority.public_key())
@@ -155,7 +160,7 @@ def artifacts(tmp_path: Path) -> M4iArtifacts:
     pre_state = lab.plant.read_state()
     proposal = ActionProposal(
         proposal_id="m4i-proposal-1",
-        actor_id="agent:operator-1",
+        actor_id=AGENT_ACTOR_ID,
         mission_id="microgrid-containment",
         resource="feeder-1",
         operation=Operation.ISOLATE_ASSET,
@@ -750,6 +755,7 @@ def test_agent_reconciliation_proof_binds_exact_action_and_fresh_nonce(
             credential_id="credential-agent-reconciliation-0001",
             subject=AGENT_SUBJECT,
             role=WorkloadRole.AGENT,
+            actor_id=AGENT_ACTOR_ID,
             audience=GATEWAY_CAPABILITY_AUDIENCE,
         ),
         agent_private,
@@ -790,6 +796,21 @@ def test_agent_reconciliation_proof_binds_exact_action_and_fresh_nonce(
             request=artifacts.dispatch.request,
             signer=agent_signer,
             request_nonce=artifacts.dispatch.request.proposal.nonce,
+            issued_at=NOW,
+            expires_at=NOW + timedelta(seconds=30),
+        )
+
+    mismatched_proposal = artifacts.dispatch.request.proposal.model_copy(
+        update={"actor_id": "agent:other-operator"}
+    )
+    mismatched_request = artifacts.dispatch.request.model_copy(
+        update={"proposal": mismatched_proposal}
+    )
+    with pytest.raises(ValidationError, match="actor must match"):
+        WorkloadAuthenticatedEffectReconciliation.issue(
+            request=mismatched_request,
+            signer=agent_signer,
+            request_nonce="reconciliation-actor-mismatch-nonce-0002",
             issued_at=NOW,
             expires_at=NOW + timedelta(seconds=30),
         )
@@ -949,6 +970,7 @@ def test_commit_outcome_uses_durable_acceptance_as_gateway_authentication_time(
             credential_id="credential-gateway-short-lived-0003",
             subject=GATEWAY_SUBJECT,
             role=WorkloadRole.GATEWAY,
+            actor_id=None,
             audience=EFFECT_COORDINATOR_AUDIENCE,
             expires_at=NOW + timedelta(seconds=2),
         ),
@@ -1045,6 +1067,7 @@ def test_reconciliation_uses_temporal_revocation_for_historical_chain(
             credential_id="credential-gateway-m4i-0002",
             subject=GATEWAY_SUBJECT,
             role=WorkloadRole.GATEWAY,
+            actor_id=None,
             audience=EFFECT_COORDINATOR_AUDIENCE,
             issued_at=NOW + timedelta(minutes=8),
             not_before=NOW + timedelta(minutes=9),
@@ -1059,6 +1082,7 @@ def test_reconciliation_uses_temporal_revocation_for_historical_chain(
             credential_id="credential-ot-coordinator-0002",
             subject=COORDINATOR_SUBJECT,
             role=WorkloadRole.OT_ADAPTER,
+            actor_id=None,
             audience=GATEWAY_COORDINATION_AUDIENCE,
             issued_at=NOW + timedelta(minutes=8),
             not_before=NOW + timedelta(minutes=9),
@@ -1315,6 +1339,7 @@ def test_signed_request_rejects_credential_not_valid_at_asserted_issuance(
         credential_id="credential-gateway-future-0001",
         subject=GATEWAY_SUBJECT,
         role=WorkloadRole.GATEWAY,
+        actor_id=None,
         audience=EFFECT_COORDINATOR_AUDIENCE,
         issued_at=NOW,
         not_before=NOW + timedelta(seconds=1),
