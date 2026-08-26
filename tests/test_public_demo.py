@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -18,9 +19,16 @@ from pydantic import ValidationError
 
 from aegis_ot.api import app, public_app
 from aegis_ot.public_demo import PublicDemoEvidence, load_public_demo_evidence
-from scripts import build_public_demo as demo_builder
 
 ROOT = Path(__file__).resolve().parents[1]
+_BUILDER_SPEC = spec_from_file_location(
+    "aegis_ot_test_build_public_demo",
+    ROOT / "scripts" / "build_public_demo.py",
+)
+if _BUILDER_SPEC is None or _BUILDER_SPEC.loader is None:
+    raise RuntimeError("public-demo builder could not be loaded")
+demo_builder = module_from_spec(_BUILDER_SPEC)
+_BUILDER_SPEC.loader.exec_module(demo_builder)
 EXPECTED_M2_OUTCOME = "b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90"
 EXPECTED_M3_OUTCOME = "150b32da0055da6086a8f858f8dab4425d06b5bfd836ba653a10c1f20adf9005"
 M2_EXECUTION_COMMIT = "cd20986ac31eb224d6678875e63f8e8a907d1b76"
