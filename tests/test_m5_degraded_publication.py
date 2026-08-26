@@ -72,6 +72,7 @@ def _trust_material(
     *,
     at: datetime = NOW,
     maximum_publication_age_seconds: int = 10,
+    maximum_status_input_age_seconds: int = 300,
     authorization_expires_at: datetime | None = None,
 ) -> TrustMaterial:
     root = Ed25519PrivateKey.generate()
@@ -88,9 +89,12 @@ def _trust_material(
             "ascii"
         ),
         health_source_id="operator-condition-template",
+        source_git_commit="1" * 40,
+        source_fingerprint_sha256="2" * 64,
         issued_at=at - timedelta(minutes=1),
         expires_at=at + timedelta(hours=1),
         maximum_publication_age_seconds=maximum_publication_age_seconds,
+        maximum_status_input_age_seconds=maximum_status_input_age_seconds,
     ).signed(root)
     services, paths = _management_conditions()
     authorization = StableDegradedAuthorization(
@@ -122,7 +126,10 @@ def _trust_material(
     ).signed(root)
     status_input = DegradedStatusInput(
         status_input_id="status-input-20260826-0001",
+        sequence=1,
         source_id=credential.health_source_id,
+        observed_at=at,
+        expires_at=at + timedelta(seconds=maximum_status_input_age_seconds),
         role_conditions=services,
         communication_conditions=paths,
     )
@@ -342,7 +349,7 @@ def test_publisher_refreshes_template_and_durably_chains_generations(
     assert first.status_input_sha256 == second.status_input_sha256 == trust.status_input.digest
     assert first.snapshot.snapshot_id != second.snapshot.snapshot_id
     assert first.snapshot.captured_at == NOW
-    assert second.snapshot.captured_at == NOW + timedelta(seconds=1)
+    assert second.snapshot.captured_at == NOW
     assert sink.current() == second
     assert FileDegradedPublicationSource(sink.path)() == second
     assert sink.path.stat().st_mode & 0o777 == 0o600
@@ -372,7 +379,11 @@ def test_check_recovers_only_an_allocated_published_crash(
     clock = [live_now]
     publisher, sink, state_store, state_path = _publisher(tmp_path, trust, clock=clock)
     first = publisher.publish_once()
-    sequence, previous = state_store.allocate(first, credential=trust.credential)
+    sequence, previous = state_store.allocate(
+        first,
+        credential=trust.credential,
+        status_input=trust.status_input,
+    )
     crashed_publication = _publication(
         trust,
         sequence=sequence,
@@ -411,6 +422,84 @@ def test_check_recovers_only_an_allocated_published_crash(
     assert report["durable_state_continuous"] is True
     assert report["sequence"] == 2
     assert state_store.read().latest_publication_sha256 == crashed_publication.digest
+    reconciled = state_store.read()
+    assert state_store.commit(
+        crashed_publication,
+        credential=trust.credential,
+    ) == reconciled
+
+    equivocated = _publication(
+        trust,
+        sequence=sequence,
+        published_at=live_now + timedelta(milliseconds=750),
+        previous=previous,
+    )
+    with pytest.raises(
+        DegradedPublicationError,
+        match="equivocated at its committed sequence",
+    ):
+        state_store.commit(equivocated, credential=trust.credential)
+
+
+def test_publisher_rejects_stale_status_and_durable_status_rollback(
+    tmp_path: Path,
+) -> None:
+    trust = _trust_material(maximum_status_input_age_seconds=30)
+    clock = [NOW]
+    publisher, _, state_store, _ = _publisher(tmp_path, trust, clock=clock)
+    current_status = {"value": trust.status_input}
+    publisher.status_source = lambda: current_status["value"]
+
+    publisher.publish_once()
+    clock[0] = NOW + timedelta(seconds=1)
+    current_status["value"] = trust.status_input.model_copy(
+        update={
+            "status_input_id": "status-input-future-20260826-0002",
+            "sequence": 2,
+            "observed_at": NOW + timedelta(seconds=2),
+            "expires_at": NOW + timedelta(seconds=20),
+        }
+    )
+    with pytest.raises(DegradedPublicationError, match="from the future"):
+        publisher.publish_once()
+
+    current_status["value"] = trust.status_input.model_copy(
+        update={
+            "status_input_id": "status-input-expired-20260826-0002",
+            "sequence": 2,
+            "observed_at": NOW - timedelta(seconds=1),
+            "expires_at": NOW + timedelta(seconds=1),
+        }
+    )
+    with pytest.raises(DegradedPublicationError, match="expired"):
+        publisher.publish_once()
+
+    current_status["value"] = trust.status_input.model_copy(
+        update={
+            "status_input_id": "status-input-fresh-20260826-0002",
+            "sequence": 2,
+            "observed_at": clock[0],
+            "expires_at": clock[0] + timedelta(seconds=30),
+        }
+    )
+    publisher.publish_once()
+    assert state_store.read().highest_status_input_sequence == 2
+
+    clock[0] = NOW + timedelta(seconds=2)
+    current_status["value"] = trust.status_input
+    with pytest.raises(DegradedPublicationError, match="sequence rolled back"):
+        publisher.publish_once()
+
+    current_status["value"] = trust.status_input.model_copy(
+        update={
+            "status_input_id": "status-input-equivocated-20260826-0002",
+            "sequence": 2,
+            "observed_at": clock[0],
+            "expires_at": clock[0] + timedelta(seconds=30),
+        }
+    )
+    with pytest.raises(DegradedPublicationError, match="equivocated at its sequence"):
+        publisher.publish_once()
 
 
 def test_gate_returns_non_execution_admission_and_pins_authorization(

@@ -20,6 +20,7 @@ services:
         PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
         AEGIS_INSTALL_TARGET: ".[simulation]"
         AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+        AEGIS_SOURCE_FINGERPRINT: "${AEGIS_SOURCE_FINGERPRINT:-unknown}"
     command: [python, -m, aegis_ot.m5_degraded_init]
     user: "0:0"
     read_only: true
@@ -63,6 +64,7 @@ services:
         PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
         AEGIS_INSTALL_TARGET: ".[simulation]"
         AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+        AEGIS_SOURCE_FINGERPRINT: "${AEGIS_SOURCE_FINGERPRINT:-unknown}"
     command: [python, -m, aegis_ot.m5_degraded_publication, run]
     user: "65532:65532"
     read_only: true
@@ -102,6 +104,7 @@ services:
         PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
         AEGIS_INSTALL_TARGET: ".[simulation]"
         AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+        AEGIS_SOURCE_FINGERPRINT: "${AEGIS_SOURCE_FINGERPRINT:-unknown}"
     command: [python, -m, aegis_ot.m5_degraded_init, inject-status]
     user: "65532:65532"
     read_only: true
@@ -129,6 +132,7 @@ services:
         PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673b8cda8f8dcacef689}"
         AEGIS_INSTALL_TARGET: ".[simulation]"
         AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+        AEGIS_SOURCE_FINGERPRINT: "${AEGIS_SOURCE_FINGERPRINT:-unknown}"
     command: [python, -m, aegis_ot.m5_degraded_init, inject-reversal]
     user: "65532:65532"
     read_only: true

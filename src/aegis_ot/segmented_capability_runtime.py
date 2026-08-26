@@ -2717,6 +2717,14 @@ def _configured_m5_degraded_gate() -> (
         credential = load_publisher_credential(
             paths["AEGIS_M5_PUBLISHER_CREDENTIAL_FILE"]
         )
+        if (
+            os.getenv("AEGIS_IMAGE_SOURCE_REVISION") != credential.source_git_commit
+            or os.getenv("AEGIS_IMAGE_SOURCE_FINGERPRINT")
+            != credential.source_fingerprint_sha256
+        ):
+            raise CapabilityRuntimeUnavailable(
+                "M5 signed publication trust does not match the built source"
+            )
         stable_authorization = FileStableDegradedAuthorizationSource(
             paths["AEGIS_M5_STABLE_AUTHORIZATION_FILE"]
         )()

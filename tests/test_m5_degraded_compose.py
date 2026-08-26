@@ -5,7 +5,7 @@ import os
 import shutil
 import stat
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -284,7 +284,10 @@ def test_injectors_validate_typed_canonical_models_and_replace_atomically(
     services[DegradedRole.OBSERVER] = RoleCondition.UNAVAILABLE
     status_input = DegradedStatusInput(
         status_input_id="m5-status-injector-input-0001",
+        sequence=1,
         source_id="m5-status-source-0001",
+        observed_at=now,
+        expires_at=now + timedelta(minutes=5),
         role_conditions=services,
         communication_conditions=healthy,
         unresolved_effect=False,

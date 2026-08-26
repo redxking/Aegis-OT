@@ -13,6 +13,8 @@ import math
 import os
 import socket
 from collections import OrderedDict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
@@ -351,10 +353,36 @@ def build_gateway_lab(opa_url: str) -> LocalLab:
     return lab
 
 
+@asynccontextmanager
+async def _legacy_gateway_lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Refuse to expose the M4d surrogate as an M5-enforced gateway."""
+
+    mode_value = os.getenv("AEGIS_M5_SIGNED_PUBLICATION_MODE")
+    signed_settings = (
+        "AEGIS_M5_ROOT_PUBLIC_KEY_FILE",
+        "AEGIS_M5_PUBLISHER_CREDENTIAL_FILE",
+        "AEGIS_M5_STABLE_AUTHORIZATION_FILE",
+        "AEGIS_M5_PUBLICATION_FILE",
+        "AEGIS_M5_CONSUMER_STATE_FILE",
+        "AEGIS_M5_REVERSAL_FILE",
+    )
+    signed_configured = any(os.getenv(name) for name in signed_settings)
+    mode = mode_value.strip().lower() if mode_value is not None else None
+    if signed_configured or mode not in {None, "disabled"}:
+        raise RuntimeError(
+            "the M4d surrogate gateway cannot enforce M5 signed publications; "
+            "include docker-compose.capability.yml"
+        )
+    yield
+
+
 simulation_app = FastAPI(title="Aegis-OT M4d Synthetic Simulation Service")
 observer_app = FastAPI(title="Aegis-OT M4d Read-Only Observer Service")
 ot_adapter_app = FastAPI(title="Aegis-OT M4d OT Command Adapter")
-segmented_gateway_app = FastAPI(title="Aegis-OT M4d Segmented Gateway")
+segmented_gateway_app = FastAPI(
+    title="Aegis-OT M4d Segmented Gateway",
+    lifespan=_legacy_gateway_lifespan,
+)
 
 _plant = MutableSurrogatePlant()
 _gateway_lab: LocalLab | None = None

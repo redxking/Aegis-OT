@@ -44,6 +44,10 @@ LEGACY_ENV = (
     "AEGIS_M5_DEGRADED_AUTHORIZATION_FILE",
     "AEGIS_M5_DEGRADED_STATE_FILE",
 )
+IMAGE_SOURCE_ENV = (
+    "AEGIS_IMAGE_SOURCE_REVISION",
+    "AEGIS_IMAGE_SOURCE_FINGERPRINT",
+)
 
 
 @dataclass(frozen=True)
@@ -56,7 +60,7 @@ class SignedRuntimeFiles:
 
 
 def _clear_m5_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (MODE_ENV, *SIGNED_ENV, *LEGACY_ENV):
+    for name in (MODE_ENV, *SIGNED_ENV, *LEGACY_ENV, *IMAGE_SOURCE_ENV):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -115,6 +119,14 @@ def _configure_required(
 ) -> None:
     _clear_m5_environment(monkeypatch)
     monkeypatch.setenv(MODE_ENV, "required")
+    monkeypatch.setenv(
+        "AEGIS_IMAGE_SOURCE_REVISION",
+        files.trust.credential.source_git_commit,
+    )
+    monkeypatch.setenv(
+        "AEGIS_IMAGE_SOURCE_FINGERPRINT",
+        files.trust.credential.source_fingerprint_sha256,
+    )
     for name, value in files.environment.items():
         monkeypatch.setenv(name, value)
 
@@ -242,6 +254,24 @@ def test_valid_required_mode_builds_gate_and_advances_consumer_floor(
     after = FileDegradedConsumerStateStore(files.state_path).read()
     assert after.highest_publication_sequence == 1
     assert after.active_authorization_sha256 == files.trust.authorization.digest
+
+
+def test_required_mode_rejects_trust_for_another_built_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    files = _signed_runtime_files(tmp_path)
+    _configure_required(monkeypatch, files)
+    monkeypatch.setenv("AEGIS_IMAGE_SOURCE_FINGERPRINT", "f" * 64)
+
+    with pytest.raises(
+        CapabilityRuntimeUnavailable,
+        match="M5 signed publication configuration is invalid",
+    ) as error:
+        runtime_module._configured_m5_degraded_gate()
+
+    assert error.value.__cause__ is not None
+    assert "does not match the built source" in str(error.value.__cause__)
 
 
 def test_gateway_health_revalidates_and_reports_current_readiness(

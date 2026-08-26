@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Provision source-bound M5 continuous-publication trust material.
 
-This v2 tool creates four deliberately separate packages:
+This v2 tool creates deliberately separate trust and runtime-input packages:
 
 * ``authority`` retains the operator root private key and the publisher leaf
   private key under administrative custody;
@@ -11,7 +11,9 @@ This v2 tool creates four deliberately separate packages:
   credential, the root public key, the status input, and the exact stable
   authorization; and
 * ``reversal`` contains one root-signed direction bound to the exact stable
-  authorization and recovery checkpoint.
+  authorization and recovery checkpoint; and
+* ``healthy-status`` contains a fresh, complete recovery assertion generated
+  from public runtime trust without exposing either private key.
 
 Every command publishes one new private directory atomically and refuses to
 replace an existing path.  Runtime packages contain no private key and no
@@ -60,6 +62,7 @@ from aegis_ot.m5_degraded_publication import (
 )
 from aegis_ot.m5_degraded_publication import (
     MAX_STABLE_AUTHORIZATION_SECONDS,
+    MAX_STATUS_INPUT_AGE_SECONDS,
     DegradedPublisherCredential,
     DegradedStatusInput,
     StableDegradedAuthorization,
@@ -73,6 +76,7 @@ AUTHORITY_SCHEMA: Final[str] = "aegis-ot-m5-degraded-publication-authority-v2"
 RUNTIME_SCHEMA: Final[str] = "aegis-ot-m5-degraded-publication-runtime-v2"
 PUBLISHER_SCHEMA: Final[str] = "aegis-ot-m5-degraded-publication-publisher-v2"
 REVERSAL_SCHEMA: Final[str] = "aegis-ot-m5-degraded-publication-reversal-v2"
+HEALTHY_STATUS_SCHEMA: Final[str] = "aegis-ot-m5-degraded-healthy-status-v1"
 
 MANIFEST_NAME: Final[str] = "manifest.json"
 ROOT_PRIVATE_NAME: Final[str] = "operator-authority.private"
@@ -113,6 +117,9 @@ PUBLISHER_FILES: Final[frozenset[str]] = frozenset(
     }
 )
 REVERSAL_FILES: Final[frozenset[str]] = frozenset({REVERSAL_NAME, MANIFEST_NAME})
+HEALTHY_STATUS_FILES: Final[frozenset[str]] = frozenset(
+    {STATUS_INPUT_NAME, MANIFEST_NAME}
+)
 
 AUTHORITY_PURPOSES: Final[dict[str, tuple[str, str]]] = {
     ROOT_PRIVATE_NAME: (
@@ -158,6 +165,12 @@ REVERSAL_PURPOSES: Final[dict[str, tuple[str, str]]] = {
         "operator_to_runtime_reversal_inbox",
     )
 }
+HEALTHY_STATUS_PURPOSES: Final[dict[str, tuple[str, str]]] = {
+    STATUS_INPUT_NAME: (
+        "assert fresh complete recovery of configured role and communication status",
+        "operator_to_publisher_status_inbox",
+    )
+}
 
 MAX_ARTIFACT_BYTES: Final[int] = 1024 * 1024
 MAX_CREDENTIAL_SECONDS: Final[int] = 7 * 24 * 60 * 60
@@ -166,6 +179,7 @@ MAX_PUBLICATION_AGE_SECONDS: Final[int] = CORE_MAX_PUBLICATION_AGE_SECONDS
 DEFAULT_CREDENTIAL_SECONDS: Final[int] = 24 * 60 * 60
 DEFAULT_AUTHORIZATION_SECONDS: Final[int] = MAX_STABLE_AUTHORIZATION_SECONDS
 DEFAULT_PUBLICATION_AGE_SECONDS: Final[int] = 5
+DEFAULT_STATUS_INPUT_AGE_SECONDS: Final[int] = MAX_STATUS_INPUT_AGE_SECONDS
 _STAGING_PREFIX: Final[str] = ".m5-degraded-publication-"
 _GIT_OBJECT: Final[re.Pattern[str]] = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _SHA256: Final[re.Pattern[str]] = re.compile(r"^[0-9a-f]{64}$")
@@ -949,6 +963,7 @@ def _require_status_authorization_binding(
 
 def _provisioning_material(
     *,
+    source_binding: Mapping[str, Any],
     authority_id: str,
     publisher_id: str,
     health_source_id: str,
@@ -963,6 +978,7 @@ def _provisioning_material(
     credential_seconds: int,
     authorization_seconds: int,
     maximum_publication_age_seconds: int,
+    maximum_status_input_age_seconds: int,
     authorization_sequence: int,
     now: datetime,
     unresolved_effect: bool,
@@ -994,9 +1010,18 @@ def _provisioning_material(
         label="maximum publication age",
         maximum=MAX_PUBLICATION_AGE_SECONDS,
     )
+    maximum_status_input_age_seconds = _validate_positive_seconds(
+        maximum_status_input_age_seconds,
+        label="maximum status input age",
+        maximum=MAX_STATUS_INPUT_AGE_SECONDS,
+    )
     if authorization_seconds > credential_seconds:
         raise PublicationArtifactError(
             "stable authorization cannot outlive its publisher credential"
+        )
+    if maximum_status_input_age_seconds > credential_seconds:
+        raise PublicationArtifactError(
+            "status input cannot outlive its publisher credential"
         )
     if isinstance(authorization_sequence, bool) or authorization_sequence < 1:
         raise PublicationArtifactError("stable authorization sequence must be positive")
@@ -1034,9 +1059,12 @@ def _provisioning_material(
         publisher_key_id=publisher_key_id,
         publisher_public_key_b64=base64.b64encode(publisher_public).decode("ascii"),
         health_source_id=health_source_id,
+        source_git_commit=str(source_binding["git_commit"]),
+        source_fingerprint_sha256=str(source_binding["source_fingerprint_sha256"]),
         issued_at=issued_at,
         expires_at=issued_at + timedelta(seconds=credential_seconds),
         maximum_publication_age_seconds=maximum_publication_age_seconds,
+        maximum_status_input_age_seconds=maximum_status_input_age_seconds,
     ).signed(authority_private_key)
 
     authorization = StableDegradedAuthorization(
@@ -1065,7 +1093,10 @@ def _provisioning_material(
 
     status_input = DegradedStatusInput(
         status_input_id=f"m5-status-input-{token}",
+        sequence=1,
         source_id=health_source_id,
+        observed_at=issued_at,
+        expires_at=issued_at + timedelta(seconds=maximum_status_input_age_seconds),
         role_conditions=role_conditions,
         communication_conditions=communication_conditions,
         unresolved_effect=unresolved_effect,
@@ -1155,6 +1186,7 @@ def _verify_authority_package(
     source_binding = manifest.get("source_binding")
     if not isinstance(source_binding, dict):
         raise PublicationArtifactError("offline authority manifest lacks source binding")
+    _require_credential_source_binding(credential, source_binding)
     if expected_source_binding is not None and source_binding != dict(expected_source_binding):
         raise PublicationArtifactError("offline authority source binding differs")
     expected_manifest = _authority_manifest(
@@ -1207,6 +1239,7 @@ def create_authority_package(
     credential_seconds: int = DEFAULT_CREDENTIAL_SECONDS,
     authorization_seconds: int = DEFAULT_AUTHORIZATION_SECONDS,
     maximum_publication_age_seconds: int = DEFAULT_PUBLICATION_AGE_SECONDS,
+    maximum_status_input_age_seconds: int = DEFAULT_STATUS_INPUT_AGE_SECONDS,
     authorization_sequence: int = 1,
     source_reference: str = "HEAD",
     now: datetime | None = None,
@@ -1222,6 +1255,7 @@ def create_authority_package(
         authorization,
         status_input,
     ) = _provisioning_material(
+        source_binding=source_binding,
         authority_id=authority_id,
         publisher_id=publisher_id,
         health_source_id=health_source_id,
@@ -1236,6 +1270,7 @@ def create_authority_package(
         credential_seconds=credential_seconds,
         authorization_seconds=authorization_seconds,
         maximum_publication_age_seconds=maximum_publication_age_seconds,
+        maximum_status_input_age_seconds=maximum_status_input_age_seconds,
         authorization_sequence=authorization_sequence,
         now=datetime.now(UTC) if now is None else now,
         unresolved_effect=unresolved_effect,
@@ -1310,6 +1345,20 @@ def _load_public_trust_material(
     return root_public, credential, authorization
 
 
+def _require_credential_source_binding(
+    credential: DegradedPublisherCredential,
+    source_binding: Mapping[str, Any],
+) -> None:
+    if (
+        credential.source_git_commit != source_binding.get("git_commit")
+        or credential.source_fingerprint_sha256
+        != source_binding.get("source_fingerprint_sha256")
+    ):
+        raise PublicationArtifactError(
+            "root-signed publisher credential differs from package source binding"
+        )
+
+
 def _runtime_manifest(
     *,
     source_binding: Mapping[str, Any],
@@ -1347,6 +1396,7 @@ def _verify_runtime_package(
     source_binding = manifest.get("source_binding")
     if not isinstance(source_binding, dict):
         raise PublicationArtifactError("runtime manifest lacks source binding")
+    _require_credential_source_binding(credential, source_binding)
     if expected_source_binding is not None and source_binding != dict(expected_source_binding):
         raise PublicationArtifactError("runtime source binding differs")
     expected_manifest = _runtime_manifest(
@@ -1422,6 +1472,188 @@ def verify_runtime_package(
     )
 
 
+def _healthy_status_manifest(
+    *,
+    source_binding: Mapping[str, Any],
+    materials: Mapping[str, bytes],
+    credential: DegradedPublisherCredential,
+    authorization: StableDegradedAuthorization,
+    status_input: DegradedStatusInput,
+) -> dict[str, Any]:
+    return _package_manifest(
+        schema_version=HEALTHY_STATUS_SCHEMA,
+        package_kind="healthy_status_input",
+        source_binding=source_binding,
+        materials=materials,
+        purposes=HEALTHY_STATUS_PURPOSES,
+        authority_id=credential.authority_id,
+        authority_key_id=credential.authority_key_id,
+        publisher_id=credential.publisher_id,
+        publisher_key_id=credential.publisher_key_id,
+        publisher_credential_sha256=credential.digest,
+        stable_authorization_id=authorization.authorization_id,
+        stable_authorization_sha256=authorization.digest,
+        status_input_sha256=status_input.digest,
+    )
+
+
+def _verify_healthy_status_package(
+    directory: Path,
+    *,
+    runtime_package: Path,
+    expected_source_binding: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _package_directory(directory, HEALTHY_STATUS_FILES, label="M5 healthy status package")
+    runtime_report = _verify_runtime_package(
+        runtime_package,
+        expected_source_binding=expected_source_binding,
+    )
+    runtime_materials = {
+        name: _read_artifact(runtime_package, name) for name in RUNTIME_PURPOSES
+    }
+    _, credential, authorization = _load_public_trust_material(runtime_materials)
+    status_material = _read_artifact(directory, STATUS_INPUT_NAME)
+    status_input = _load_model(
+        DegradedStatusInput,
+        status_material,
+        label=STATUS_INPUT_NAME,
+    )
+    if status_input.sequence < 2:
+        raise PublicationArtifactError("healthy status sequence must follow initial status")
+    if status_input.source_id != credential.health_source_id:
+        raise PublicationArtifactError("healthy status source differs from publisher credential")
+    if (
+        set(status_input.role_conditions.values()) != {RoleCondition.HEALTHY}
+        or set(status_input.communication_conditions.values()) != {RoleCondition.HEALTHY}
+        or status_input.unresolved_effect
+    ):
+        raise PublicationArtifactError("healthy status must assert complete resolved recovery")
+    if (
+        status_input.observed_at < credential.issued_at
+        or status_input.expires_at > credential.expires_at
+        or status_input.expires_at - status_input.observed_at
+        > timedelta(seconds=credential.maximum_status_input_age_seconds)
+    ):
+        raise PublicationArtifactError("healthy status validity is outside its credential")
+    manifest = _load_json(_read_artifact(directory, MANIFEST_NAME), label=MANIFEST_NAME)
+    source_binding = manifest.get("source_binding")
+    if not isinstance(source_binding, dict):
+        raise PublicationArtifactError("healthy status manifest lacks source binding")
+    _require_credential_source_binding(credential, source_binding)
+    if expected_source_binding is not None and source_binding != dict(expected_source_binding):
+        raise PublicationArtifactError("healthy status source binding differs")
+    materials = {STATUS_INPUT_NAME: status_material}
+    expected_manifest = _healthy_status_manifest(
+        source_binding=source_binding,
+        materials=materials,
+        credential=credential,
+        authorization=authorization,
+        status_input=status_input,
+    )
+    _validate_manifest(
+        manifest,
+        expected=expected_manifest,
+        schema_version=HEALTHY_STATUS_SCHEMA,
+        package_kind="healthy_status_input",
+    )
+    return {
+        "valid": True,
+        "schema_version": HEALTHY_STATUS_SCHEMA,
+        "source_git_commit": runtime_report["source_git_commit"],
+        "source_fingerprint_sha256": runtime_report["source_fingerprint_sha256"],
+        "publisher_credential_sha256": credential.digest,
+        "stable_authorization_sha256": authorization.digest,
+        "status_input_id": status_input.status_input_id,
+        "status_input_sequence": status_input.sequence,
+        "status_input_sha256": status_input.digest,
+        "observed_at": status_input.observed_at.isoformat(),
+        "expires_at": status_input.expires_at.isoformat(),
+        "complete_recovery_asserted": True,
+        "private_key_material_included": False,
+        "execution_authorized": False,
+    }
+
+
+def create_healthy_status_package(
+    output: Path,
+    *,
+    runtime_package: Path,
+    sequence: int,
+    valid_seconds: int = DEFAULT_STATUS_INPUT_AGE_SECONDS,
+    source_reference: str = "HEAD",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Create one fresh complete recovery assertion from public runtime trust."""
+
+    source_binding = _assert_clean_source(source_reference)
+    runtime_package = runtime_package.resolve(strict=True)
+    _reject_output_within(output, runtime_package, label="gateway runtime package")
+    _verify_runtime_package(runtime_package, expected_source_binding=source_binding)
+    runtime_materials = {
+        name: _read_artifact(runtime_package, name) for name in RUNTIME_PURPOSES
+    }
+    _, credential, authorization = _load_public_trust_material(runtime_materials)
+    if isinstance(sequence, bool) or sequence < 2:
+        raise PublicationArtifactError("healthy status sequence must be at least two")
+    valid_seconds = _validate_positive_seconds(
+        valid_seconds,
+        label="healthy status lifetime",
+        maximum=credential.maximum_status_input_age_seconds,
+    )
+    observed_at = datetime.now(UTC) if now is None else now
+    if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+        raise PublicationArtifactError("healthy status observation must be timezone-aware")
+    observed_at = observed_at.astimezone(UTC)
+    expires_at = observed_at + timedelta(seconds=valid_seconds)
+    if not credential.issued_at <= observed_at < expires_at <= credential.expires_at:
+        raise PublicationArtifactError("healthy status validity is outside its credential")
+    healthy = {role: RoleCondition.HEALTHY for role in DegradedRole}
+    status_input = DegradedStatusInput(
+        status_input_id=f"m5-healthy-status-input-{secrets.token_hex(16)}",
+        sequence=sequence,
+        source_id=credential.health_source_id,
+        observed_at=observed_at,
+        expires_at=expires_at,
+        role_conditions=healthy,
+        communication_conditions=healthy,
+        unresolved_effect=False,
+        operator_asserted_not_detected=True,
+    )
+    materials = {STATUS_INPUT_NAME: _model_bytes(status_input)}
+    manifest = _healthy_status_manifest(
+        source_binding=source_binding,
+        materials=materials,
+        credential=credential,
+        authorization=authorization,
+        status_input=status_input,
+    )
+    package = {**materials, MANIFEST_NAME: _canonical_bytes(manifest)}
+    return _publish_package(
+        output,
+        package,
+        verify_staging=lambda path: _verify_healthy_status_package(
+            path,
+            runtime_package=runtime_package,
+            expected_source_binding=source_binding,
+        ),
+    )
+
+
+def verify_healthy_status_package(
+    directory: Path,
+    *,
+    runtime_package: Path,
+    source_reference: str = "HEAD",
+) -> dict[str, Any]:
+    """Verify one healthy status package against public runtime trust."""
+
+    return _verify_healthy_status_package(
+        directory.resolve(strict=True),
+        runtime_package=runtime_package.resolve(strict=True),
+        expected_source_binding=_assert_clean_source(source_reference),
+    )
+
+
 def _publisher_manifest(
     *,
     source_binding: Mapping[str, Any],
@@ -1473,6 +1705,7 @@ def _verify_publisher_package(
     source_binding = manifest.get("source_binding")
     if not isinstance(source_binding, dict):
         raise PublicationArtifactError("publisher manifest lacks source binding")
+    _require_credential_source_binding(credential, source_binding)
     if expected_source_binding is not None and source_binding != dict(expected_source_binding):
         raise PublicationArtifactError("publisher source binding differs")
     expected_manifest = _publisher_manifest(
@@ -1622,6 +1855,7 @@ def _verify_reversal_package(
     source_binding = manifest.get("source_binding")
     if not isinstance(source_binding, dict):
         raise PublicationArtifactError("reversal manifest lacks source binding")
+    _require_credential_source_binding(credential, source_binding)
     if expected_source_binding is not None and source_binding != dict(expected_source_binding):
         raise PublicationArtifactError("reversal source binding differs")
     materials = {REVERSAL_NAME: reversal_material}
@@ -1763,9 +1997,26 @@ def _source_reference_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def source_binding_report(*, source_reference: str = "HEAD") -> dict[str, Any]:
+    """Return the exact clean source identity needed before image build."""
+
+    binding = _assert_clean_source(source_reference)
+    return {
+        "schema_version": "aegis-ot-m5-degraded-source-binding-v1",
+        **binding,
+        "execution_authorized": False,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    source_binding = commands.add_parser(
+        "source-binding",
+        help="report the exact clean source revision and fingerprint before image build",
+    )
+    _source_reference_argument(source_binding)
 
     authority = commands.add_parser(
         "authority",
@@ -1793,6 +2044,11 @@ def _parser() -> argparse.ArgumentParser:
         "--maximum-publication-age-seconds",
         type=int,
         default=DEFAULT_PUBLICATION_AGE_SECONDS,
+    )
+    authority.add_argument(
+        "--maximum-status-input-age-seconds",
+        type=int,
+        default=DEFAULT_STATUS_INPUT_AGE_SECONDS,
     )
     authority.add_argument("--authorization-sequence", type=int, default=1)
     authority.add_argument("--unresolved-effect", action="store_true")
@@ -1822,6 +2078,20 @@ def _parser() -> argparse.ArgumentParser:
     reversal.add_argument("--reason-code", default="runtime_dependencies_recovered")
     _source_reference_argument(reversal)
 
+    healthy_status = commands.add_parser(
+        "healthy-status",
+        help="create one fresh complete recovery assertion from public runtime trust",
+    )
+    healthy_status.add_argument("--output", type=Path, required=True)
+    healthy_status.add_argument("--runtime", type=Path, required=True)
+    healthy_status.add_argument("--sequence", type=int, required=True)
+    healthy_status.add_argument(
+        "--valid-seconds",
+        type=int,
+        default=DEFAULT_STATUS_INPUT_AGE_SECONDS,
+    )
+    _source_reference_argument(healthy_status)
+
     for name, help_text in (
         ("verify-authority", "verify the private offline provisioning package"),
         ("verify-runtime", "verify the public-only gateway package"),
@@ -1837,13 +2107,23 @@ def _parser() -> argparse.ArgumentParser:
     verify_reversal.add_argument("--package", type=Path, required=True)
     verify_reversal.add_argument("--runtime", type=Path, required=True)
     _source_reference_argument(verify_reversal)
+
+    verify_healthy_status = commands.add_parser(
+        "verify-healthy-status",
+        help="verify a healthy status assertion against a runtime package",
+    )
+    verify_healthy_status.add_argument("--package", type=Path, required=True)
+    verify_healthy_status.add_argument("--runtime", type=Path, required=True)
+    _source_reference_argument(verify_healthy_status)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        if arguments.command == "authority":
+        if arguments.command == "source-binding":
+            report = source_binding_report(source_reference=arguments.source_reference)
+        elif arguments.command == "authority":
             report = create_authority_package(
                 arguments.output,
                 authority_id=arguments.authority_id,
@@ -1860,6 +2140,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 credential_seconds=arguments.credential_seconds,
                 authorization_seconds=arguments.authorization_seconds,
                 maximum_publication_age_seconds=(arguments.maximum_publication_age_seconds),
+                maximum_status_input_age_seconds=(
+                    arguments.maximum_status_input_age_seconds
+                ),
                 authorization_sequence=arguments.authorization_sequence,
                 unresolved_effect=arguments.unresolved_effect,
                 source_reference=arguments.source_reference,
@@ -1885,6 +2168,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reason_code=arguments.reason_code,
                 source_reference=arguments.source_reference,
             )
+        elif arguments.command == "healthy-status":
+            report = create_healthy_status_package(
+                arguments.output,
+                runtime_package=arguments.runtime,
+                sequence=arguments.sequence,
+                valid_seconds=arguments.valid_seconds,
+                source_reference=arguments.source_reference,
+            )
         elif arguments.command == "verify-authority":
             report = verify_authority_package(
                 arguments.package,
@@ -1900,8 +2191,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.package,
                 source_reference=arguments.source_reference,
             )
-        else:
+        elif arguments.command == "verify-reversal":
             report = verify_reversal_package(
+                arguments.package,
+                runtime_package=arguments.runtime,
+                source_reference=arguments.source_reference,
+            )
+        else:
+            report = verify_healthy_status_package(
                 arguments.package,
                 runtime_package=arguments.runtime,
                 source_reference=arguments.source_reference,

@@ -68,11 +68,13 @@ PUBLISHER_STATE_INTEGRITY_DOMAIN: Final[bytes] = b"aegis-ot:m5:degraded-publishe
 CONSUMER_STATE_INTEGRITY_DOMAIN: Final[bytes] = b"aegis-ot:m5:degraded-consumer-state:v1\x00"
 
 SHA256_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
+GIT_OBJECT_PATTERN: Final[str] = r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
 MAX_CONFIGURATION_BYTES: Final[int] = 1024 * 1024
 MAX_STATE_BYTES: Final[int] = 64 * 1024
 MAX_STABLE_AUTHORIZATION_SECONDS: Final[int] = 300
 MAX_REVERSAL_AGE_SECONDS: Final[int] = 300
 MAX_PUBLICATION_AGE_SECONDS: Final[int] = 30
+MAX_STATUS_INPUT_AGE_SECONDS: Final[int] = 300
 
 
 class DegradedPublicationError(RuntimeError):
@@ -160,8 +162,8 @@ class DegradedPublisherCredential(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = Field(
-        default="aegis-ot-m5-degraded-publisher-credential-v1",
-        pattern=r"^aegis-ot-m5-degraded-publisher-credential-v1$",
+        default="aegis-ot-m5-degraded-publisher-credential-v2",
+        pattern=r"^aegis-ot-m5-degraded-publisher-credential-v2$",
     )
     credential_id: str = Field(min_length=16, max_length=128)
     authority_id: str = Field(min_length=3, max_length=128)
@@ -170,11 +172,17 @@ class DegradedPublisherCredential(BaseModel):
     publisher_key_id: str = Field(pattern=SHA256_PATTERN)
     publisher_public_key_b64: str = Field(min_length=44, max_length=44)
     health_source_id: str = Field(min_length=3, max_length=128)
+    source_git_commit: str = Field(pattern=GIT_OBJECT_PATTERN)
+    source_fingerprint_sha256: str = Field(pattern=SHA256_PATTERN)
     issued_at: datetime
     expires_at: datetime
     maximum_publication_age_seconds: int = Field(
         ge=1,
         le=MAX_PUBLICATION_AGE_SECONDS,
+    )
+    maximum_status_input_age_seconds: int = Field(
+        ge=1,
+        le=MAX_STATUS_INPUT_AGE_SECONDS,
     )
     signature: str = ""
 
@@ -361,24 +369,32 @@ class StableDegradedAuthorization(BaseModel):
 class DegradedStatusInput(BaseModel):
     """Complete configured condition template sampled by the online publisher.
 
-    This is an operator/integration assertion.  Re-reading and signing it does
+    This is an operator/integration assertion. Re-reading and signing it does
     not establish automatic health assessment or live compromise detection.
-    The publisher creates a fresh snapshot identifier and capture time for each
-    successful read while preserving these asserted conditions exactly.
+    Its observation time and expiry are part of the input itself, so repeatedly
+    reading an abandoned file cannot manufacture fresh evidence.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = Field(
-        default="aegis-ot-m5-degraded-status-input-v1",
-        pattern=r"^aegis-ot-m5-degraded-status-input-v1$",
+        default="aegis-ot-m5-degraded-status-input-v2",
+        pattern=r"^aegis-ot-m5-degraded-status-input-v2$",
     )
     status_input_id: str = Field(min_length=16, max_length=128)
+    sequence: int = Field(ge=1)
     source_id: str = Field(min_length=3, max_length=128)
+    observed_at: datetime
+    expires_at: datetime
     role_conditions: Mapping[DegradedRole, RoleCondition]
     communication_conditions: Mapping[DegradedRole, RoleCondition]
     unresolved_effect: bool = False
     operator_asserted_not_detected: bool = True
+
+    @field_validator("observed_at", "expires_at")
+    @classmethod
+    def require_times(cls, value: datetime) -> datetime:
+        return _aware_utc(value, label="degraded status input time")
 
     @field_validator("role_conditions", "communication_conditions")
     @classmethod
@@ -403,6 +419,8 @@ class DegradedStatusInput(BaseModel):
             self.communication_conditions
         ) != set(DegradedRole):
             raise ValueError("status input must cover every role and path")
+        if self.expires_at <= self.observed_at:
+            raise ValueError("status input expiry must follow its observation")
         if not self.operator_asserted_not_detected:
             raise ValueError("status input must preserve its operator-assertion boundary")
         return self
@@ -486,8 +504,8 @@ class DegradedPublisherState(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     schema_version: str = Field(
-        default="aegis-ot-m5-degraded-publisher-state-v1",
-        pattern=r"^aegis-ot-m5-degraded-publisher-state-v1$",
+        default="aegis-ot-m5-degraded-publisher-state-v2",
+        pattern=r"^aegis-ot-m5-degraded-publisher-state-v2$",
     )
     authority_key_id: str = Field(pattern=SHA256_PATTERN)
     publisher_credential_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -495,6 +513,8 @@ class DegradedPublisherState(BaseModel):
     highest_allocated_sequence: int = Field(ge=0)
     latest_published_sequence: int = Field(ge=0)
     latest_publication_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    highest_status_input_sequence: int = Field(ge=0)
+    latest_status_input_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
     integrity_sha256: str = Field(pattern=SHA256_PATTERN)
 
     @model_validator(mode="after")
@@ -503,6 +523,10 @@ class DegradedPublisherState(BaseModel):
             raise ValueError("publisher commit cannot exceed its allocation")
         if (self.latest_published_sequence == 0) != (self.latest_publication_sha256 is None):
             raise ValueError("publisher sequence and digest disagree")
+        if (self.highest_status_input_sequence == 0) != (
+            self.latest_status_input_sha256 is None
+        ):
+            raise ValueError("status input sequence and digest disagree")
         if self.integrity_sha256 != _state_integrity(
             PUBLISHER_STATE_INTEGRITY_DOMAIN,
             self.integrity_fields(),
@@ -523,15 +547,19 @@ class DegradedPublisherState(BaseModel):
         highest_allocated_sequence: int = 0,
         latest_published_sequence: int = 0,
         latest_publication_sha256: str | None = None,
+        highest_status_input_sequence: int = 0,
+        latest_status_input_sha256: str | None = None,
     ) -> DegradedPublisherState:
         fields: dict[str, Any] = {
-            "schema_version": "aegis-ot-m5-degraded-publisher-state-v1",
+            "schema_version": "aegis-ot-m5-degraded-publisher-state-v2",
             "authority_key_id": authority_key_id,
             "publisher_credential_sha256": publisher_credential_sha256,
             "publisher_key_id": publisher_key_id,
             "highest_allocated_sequence": highest_allocated_sequence,
             "latest_published_sequence": latest_published_sequence,
             "latest_publication_sha256": latest_publication_sha256,
+            "highest_status_input_sequence": highest_status_input_sequence,
+            "latest_status_input_sha256": latest_status_input_sha256,
         }
         return cls(
             **fields,
@@ -1360,6 +1388,8 @@ class FileDegradedPublisherStateStore:
             highest_allocated_sequence=state.highest_allocated_sequence,
             latest_published_sequence=current_publication.sequence,
             latest_publication_sha256=current_digest,
+            highest_status_input_sequence=state.highest_status_input_sequence,
+            latest_status_input_sha256=state.latest_status_input_sha256,
         )
 
     def reconcile_current(
@@ -1387,6 +1417,7 @@ class FileDegradedPublisherStateStore:
         current_publication: DegradedRuntimePublication | None,
         *,
         credential: DegradedPublisherCredential,
+        status_input: DegradedStatusInput,
     ) -> tuple[int, str | None]:
         def transition(
             state: DegradedPublisherState,
@@ -1396,6 +1427,13 @@ class FileDegradedPublisherStateStore:
                 current_publication,
                 credential=credential,
             )
+            if status_input.sequence < reconciled.highest_status_input_sequence:
+                raise DegradedPublicationError("status input sequence rolled back")
+            if (
+                status_input.sequence == reconciled.highest_status_input_sequence
+                and status_input.digest != reconciled.latest_status_input_sha256
+            ):
+                raise DegradedPublicationError("status input equivocated at its sequence")
             allocated = reconciled.highest_allocated_sequence + 1
             updated = DegradedPublisherState.create(
                 authority_key_id=reconciled.authority_key_id,
@@ -1404,6 +1442,15 @@ class FileDegradedPublisherStateStore:
                 highest_allocated_sequence=allocated,
                 latest_published_sequence=reconciled.latest_published_sequence,
                 latest_publication_sha256=reconciled.latest_publication_sha256,
+                highest_status_input_sequence=max(
+                    reconciled.highest_status_input_sequence,
+                    status_input.sequence,
+                ),
+                latest_status_input_sha256=(
+                    status_input.digest
+                    if status_input.sequence > reconciled.highest_status_input_sequence
+                    else reconciled.latest_status_input_sha256
+                ),
             )
             return updated, (allocated, reconciled.latest_publication_sha256)
 
@@ -1428,6 +1475,12 @@ class FileDegradedPublisherStateStore:
                 or not publication.verify(credential.publisher_public_key)
             ):
                 raise DegradedPublicationError("publisher commit is outside configured trust")
+            if publication.sequence == state.latest_published_sequence:
+                if publication.digest != state.latest_publication_sha256:
+                    raise DegradedPublicationError(
+                        "publisher commit equivocated at its committed sequence"
+                    )
+                return state, state
             if not (
                 state.latest_published_sequence
                 < publication.sequence
@@ -1443,6 +1496,8 @@ class FileDegradedPublisherStateStore:
                 highest_allocated_sequence=state.highest_allocated_sequence,
                 latest_published_sequence=publication.sequence,
                 latest_publication_sha256=publication.digest,
+                highest_status_input_sequence=state.highest_status_input_sequence,
+                latest_status_input_sha256=state.latest_status_input_sha256,
             )
             return updated, updated
 
@@ -1551,9 +1606,20 @@ class DegradedPublicationPublisher:
             raise DegradedPublicationError("status source returned an invalid model")
         if status_input.source_id != self.credential.health_source_id:
             raise DegradedPublicationError("status input source is not credentialed")
+        maximum_status_age = timedelta(
+            seconds=self.credential.maximum_status_input_age_seconds
+        )
+        if status_input.observed_at > now:
+            raise DegradedPublicationError("status input observation is from the future")
+        if now - status_input.observed_at > maximum_status_age:
+            raise DegradedPublicationError("status input observation is stale")
+        if status_input.expires_at - status_input.observed_at > maximum_status_age:
+            raise DegradedPublicationError("status input lifetime exceeds its credential")
+        if now >= status_input.expires_at:
+            raise DegradedPublicationError("status input observation is expired")
         snapshot = DegradedRuntimeSnapshot(
             snapshot_id=f"m5-degraded-snapshot-{secrets.token_hex(16)}",
-            captured_at=now,
+            captured_at=status_input.observed_at,
             role_conditions=status_input.role_conditions,
             communication_conditions=status_input.communication_conditions,
             unresolved_effect=status_input.unresolved_effect,
@@ -1568,6 +1634,7 @@ class DegradedPublicationPublisher:
         sequence, previous_digest = self.state_store.allocate(
             current,
             credential=self.credential,
+            status_input=status_input,
         )
         publication = DegradedRuntimePublication(
             publication_id=f"m5-degraded-publication-{secrets.token_hex(16)}",
@@ -1716,6 +1783,7 @@ class PublishedDegradedOperationGate:
         publication_age = evaluated_at - publication.published_at
         snapshot_age = evaluated_at - publication.snapshot.captured_at
         maximum_age = timedelta(seconds=credential.maximum_publication_age_seconds)
+        maximum_status_age = timedelta(seconds=credential.maximum_status_input_age_seconds)
         if publication_age < timedelta(0):
             reasons.append("degraded_publication_from_future")
         elif publication_age > maximum_age:
@@ -1726,7 +1794,7 @@ class PublishedDegradedOperationGate:
             reasons.append("degraded_publication_expired")
         if snapshot_age < timedelta(0):
             reasons.append("degraded_snapshot_from_future")
-        elif snapshot_age > maximum_age:
+        elif snapshot_age > maximum_status_age:
             reasons.append("degraded_snapshot_stale")
         return reasons
 
@@ -2517,6 +2585,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             publication = FileDegradedPublicationSource(arguments.publication_file)()
             now = datetime.now(UTC)
             maximum_age = timedelta(seconds=credential.maximum_publication_age_seconds)
+            maximum_status_age = timedelta(
+                seconds=credential.maximum_status_input_age_seconds
+            )
             if (
                 not publication.verify(credential.publisher_public_key)
                 or publication.publisher_credential_sha256 != credential.digest
@@ -2528,7 +2599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or publication.expires_at - publication.published_at > maximum_age
                 or now >= publication.expires_at
                 or publication.snapshot.captured_at > now
-                or now - publication.snapshot.captured_at > maximum_age
+                or now - publication.snapshot.captured_at > maximum_status_age
             ):
                 raise DegradedPublicationError("current degraded publication is not trusted")
             if (

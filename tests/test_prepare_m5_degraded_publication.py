@@ -135,6 +135,9 @@ def test_authority_creates_distinct_signed_root_and_leaf_material(
     generator: ModuleType,
     tmp_path: Path,
 ) -> None:
+    source_report = generator.source_binding_report()
+    assert source_report["schema_version"] == "aegis-ot-m5-degraded-source-binding-v1"
+    assert source_report["execution_authorized"] is False
     authority = _create_authority(generator, tmp_path)
 
     assert {path.name for path in authority.iterdir()} == generator.AUTHORITY_FILES
@@ -274,10 +277,10 @@ def test_publisher_package_drives_fresh_chained_core_publications(
     assert second.sequence == 2
     assert second.previous_publication_sha256 == first.digest
     assert first.snapshot.snapshot_id != second.snapshot.snapshot_id
-    assert first.snapshot.captured_at == NOW + timedelta(seconds=1)
-    assert second.snapshot.captured_at == NOW + timedelta(seconds=2)
-    assert first.published_at == first.snapshot.captured_at
-    assert second.published_at == second.snapshot.captured_at
+    assert first.snapshot.captured_at == NOW
+    assert second.snapshot.captured_at == NOW
+    assert first.published_at == NOW + timedelta(seconds=1)
+    assert second.published_at == NOW + timedelta(seconds=2)
     assert first.expires_at - first.published_at == timedelta(seconds=5)
     assert second.expires_at - second.published_at == timedelta(seconds=5)
     assert first.status_input_sha256 == status_input.digest
@@ -331,6 +334,51 @@ def test_reversal_is_exact_keyless_and_valid_after_authorization_expiry(
         generator.verify_reversal_package(
             reversal_package,
             runtime_package=other_runtime,
+        )
+
+
+def test_healthy_status_is_generated_from_public_runtime_trust(
+    generator: ModuleType,
+    tmp_path: Path,
+) -> None:
+    authority = _create_authority(generator, tmp_path)
+    runtime = tmp_path / "runtime"
+    generator.create_runtime_package(runtime, authority_directory=authority)
+    healthy_package = tmp_path / "healthy-status"
+
+    report = generator.create_healthy_status_package(
+        healthy_package,
+        runtime_package=runtime,
+        sequence=2,
+        valid_seconds=30,
+        now=NOW + timedelta(seconds=1),
+    )
+    verified = generator.verify_healthy_status_package(
+        healthy_package,
+        runtime_package=runtime,
+    )
+    status_input = DegradedStatusInput.model_validate_json(
+        (healthy_package / generator.STATUS_INPUT_NAME).read_bytes()
+    )
+
+    assert report == verified
+    assert {path.name for path in healthy_package.iterdir()} == generator.HEALTHY_STATUS_FILES
+    assert status_input.sequence == 2
+    assert status_input.observed_at == NOW + timedelta(seconds=1)
+    assert status_input.expires_at == NOW + timedelta(seconds=31)
+    assert set(status_input.role_conditions.values()) == {RoleCondition.HEALTHY}
+    assert set(status_input.communication_conditions.values()) == {RoleCondition.HEALTHY}
+    assert not status_input.unresolved_effect
+    assert report["private_key_material_included"] is False
+    assert report["execution_authorized"] is False
+
+    with pytest.raises(generator.PublicationArtifactError, match="at least two"):
+        generator.create_healthy_status_package(
+            tmp_path / "invalid-healthy-status",
+            runtime_package=runtime,
+            sequence=1,
+            valid_seconds=30,
+            now=NOW + timedelta(seconds=1),
         )
 
 
