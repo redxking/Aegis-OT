@@ -440,7 +440,16 @@ def _validate_registry_binding(reference: str, binding: object) -> dict[str, Any
         or any(layer["media_type"] not in OCI_LAYER_MEDIA_TYPES for layer in layers)
     ):
         _fail("registry manifest descriptors differ from the retained binding")
-    return {"config": config, "layers": layers}
+    selected = cast(dict[str, Any], binding["selected_manifest"])
+    return {
+        "selected_manifest": {
+            "digest": selected["digest"],
+            "size_bytes": selected["size_bytes"],
+            "media_type": selected["media_type"],
+        },
+        "config": config,
+        "layers": layers,
+    }
 
 
 def _validate_saved_runtime_archive(
@@ -469,16 +478,94 @@ def _validate_saved_runtime_archive(
         raise RuntimeImageBundleError(
             f"saved runtime image archive structure is invalid: {exc}"
         ) from exc
+    if not isinstance(archive_binding, dict):
+        _fail("saved runtime archive validation result is malformed")
+    selected_manifest = derived_registry["selected_manifest"]
     config = derived_registry["config"]
+    registry_layers = derived_registry["layers"]
+    image_binding = archive_binding.get("image_id_binding")
+    if not isinstance(image_binding, dict):
+        _fail("saved runtime archive lacks an exact OCI descriptor closure")
+    if image_binding.get("kind") != "oci_descriptor_chain":
+        _fail(
+            "saved runtime archive does not provide a supported exact OCI "
+            "descriptor closure"
+        )
+    root_digest = image_binding.get("root_digest")
+    image_manifest_digest = image_binding.get("image_manifest_digest")
+    root_media_type = image_binding.get("root_media_type")
+    layer_digests = image_binding.get("layer_digests")
+    layer_media_types = image_binding.get("layer_media_types")
+    verified_layers = image_binding.get("verified_layers")
     if (
-        config["digest"] != "sha256:" + archive_binding["config_sha256"]
+        not isinstance(root_digest, str)
+        or not isinstance(image_manifest_digest, str)
+        or not isinstance(root_media_type, str)
+        or not isinstance(layer_digests, list)
+        or not all(isinstance(value, str) for value in layer_digests)
+        or not isinstance(layer_media_types, list)
+        or not all(isinstance(value, str) for value in layer_media_types)
+        or not isinstance(verified_layers, list)
+        or not all(isinstance(value, dict) for value in verified_layers)
+    ):
+        _fail("saved runtime archive exact OCI descriptor closure is malformed")
+    archive_manifest_closure = {
+        "digest": f"sha256:{root_digest}",
+        "image_manifest_digest": f"sha256:{image_manifest_digest}",
+        "media_type": root_media_type,
+    }
+    expected_manifest_closure = {
+        "digest": selected_manifest["digest"],
+        "image_manifest_digest": selected_manifest["digest"],
+        "media_type": selected_manifest["media_type"],
+    }
+    try:
+        archive_layer_closure = [
+            {
+                "digest": "sha256:" + digest,
+                "media_type": media_type,
+                "size_bytes": verified["size_bytes"],
+                "path": verified["path"],
+                "sha256": verified["sha256"],
+                "digest_semantics": verified["digest_semantics"],
+            }
+            for digest, media_type, verified in zip(
+                cast(list[str], layer_digests),
+                cast(list[str], layer_media_types),
+                cast(list[dict[str, Any]], verified_layers),
+                strict=True,
+            )
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeImageBundleError(
+            "saved runtime archive OCI layer closure is malformed"
+        ) from exc
+    expected_layer_closure = [
+        {
+            "digest": layer["digest"],
+            "media_type": layer["media_type"],
+            "size_bytes": layer["size_bytes"],
+            "path": f"blobs/sha256/{layer['digest'].removeprefix('sha256:')}",
+            "sha256": layer["digest"].removeprefix("sha256:"),
+            "digest_semantics": "stored_descriptor_digest",
+        }
+        for layer in registry_layers
+    ]
+    if (
+        image_id != selected_manifest["digest"]
+        or archive_manifest_closure != expected_manifest_closure
+        or archive_layer_closure != expected_layer_closure
+        or config["digest"] != "sha256:" + archive_binding["config_sha256"]
         or config["size_bytes"] != archive_binding["config_size_bytes"]
-        or len(derived_registry["layers"]) != archive_binding["layer_count"]
+        or len(registry_layers) != archive_binding["layer_count"]
         or archive_binding["repo_tags"] != [distribution_tag]
         or archive_binding["platform"]
         != {"os": "linux", "architecture": "amd64", "variant": None}
     ):
-        _fail("saved runtime archive is not bound to the registry manifest/config")
+        _fail(
+            "saved runtime archive is not bound to the selected registry "
+            "manifest/config/layers"
+        )
     return cast(dict[str, Any], archive_binding)
 
 

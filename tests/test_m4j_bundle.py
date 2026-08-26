@@ -1968,28 +1968,30 @@ def test_runtime_pull_refreshes_linux_amd64_before_inspecting_cached_image(
 def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
     runtime_preparer: Any,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     layer = b"registry-bound-runtime-layer"
     config = _image_config("a" * 40, layer=layer)
     config_digest = hashlib.sha256(config).hexdigest()
     layer_digest = hashlib.sha256(layer).hexdigest()
-    registry_manifest = json.dumps(
-        {
-            "schemaVersion": 2,
-            "mediaType": "application/vnd.oci.image.manifest.v1+json",
-            "config": {
-                "mediaType": "application/vnd.oci.image.config.v1+json",
-                "digest": f"sha256:{config_digest}",
-                "size": len(config),
-            },
-            "layers": [
-                {
-                    "mediaType": "application/vnd.oci.image.layer.v1.tar",
-                    "digest": f"sha256:{layer_digest}",
-                    "size": len(layer),
-                }
-            ],
+    registry_manifest_document = {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "config": {
+            "mediaType": "application/vnd.oci.image.config.v1+json",
+            "digest": f"sha256:{config_digest}",
+            "size": len(config),
         },
+        "layers": [
+            {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar",
+                "digest": f"sha256:{layer_digest}",
+                "size": len(layer),
+            }
+        ],
+    }
+    registry_manifest = json.dumps(
+        registry_manifest_document,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -2021,13 +2023,35 @@ def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
         ],
     }
     distribution_tag = "aegis-m4j-runtime/fixture:0123456789abcdef"
+
+    def write_archive(path: Path, image_manifest: bytes) -> str:
+        image_manifest_digest = hashlib.sha256(image_manifest).hexdigest()
+        docker_manifest = json.dumps(
+            [
+                {
+                    "Config": f"blobs/sha256/{config_digest}",
+                    "RepoTags": [distribution_tag],
+                    "Layers": [f"blobs/sha256/{layer_digest}"],
+                }
+            ],
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        materials = {
+            "manifest.json": docker_manifest,
+            f"blobs/sha256/{config_digest}": config,
+            f"blobs/sha256/{layer_digest}": layer,
+            f"blobs/sha256/{image_manifest_digest}": image_manifest,
+        }
+        with tarfile.open(path, mode="w") as archive:
+            for member_name, material in materials.items():
+                member = tarfile.TarInfo(member_name)
+                member.size = len(material)
+                archive.addfile(member, io.BytesIO(material))
+        return f"sha256:{image_manifest_digest}"
+
     archive_path = tmp_path / "runtime-image.tar"
-    image_id = _write_saved_image_archive(
-        archive_path,
-        config=config,
-        repo_tags=[distribution_tag],
-        layer=layer,
-    )
+    image_id = write_archive(archive_path, registry_manifest)
 
     binding = runtime_preparer._validate_saved_runtime_archive(
         archive_path,
@@ -2037,6 +2061,10 @@ def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
         registry_binding=registry_binding,
     )
     assert binding["config_sha256"] == config_digest
+    assert binding["image_id_binding"]["root_digest"] == root_digest.removeprefix(
+        "sha256:"
+    )
+    assert binding["image_id_binding"]["layer_digests"] == [layer_digest]
 
     wrong_reference = reference.rsplit("sha256:", maxsplit=1)[0] + "sha256:" + "0" * 64
     with pytest.raises(
@@ -2051,23 +2079,86 @@ def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
             registry_binding=registry_binding,
         )
 
-    foreign_layer = b"foreign-runtime-layer"
-    foreign_config = _image_config("a" * 40, layer=foreign_layer)
-    foreign_archive = tmp_path / "foreign-runtime-image.tar"
-    foreign_image_id = _write_saved_image_archive(
-        foreign_archive,
-        config=foreign_config,
-        repo_tags=[distribution_tag],
-        layer=foreign_layer,
-    )
+    foreign_manifest_document = dict(registry_manifest_document)
+    foreign_manifest_document["annotations"] = {
+        "org.aegis-ot.fixture": "foreign-manifest-same-config-and-layers"
+    }
+    foreign_manifest = json.dumps(
+        foreign_manifest_document,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    foreign_archive = tmp_path / "foreign-manifest-runtime-image.tar"
+    foreign_image_id = write_archive(foreign_archive, foreign_manifest)
     with pytest.raises(
         runtime_preparer.RuntimeImageBundleError,
-        match="not bound to the registry",
+        match="selected registry manifest/config/layers",
     ):
         runtime_preparer._validate_saved_runtime_archive(
             foreign_archive,
             reference=reference,
             distribution_tag=distribution_tag,
             image_id=foreign_image_id,
+            registry_binding=registry_binding,
+        )
+
+    legacy_archive = tmp_path / "legacy-config-id-runtime-image.tar"
+    legacy_image_id = _write_saved_image_archive(
+        legacy_archive,
+        config=config,
+        repo_tags=[distribution_tag],
+        layer=layer,
+    )
+    with pytest.raises(
+        runtime_preparer.RuntimeImageBundleError,
+        match="does not provide a supported exact OCI descriptor closure",
+    ):
+        runtime_preparer._validate_saved_runtime_archive(
+            legacy_archive,
+            reference=reference,
+            distribution_tag=distribution_tag,
+            image_id=legacy_image_id,
+            registry_binding=registry_binding,
+        )
+
+    malformed_binding = json.loads(json.dumps(binding))
+    malformed_binding["image_id_binding"]["layer_digests"] = None
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_load_archive_validator",
+        lambda: SimpleNamespace(
+            _validate_saved_image_archive=lambda *args, **kwargs: malformed_binding
+        ),
+    )
+    with pytest.raises(
+        runtime_preparer.RuntimeImageBundleError,
+        match="exact OCI descriptor closure is malformed",
+    ):
+        runtime_preparer._validate_saved_runtime_archive(
+            archive_path,
+            reference=reference,
+            distribution_tag=distribution_tag,
+            image_id=image_id,
+            registry_binding=registry_binding,
+        )
+
+    forged_binding = json.loads(json.dumps(binding))
+    forged_binding["image_id_binding"]["layer_digests"] = ["0" * 64]
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_load_archive_validator",
+        lambda: SimpleNamespace(
+            _validate_saved_image_archive=lambda *args, **kwargs: forged_binding
+        ),
+    )
+    with pytest.raises(
+        runtime_preparer.RuntimeImageBundleError,
+        match="selected registry manifest/config/layers",
+    ):
+        runtime_preparer._validate_saved_runtime_archive(
+            archive_path,
+            reference=reference,
+            distribution_tag=distribution_tag,
+            image_id=image_id,
             registry_binding=registry_binding,
         )
