@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import heapq
 import json
+from bisect import bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
@@ -23,8 +24,28 @@ from typing import Final, cast
 
 SCALE_POINTS: Final[tuple[int, ...]] = (10, 100, 1_000, 10_000)
 SENSITIVITY_CASES: Final[tuple[str, ...]] = ("low", "base", "high")
-MODEL_SCHEMA_VERSION: Final[str] = "aegis-ot-m6-fleet-study-v1"
+MODEL_SCHEMA_VERSION: Final[str] = "aegis-ot-m6-fleet-study-v2"
 MODEL_KIND: Final[str] = "deterministic_synthetic_discrete_event_model"
+MODELED_REQUIREMENT_COVERAGE: Final[tuple[str, ...]] = (
+    "AOT-PERF-007",
+    "AOT-PERF-008",
+)
+UNRESOLVED_TBRS: Final[tuple[str, ...]] = (
+    "TBR-011",
+    "TBR-016",
+    "TBR-017",
+    "TBR-021",
+    "TBR-023",
+)
+G6_DISPOSITION: Final[str] = "not_accepted_modeled_coverage_only"
+
+ACTION_CATEGORIES: Final[tuple[str, ...]] = (
+    "nominal_low_risk",
+    "provisional_unapproved",
+    "conflicting_consequential",
+    "containment_recovery",
+    "read_only",
+)
 
 MICROSECONDS_PER_SECOND: Final[int] = 1_000_000
 SECONDS_PER_DAY: Final[int] = 86_400
@@ -32,6 +53,7 @@ BYTES_PER_GIB: Final[int] = 1 << 30
 MAX_LOGICAL_AGENTS: Final[int] = 10_000
 MAX_EVENTS_PER_LOGICAL_AGENT: Final[int] = 25
 MAX_SIMULATED_EVENTS_BOUND: Final[int] = 250_000
+MAX_COORDINATION_SAMPLES_BOUND: Final[int] = 1_000_000
 
 JsonValue = None | bool | int | str | list["JsonValue"] | dict[str, "JsonValue"]
 
@@ -212,7 +234,7 @@ DEFAULT_ECONOMIC_CASES: Final[tuple[EconomicCase, ...]] = (
 class FleetModelAssumptions:
     """Bounded inputs for the queue, graph, evidence, staffing, and cost models."""
 
-    seed: str = "aegis-ot-m6-reference-seed-v1"
+    seed: str = "aegis-ot-m6-reference-seed-v2"
     horizon_seconds: int = 60
     events_per_logical_agent_per_horizon: int = 5
     arrival_jitter_window_microseconds: int = 200_000
@@ -220,6 +242,18 @@ class FleetModelAssumptions:
     service_time_min_microseconds: int = 3_000
     service_time_max_microseconds: int = 5_000
     maximum_simulated_events: int = 100_000
+    nominal_low_risk_action_basis_points: int = 5_000
+    provisional_unapproved_action_basis_points: int = 2_000
+    conflicting_consequential_action_basis_points: int = 1_000
+    containment_recovery_action_basis_points: int = 1_000
+    read_only_action_basis_points: int = 1_000
+    approval_duration_microseconds: int = 2_000_000
+    concurrency_sample_microseconds: int = 100_000
+    replay_state_bytes_per_entry: int = 192
+    pending_effect_basis_points: int = 250
+    reconciliation_worker_count: int = 2
+    reconciliation_service_time_min_microseconds: int = 100_000
+    reconciliation_service_time_max_microseconds: int = 250_000
     delegation_branching_factor: int = 10
     revocation_edge_delay_microseconds: int = 2_000
     revocation_edge_jitter_microseconds: int = 1_000
@@ -277,6 +311,78 @@ class FleetModelAssumptions:
                 1,
                 MAX_SIMULATED_EVENTS_BOUND,
             ),
+            (
+                "nominal low-risk action share",
+                self.nominal_low_risk_action_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "provisional or unapproved action-request share",
+                self.provisional_unapproved_action_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "conflicting consequential action share",
+                self.conflicting_consequential_action_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "containment and recovery action share",
+                self.containment_recovery_action_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "read-only action share",
+                self.read_only_action_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "approval duration",
+                self.approval_duration_microseconds,
+                1,
+                86_400 * MICROSECONDS_PER_SECOND,
+            ),
+            (
+                "concurrency sample interval",
+                self.concurrency_sample_microseconds,
+                1,
+                60 * MICROSECONDS_PER_SECOND,
+            ),
+            (
+                "replay state bytes per entry",
+                self.replay_state_bytes_per_entry,
+                1,
+                1_000_000,
+            ),
+            (
+                "pending-effect share",
+                self.pending_effect_basis_points,
+                0,
+                10_000,
+            ),
+            (
+                "reconciliation worker count",
+                self.reconciliation_worker_count,
+                1,
+                128,
+            ),
+            (
+                "minimum reconciliation service time",
+                self.reconciliation_service_time_min_microseconds,
+                1,
+                60_000_000,
+            ),
+            (
+                "maximum reconciliation service time",
+                self.reconciliation_service_time_max_microseconds,
+                1,
+                60_000_000,
+            ),
             ("delegation branching factor", self.delegation_branching_factor, 2, 64),
             ("revocation edge delay", self.revocation_edge_delay_microseconds, 1, 60_000_000),
             (
@@ -327,10 +433,37 @@ class FleetModelAssumptions:
 
         if self.service_time_min_microseconds > self.service_time_max_microseconds:
             raise ValueError("minimum service time must not exceed maximum service time")
+        if (
+            self.reconciliation_service_time_min_microseconds
+            > self.reconciliation_service_time_max_microseconds
+        ):
+            raise ValueError(
+                "minimum reconciliation service time must not exceed maximum"
+            )
+        if sum(
+            (
+                self.nominal_low_risk_action_basis_points,
+                self.provisional_unapproved_action_basis_points,
+                self.conflicting_consequential_action_basis_points,
+                self.containment_recovery_action_basis_points,
+                self.read_only_action_basis_points,
+            )
+        ) != 10_000:
+            raise ValueError("action distribution shares must sum to 10000 basis points")
         horizon_microseconds = self.horizon_seconds * MICROSECONDS_PER_SECOND
         arrival_interval = horizon_microseconds // self.events_per_logical_agent_per_horizon
         if self.arrival_jitter_window_microseconds >= arrival_interval:
             raise ValueError("arrival jitter must be smaller than each event arrival interval")
+        if self.concurrency_sample_microseconds > horizon_microseconds:
+            raise ValueError("concurrency sample interval must fit within the model horizon")
+        coordination_sample_count = _ceil_div(
+            horizon_microseconds,
+            self.concurrency_sample_microseconds,
+        )
+        if coordination_sample_count > MAX_COORDINATION_SAMPLES_BOUND:
+            raise ValueError(
+                "coordination sample count exceeds the deterministic simulation bound"
+            )
         largest_event_count = MAX_LOGICAL_AGENTS * self.events_per_logical_agent_per_horizon
         if largest_event_count > self.maximum_simulated_events:
             raise ValueError("maximum simulated events cannot contain the 10000-agent scale")
@@ -428,6 +561,39 @@ class QueueModelResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionWorkloadResult:
+    total_action_requests: int
+    nominal_low_risk_action_requests: int
+    provisional_unapproved_action_requests: int
+    conflicting_consequential_action_requests: int
+    containment_recovery_action_requests: int
+    read_only_action_requests: int
+    distribution_status: str
+    action_trace_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalCoordinationResult:
+    action_requests_requiring_approval: int
+    approval_concurrency_sample_count: int
+    modeled_mean_concurrent_approvals: Decimal
+    modeled_p95_concurrent_approvals: int
+    modeled_peak_concurrent_approvals: int
+    approval_duration_microseconds: int
+    replay_state_entries_at_horizon: int
+    modeled_replay_state_bytes_at_horizon: int
+    pending_effect_candidate_action_requests: int
+    pending_effects_created: int
+    reconciliation_completions_within_horizon: int
+    unresolved_effects_at_horizon: int
+    reconciliation_backlog_sample_count: int
+    modeled_p95_reconciliation_backlog_effects: int
+    modeled_maximum_reconciliation_backlog_effects: int
+    approval_trace_sha256: str
+    reconciliation_trace_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class DelegationGraphResult:
     nodes: int
     edges: int
@@ -502,6 +668,8 @@ class EconomicResult:
 class FleetScaleResult:
     logical_agents: int
     queue: QueueModelResult
+    action_workload: ActionWorkloadResult
+    approval_and_coordination: ApprovalCoordinationResult
     delegation_graph: DelegationGraphResult
     revocation: RevocationPropagationResult
     policy_distribution: PolicyDistributionResult
@@ -519,6 +687,9 @@ class FleetStudyReport:
     claim_scope: str
     logical_agent_definition: str
     excluded_claims: tuple[str, ...]
+    modeled_requirement_coverage: tuple[str, ...]
+    unresolved_tbrs: tuple[str, ...]
+    g6_disposition: str
     scale_points: tuple[int, ...]
     units: Mapping[str, str]
     assumptions: FleetModelAssumptions
@@ -548,6 +719,10 @@ UNIT_REGISTRY: Final[Mapping[str, str]] = MappingProxyType({
     "logical_agent": "logical_agent",
     "queue_throughput": "modeled_event/second",
     "event_count": "event",
+    "action_distribution": "basis-point (1 basis-point = 0.01 percent)",
+    "approval_concurrency": "modeled concurrent approval",
+    "replay_state": "entry and byte at model-horizon boundary",
+    "reconciliation_backlog": "modeled unresolved effect",
     "time": "microsecond",
     "service_utilization": "percent",
     "delegation_depth": "hop",
@@ -576,10 +751,10 @@ def _nearest_rank_percentile(sorted_values: list[int], percentile: int) -> int:
     return sorted_values[rank - 1]
 
 
-def _simulate_queue(
+def _generate_event_arrivals(
     logical_agents: int,
     assumptions: FleetModelAssumptions,
-) -> QueueModelResult:
+) -> list[tuple[int, int, int]]:
     event_count = logical_agents * assumptions.events_per_logical_agent_per_horizon
     if event_count > assumptions.maximum_simulated_events:
         raise ValueError("requested fleet exceeds the configured simulated-event bound")
@@ -598,6 +773,17 @@ def _simulate_queue(
             )
             arrivals.append((interval_start + jitter, agent_index, event_ordinal))
     arrivals.sort()
+    return arrivals
+
+
+def _simulate_queue(
+    arrivals: list[tuple[int, int, int]],
+    assumptions: FleetModelAssumptions,
+) -> QueueModelResult:
+    event_count = len(arrivals)
+    if event_count <= 0 or event_count > assumptions.maximum_simulated_events:
+        raise ValueError("queue input is outside the configured simulated-event bound")
+    horizon_microseconds = assumptions.horizon_seconds * MICROSECONDS_PER_SECOND
 
     workers = [0] * assumptions.service_worker_count
     heapq.heapify(workers)
@@ -660,6 +846,265 @@ def _simulate_queue(
         modeled_service_utilization_percent=utilization,
         completion_window_microseconds=completion_window,
         event_trace_sha256=trace.hexdigest(),
+    )
+
+
+def _fixed_distribution_counts(
+    total: int,
+    basis_points: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Allocate an exact integer total using a stable largest-remainder rule."""
+
+    if type(total) is not int or total < 0:
+        raise ValueError("distribution total must be a nonnegative integer")
+    if not basis_points or any(type(item) is not int or item < 0 for item in basis_points):
+        raise ValueError("distribution shares must be nonnegative integers")
+    if sum(basis_points) != 10_000:
+        raise ValueError("distribution shares must sum to 10000 basis points")
+    numerators = [total * item for item in basis_points]
+    counts = [item // 10_000 for item in numerators]
+    remainders = [item % 10_000 for item in numerators]
+    remaining = total - sum(counts)
+    allocation_order = sorted(
+        range(len(basis_points)),
+        key=lambda index: (-remainders[index], index),
+    )
+    for index in allocation_order[:remaining]:
+        counts[index] += 1
+    if sum(counts) != total:
+        raise ValueError("integer distribution allocation did not preserve its total")
+    return tuple(counts)
+
+
+def _action_distribution_basis_points(
+    assumptions: FleetModelAssumptions,
+) -> tuple[int, ...]:
+    return (
+        assumptions.nominal_low_risk_action_basis_points,
+        assumptions.provisional_unapproved_action_basis_points,
+        assumptions.conflicting_consequential_action_basis_points,
+        assumptions.containment_recovery_action_basis_points,
+        assumptions.read_only_action_basis_points,
+    )
+
+
+def _model_action_workload(
+    arrivals: list[tuple[int, int, int]],
+    assumptions: FleetModelAssumptions,
+) -> tuple[list[tuple[int, int, int, str]], ActionWorkloadResult]:
+    shares = _action_distribution_basis_points(assumptions)
+    counts = _fixed_distribution_counts(len(arrivals), shares)
+    ranked = sorted(
+        arrivals,
+        key=lambda event: (
+            _deterministic_offset(
+                assumptions.seed,
+                "action-distribution-v2",
+                event[1],
+                event[2],
+                modulus=1 << 64,
+            ),
+            event,
+        ),
+    )
+    category_by_identity: dict[tuple[int, int], str] = {}
+    cursor = 0
+    for category, count in zip(ACTION_CATEGORIES, counts, strict=True):
+        for _arrival, agent_index, event_ordinal in ranked[cursor : cursor + count]:
+            category_by_identity[(agent_index, event_ordinal)] = category
+        cursor += count
+    if cursor != len(arrivals) or len(category_by_identity) != len(arrivals):
+        raise ValueError("action distribution did not assign every generated request")
+
+    actions = [
+        (arrival, agent_index, event_ordinal, category_by_identity[(agent_index, event_ordinal)])
+        for arrival, agent_index, event_ordinal in arrivals
+    ]
+    trace = hashlib.sha256()
+    trace.update(
+        (
+            "shares="
+            + ",".join(
+                f"{category}:{share}"
+                for category, share in zip(ACTION_CATEGORIES, shares, strict=True)
+            )
+            + "\n"
+        ).encode()
+    )
+    for arrival, agent_index, event_ordinal, category in actions:
+        trace.update(f"{arrival},{agent_index},{event_ordinal},{category}\n".encode())
+
+    counts_by_category = dict(zip(ACTION_CATEGORIES, counts, strict=True))
+    return actions, ActionWorkloadResult(
+        total_action_requests=len(actions),
+        nominal_low_risk_action_requests=counts_by_category["nominal_low_risk"],
+        provisional_unapproved_action_requests=counts_by_category[
+            "provisional_unapproved"
+        ],
+        conflicting_consequential_action_requests=counts_by_category[
+            "conflicting_consequential"
+        ],
+        containment_recovery_action_requests=counts_by_category[
+            "containment_recovery"
+        ],
+        read_only_action_requests=counts_by_category["read_only"],
+        distribution_status="fixed_basis_point_shares_exact_largest_remainder_counts",
+        action_trace_sha256=trace.hexdigest(),
+    )
+
+
+def _coordination_samples(
+    starts: list[int],
+    completions: list[int],
+    *,
+    horizon_microseconds: int,
+    sample_microseconds: int,
+) -> list[int]:
+    sorted_starts = sorted(starts)
+    sorted_completions = sorted(completions)
+    return [
+        bisect_right(sorted_starts, timestamp)
+        - bisect_right(sorted_completions, timestamp)
+        for timestamp in range(0, horizon_microseconds, sample_microseconds)
+    ]
+
+
+def _model_approval_and_coordination(
+    actions: list[tuple[int, int, int, str]],
+    assumptions: FleetModelAssumptions,
+) -> ApprovalCoordinationResult:
+    horizon_microseconds = assumptions.horizon_seconds * MICROSECONDS_PER_SECOND
+    approval_actions = [
+        item
+        for item in actions
+        if item[3] in {"provisional_unapproved", "conflicting_consequential"}
+    ]
+    approval_starts = [item[0] for item in approval_actions]
+    approval_completions = [
+        start + assumptions.approval_duration_microseconds for start in approval_starts
+    ]
+    approval_samples = _coordination_samples(
+        approval_starts,
+        approval_completions,
+        horizon_microseconds=horizon_microseconds,
+        sample_microseconds=assumptions.concurrency_sample_microseconds,
+    )
+    approval_trace = hashlib.sha256(
+        (
+            f"duration={assumptions.approval_duration_microseconds},"
+            f"sample={assumptions.concurrency_sample_microseconds}\n"
+        ).encode()
+    )
+    for arrival, agent_index, event_ordinal, category in approval_actions:
+        approval_trace.update(
+            (
+                f"{arrival},{arrival + assumptions.approval_duration_microseconds},"
+                f"{agent_index},{event_ordinal},{category}\n"
+            ).encode()
+        )
+
+    effect_candidates = [item for item in actions if item[3] != "read_only"]
+    pending_count = _fixed_distribution_counts(
+        len(effect_candidates),
+        (assumptions.pending_effect_basis_points, 10_000 - assumptions.pending_effect_basis_points),
+    )[0]
+    pending_ranked = sorted(
+        effect_candidates,
+        key=lambda event: (
+            _deterministic_offset(
+                assumptions.seed,
+                "pending-effect-selection-v2",
+                event[1],
+                event[2],
+                modulus=1 << 64,
+            ),
+            event,
+        ),
+    )
+    pending_identities = {
+        (agent_index, event_ordinal)
+        for _arrival, agent_index, event_ordinal, _category in pending_ranked[:pending_count]
+    }
+    pending_actions = [
+        item for item in effect_candidates if (item[1], item[2]) in pending_identities
+    ]
+
+    reconciliation_trace = hashlib.sha256(
+        (
+            f"workers={assumptions.reconciliation_worker_count},"
+            f"service={assumptions.reconciliation_service_time_min_microseconds}-"
+            f"{assumptions.reconciliation_service_time_max_microseconds},"
+            f"pending_basis_points={assumptions.pending_effect_basis_points}\n"
+        ).encode()
+    )
+    workers = [0] * assumptions.reconciliation_worker_count
+    heapq.heapify(workers)
+    reconciliation_completions: list[int] = []
+    reconciliation_service_span = (
+        assumptions.reconciliation_service_time_max_microseconds
+        - assumptions.reconciliation_service_time_min_microseconds
+        + 1
+    )
+    for arrival, agent_index, event_ordinal, category in pending_actions:
+        available = heapq.heappop(workers)
+        start = max(arrival, available)
+        service = (
+            assumptions.reconciliation_service_time_min_microseconds
+            + _deterministic_offset(
+                assumptions.seed,
+                "reconciliation-service-v2",
+                agent_index,
+                event_ordinal,
+                modulus=reconciliation_service_span,
+            )
+        )
+        completion = start + service
+        heapq.heappush(workers, completion)
+        reconciliation_completions.append(completion)
+        reconciliation_trace.update(
+            (
+                f"{arrival},{agent_index},{event_ordinal},{category},"
+                f"{start},{completion}\n"
+            ).encode()
+        )
+
+    pending_arrivals = [item[0] for item in pending_actions]
+    backlog_samples = _coordination_samples(
+        pending_arrivals,
+        reconciliation_completions,
+        horizon_microseconds=horizon_microseconds,
+        sample_microseconds=assumptions.concurrency_sample_microseconds,
+    )
+    completions_within_horizon = sum(
+        completion <= horizon_microseconds for completion in reconciliation_completions
+    )
+    unresolved_at_horizon = len(pending_actions) - completions_within_horizon
+    return ApprovalCoordinationResult(
+        action_requests_requiring_approval=len(approval_actions),
+        approval_concurrency_sample_count=len(approval_samples),
+        modeled_mean_concurrent_approvals=_quantize(
+            Decimal(sum(approval_samples)) / Decimal(len(approval_samples))
+        ),
+        modeled_p95_concurrent_approvals=_nearest_rank_percentile(
+            sorted(approval_samples), 95
+        ),
+        modeled_peak_concurrent_approvals=max(approval_samples),
+        approval_duration_microseconds=assumptions.approval_duration_microseconds,
+        replay_state_entries_at_horizon=len(actions),
+        modeled_replay_state_bytes_at_horizon=(
+            len(actions) * assumptions.replay_state_bytes_per_entry
+        ),
+        pending_effect_candidate_action_requests=len(effect_candidates),
+        pending_effects_created=len(pending_actions),
+        reconciliation_completions_within_horizon=completions_within_horizon,
+        unresolved_effects_at_horizon=unresolved_at_horizon,
+        reconciliation_backlog_sample_count=len(backlog_samples),
+        modeled_p95_reconciliation_backlog_effects=_nearest_rank_percentile(
+            sorted(backlog_samples), 95
+        ),
+        modeled_maximum_reconciliation_backlog_effects=max(backlog_samples),
+        approval_trace_sha256=approval_trace.hexdigest(),
+        reconciliation_trace_sha256=reconciliation_trace.hexdigest(),
     )
 
 
@@ -892,7 +1337,10 @@ def _simulate_scale(
 ) -> FleetScaleResult:
     if logical_agents not in SCALE_POINTS:
         raise ValueError("logical-agent scale must be one of 10, 100, 1000, or 10000")
-    queue = _simulate_queue(logical_agents, assumptions)
+    arrivals = _generate_event_arrivals(logical_agents, assumptions)
+    queue = _simulate_queue(arrivals, assumptions)
+    actions, action_workload = _model_action_workload(arrivals, assumptions)
+    approval_and_coordination = _model_approval_and_coordination(actions, assumptions)
     parents, _depths, graph = _build_delegation_graph(logical_agents, assumptions)
     revocation = _simulate_revocation(parents, assumptions)
     policy_distribution = _simulate_policy_distribution(parents, assumptions)
@@ -915,6 +1363,8 @@ def _simulate_scale(
     return FleetScaleResult(
         logical_agents=logical_agents,
         queue=queue,
+        action_workload=action_workload,
+        approval_and_coordination=approval_and_coordination,
         delegation_graph=graph,
         revocation=revocation,
         policy_distribution=policy_distribution,
@@ -985,8 +1435,9 @@ def run_m6_fleet_study(
         model_kind=MODEL_KIND,
         evidence_classification="synthetic_model_output_only",
         claim_scope=(
-            "All throughput, queue-delay, propagation, effort, and cost values are "
-            "modeled, not measured."
+            "All throughput, queue-delay, action-distribution, approval-concurrency, "
+            "replay-state, pending-effect, reconciliation, propagation, effort, and "
+            "cost values are modeled, not measured."
         ),
         logical_agent_definition=(
             "An identity-bearing logical workload actor in this model; not a VM, host, "
@@ -997,7 +1448,12 @@ def run_m6_fleet_study(
             "No deployment, production-readiness, operational-effectiveness, or cost "
             "forecast claim.",
             "No independent validation or replication claim.",
+            "No AOT-PERF-007 or AOT-PERF-008 verification-completion claim.",
+            "No TBR closure or G6 acceptance claim.",
         ),
+        modeled_requirement_coverage=MODELED_REQUIREMENT_COVERAGE,
+        unresolved_tbrs=UNRESOLVED_TBRS,
+        g6_disposition=G6_DISPOSITION,
         scale_points=scale_points,
         units=UNIT_REGISTRY,
         assumptions=assumptions,
@@ -1007,6 +1463,25 @@ def run_m6_fleet_study(
             "construction.",
             "Queue delay and throughput are outputs of a seeded FCFS synthetic queue; "
             "they are not host benchmarks.",
+            (
+                "Action-request categories use fixed basis-point shares and a stable "
+                "largest-remainder allocation; provisional or unapproved means awaiting "
+                "approval in the model and never denotes execution authorization."
+            ),
+            (
+                "Approval concurrency is sampled at the retained fixed interval over the "
+                "model horizon; it is not observed operator workload or measured service "
+                "capacity."
+            ),
+            (
+                "Replay state assumes one entry per generated action request at the model "
+                "horizon and no compaction; TBR-016 remains unresolved."
+            ),
+            (
+                "Pending-effect share is applied to non-read-only action requests. The "
+                "seeded FCFS reconciliation queue models completion and backlog counts, "
+                "not correctness of an external effect."
+            ),
             "Delegation depth, operator headcount, and review blocks are integer steps, "
             "so modeled marginal cost can be non-monotonic even while total cost is "
             "nondecreasing.",
@@ -1016,5 +1491,9 @@ def run_m6_fleet_study(
             "rounded upward to a whole byte.",
             "The policy and revocation fan-out assumes level-parallel delivery over the "
             "balanced delegation tree.",
+            (
+                "TBR-011, TBR-016, TBR-017, TBR-021, and TBR-023 remain open; this "
+                "modeled coverage does not accept G6."
+            ),
         ),
     )

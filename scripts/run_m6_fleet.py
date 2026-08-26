@@ -1,9 +1,12 @@
 """Run and offline-verify the deterministic M6 fleet-model campaign.
 
-This runner retains synthetic model output.  It does not benchmark a host,
-instantiate a fleet, deploy Aegis-OT, validate production capacity, or establish
-operational effectiveness.  Economic values are model estimates under the
-retained assumptions, not forecasts or observed costs.
+This runner retains synthetic model output, including fixed action/conflict
+distributions and modeled approval, replay-state, pending-effect, and
+reconciliation behavior.  It does not benchmark a host, instantiate a fleet,
+deploy Aegis-OT, validate production capacity, or establish operational
+effectiveness.  Economic values are model estimates under the retained
+assumptions, not forecasts or observed costs.  PERF-007/008 coverage is modeled
+only; the declared TBRs remain unresolved and G6 remains unaccepted.
 """
 
 from __future__ import annotations
@@ -28,10 +31,10 @@ from typing import Any
 import aegis_ot.m6_fleet as m6
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_SCHEMA = "aegis-ot-m6-fleet-campaign-v1"
-PLAN_SCHEMA = "aegis-ot-m6-fleet-plan-v1"
-SEMANTIC_PROJECTION_VERSION = "aegis-ot-m6-fleet-semantic-projection-v1"
-CAMPAIGN_ID = "m6-fleet-scaling-and-economics-v1"
+REPORT_SCHEMA = "aegis-ot-m6-fleet-campaign-v2"
+PLAN_SCHEMA = "aegis-ot-m6-fleet-plan-v2"
+SEMANTIC_PROJECTION_VERSION = "aegis-ot-m6-fleet-semantic-projection-v2"
+CAMPAIGN_ID = "m6-fleet-scaling-coordination-and-economics-v2"
 OUTPUT_PREFIX = "aegis-ot-m6-fleet-"
 MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -52,6 +55,18 @@ REQUIRED_ASSUMPTION_FIELDS = (
     "service_time_min_microseconds",
     "service_time_max_microseconds",
     "maximum_simulated_events",
+    "nominal_low_risk_action_basis_points",
+    "provisional_unapproved_action_basis_points",
+    "conflicting_consequential_action_basis_points",
+    "containment_recovery_action_basis_points",
+    "read_only_action_basis_points",
+    "approval_duration_microseconds",
+    "concurrency_sample_microseconds",
+    "replay_state_bytes_per_entry",
+    "pending_effect_basis_points",
+    "reconciliation_worker_count",
+    "reconciliation_service_time_min_microseconds",
+    "reconciliation_service_time_max_microseconds",
     "delegation_branching_factor",
     "revocation_edge_delay_microseconds",
     "revocation_edge_jitter_microseconds",
@@ -89,6 +104,8 @@ REQUIRED_ECONOMIC_CASE_FIELDS = (
 REQUIRED_SCALE_FIELDS = (
     "logical_agents",
     "queue",
+    "action_workload",
+    "approval_and_coordination",
     "delegation_graph",
     "revocation",
     "policy_distribution",
@@ -120,6 +137,55 @@ MEASURE_CATALOG: tuple[dict[str, Any], ...] = (
             "queue.modeled_service_utilization_percent",
             "queue.completion_window_microseconds",
             "queue.event_trace_sha256",
+        ],
+    },
+    {
+        "measure_id": "provisional_unapproved_and_conflict_distribution",
+        "classification": "fixed_synthetic_request_distribution_not_executed_actions",
+        "field_paths": [
+            "action_workload.total_action_requests",
+            "action_workload.nominal_low_risk_action_requests",
+            "action_workload.provisional_unapproved_action_requests",
+            "action_workload.conflicting_consequential_action_requests",
+            "action_workload.containment_recovery_action_requests",
+            "action_workload.read_only_action_requests",
+            "action_workload.distribution_status",
+            "action_workload.action_trace_sha256",
+        ],
+    },
+    {
+        "measure_id": "approval_concurrency_and_replay_state",
+        "classification": "synthetic_model_output_not_operator_or_capacity_measurement",
+        "field_paths": [
+            "approval_and_coordination.action_requests_requiring_approval",
+            "approval_and_coordination.approval_concurrency_sample_count",
+            "approval_and_coordination.modeled_mean_concurrent_approvals",
+            "approval_and_coordination.modeled_p95_concurrent_approvals",
+            "approval_and_coordination.modeled_peak_concurrent_approvals",
+            "approval_and_coordination.approval_duration_microseconds",
+            "approval_and_coordination.replay_state_entries_at_horizon",
+            "approval_and_coordination.modeled_replay_state_bytes_at_horizon",
+            "approval_and_coordination.approval_trace_sha256",
+        ],
+    },
+    {
+        "measure_id": "pending_effects_and_reconciliation",
+        "classification": "synthetic_queue_projection_not_external_effect_validation",
+        "field_paths": [
+            "approval_and_coordination.pending_effect_candidate_action_requests",
+            "approval_and_coordination.pending_effects_created",
+            "approval_and_coordination.reconciliation_completions_within_horizon",
+            "approval_and_coordination.unresolved_effects_at_horizon",
+            "approval_and_coordination.reconciliation_backlog_sample_count",
+            (
+                "approval_and_coordination."
+                "modeled_p95_reconciliation_backlog_effects"
+            ),
+            (
+                "approval_and_coordination."
+                "modeled_maximum_reconciliation_backlog_effects"
+            ),
+            "approval_and_coordination.reconciliation_trace_sha256",
         ],
     },
     {
@@ -216,6 +282,9 @@ ACCEPTANCE_GATE_NAMES = (
     "exact_required_logical_agent_scales",
     "complete_per_scale_measure_contract",
     "throughput_and_queue_outputs_retained",
+    "provisional_unapproved_and_conflict_distribution_retained",
+    "approval_concurrency_and_replay_growth_retained",
+    "pending_effect_and_reconciliation_backlog_retained",
     "delegation_and_revocation_outputs_retained",
     "policy_and_evidence_outputs_retained",
     "operator_and_incident_effort_outputs_retained",
@@ -224,6 +293,8 @@ ACCEPTANCE_GATE_NAMES = (
     "canonical_model_result_hash_valid",
     "synthetic_modeled_boundary_explicit",
     "deployment_and_effectiveness_claims_excluded",
+    "perf_requirements_are_modeled_coverage_only",
+    "required_tbrs_open_and_g6_not_accepted",
     "exact_clean_committed_source_bound",
     "evidence_contains_no_sensitive_material",
 )
@@ -238,22 +309,41 @@ EVIDENCE_LIMITS = (
         "physical endpoint, or deployed workload."
     ),
     (
-        "Throughput, queue delay, propagation, distribution, evidence volume, staffing, "
-        "incident effort, and cost are modeled outputs under retained assumptions."
+        "Throughput, queue delay, action and conflict distributions, approval concurrency, "
+        "replay-state growth, pending effects, reconciliation backlog, propagation, "
+        "evidence volume, staffing, incident effort, and cost are modeled outputs under "
+        "retained assumptions."
+    ),
+    (
+        "Provisional or unapproved and conflicting consequential items are synthetic "
+        "action-request categories; neither category denotes execution authorization."
     ),
     (
         "Economic values are sensitivity estimates, not budgets, quotes, forecasts, "
         "procurement data, or observed operating costs."
     ),
     (
-        "Campaign acceptance means only that the deterministic model and retained-evidence "
-        "contract passed against the exact source revision."
+        "A true campaign_contract_passed value means only that the deterministic model "
+        "and retained-evidence contract passed against the exact source revision."
     ),
     (
         "The campaign does not establish deployment, production readiness, empirical "
         "capacity, operational effectiveness, independent validation, or replication."
     ),
+    (
+        "AOT-PERF-007 and AOT-PERF-008 receive modeled coverage only; TBR-011, TBR-016, "
+        "TBR-017, TBR-021, and TBR-023 remain unresolved, and G6 is not accepted."
+    ),
 )
+
+REQUIREMENTS_BOUNDARY = {
+    "modeled_coverage": list(m6.MODELED_REQUIREMENT_COVERAGE),
+    "verification_completion_claimed": False,
+    "unresolved_tbrs": list(m6.UNRESOLVED_TBRS),
+    "gate": "G6",
+    "gate_accepted": False,
+    "gate_disposition": m6.G6_DISPOSITION,
+}
 
 MATERIAL_HANDLING = {
     "classification": "non_sensitive_synthetic_model_evidence",
@@ -478,12 +568,68 @@ def _acceptance_gates(
         and len(scale["economics"]) == len(m6.SENSITIVITY_CASES)
         for scale in scales or []
     )
+
+    def coordination_relationships_complete() -> bool:
+        if not isinstance(scales, list) or not isinstance(assumptions, dict):
+            return False
+        replay_bytes = assumptions.get("replay_state_bytes_per_entry")
+        if isinstance(replay_bytes, bool) or not isinstance(replay_bytes, int):
+            return False
+        try:
+            for scale in scales:
+                if not isinstance(scale, dict):
+                    return False
+                queue = scale["queue"]
+                action = scale["action_workload"]
+                coordination = scale["approval_and_coordination"]
+                if not all(
+                    isinstance(item, dict) for item in (queue, action, coordination)
+                ):
+                    return False
+                category_total = sum(
+                    (
+                        action["nominal_low_risk_action_requests"],
+                        action["provisional_unapproved_action_requests"],
+                        action["conflicting_consequential_action_requests"],
+                        action["containment_recovery_action_requests"],
+                        action["read_only_action_requests"],
+                    )
+                )
+                total = action["total_action_requests"]
+                if not (
+                    category_total == total == queue["generated_events"]
+                    and coordination["action_requests_requiring_approval"]
+                    == action["provisional_unapproved_action_requests"]
+                    + action["conflicting_consequential_action_requests"]
+                    and coordination["replay_state_entries_at_horizon"] == total
+                    and coordination["modeled_replay_state_bytes_at_horizon"]
+                    == total * replay_bytes
+                    and coordination["pending_effect_candidate_action_requests"]
+                    == total - action["read_only_action_requests"]
+                    and coordination["reconciliation_completions_within_horizon"]
+                    + coordination["unresolved_effects_at_horizon"]
+                    == coordination["pending_effects_created"]
+                    and coordination["modeled_maximum_reconciliation_backlog_effects"]
+                    >= coordination["modeled_p95_reconciliation_backlog_effects"]
+                ):
+                    return False
+        except (KeyError, TypeError):
+            return False
+        return True
+
+    coordination_complete = coordination_relationships_complete()
     excluded = study.get("excluded_claims")
     boundaries_rendered = _canonical_bytes(
         {
             "claim_scope": study.get("claim_scope"),
             "logical_agent_definition": study.get("logical_agent_definition"),
             "excluded_claims": excluded,
+            "modeled_requirement_coverage": study.get(
+                "modeled_requirement_coverage"
+            ),
+            "unresolved_tbrs": study.get("unresolved_tbrs"),
+            "g6_disposition": study.get("g6_disposition"),
+            "relationship_notes": study.get("relationship_notes"),
         }
     ).decode("ascii").lower()
     try:
@@ -496,6 +642,18 @@ def _acceptance_gates(
         "complete_per_scale_measure_contract": scale_fields_complete,
         "throughput_and_queue_outputs_retained": measure_complete(
             "throughput_and_queue_delay"
+        ),
+        "provisional_unapproved_and_conflict_distribution_retained": (
+            measure_complete("provisional_unapproved_and_conflict_distribution")
+            and coordination_complete
+        ),
+        "approval_concurrency_and_replay_growth_retained": (
+            measure_complete("approval_concurrency_and_replay_state")
+            and coordination_complete
+        ),
+        "pending_effect_and_reconciliation_backlog_retained": (
+            measure_complete("pending_effects_and_reconciliation")
+            and coordination_complete
         ),
         "delegation_and_revocation_outputs_retained": (
             measure_complete("delegation_complexity")
@@ -517,12 +675,25 @@ def _acceptance_gates(
             and study.get("model_kind") == m6.MODEL_KIND
             and "modeled, not measured" in boundaries_rendered
             and "not a vm" in boundaries_rendered
+            and "never denotes execution authorization" in boundaries_rendered
         ),
         "deployment_and_effectiveness_claims_excluded": (
             isinstance(excluded, list)
             and "no deployment" in boundaries_rendered
             and "operational-effectiveness" in boundaries_rendered
             and "no independent validation or replication claim" in boundaries_rendered
+        ),
+        "perf_requirements_are_modeled_coverage_only": (
+            study.get("modeled_requirement_coverage")
+            == list(m6.MODELED_REQUIREMENT_COVERAGE)
+            and "no aot-perf-007 or aot-perf-008 verification-completion claim"
+            in boundaries_rendered
+        ),
+        "required_tbrs_open_and_g6_not_accepted": (
+            study.get("unresolved_tbrs") == list(m6.UNRESOLVED_TBRS)
+            and study.get("g6_disposition") == m6.G6_DISPOSITION
+            and "no tbr closure or g6 acceptance claim" in boundaries_rendered
+            and "does not accept g6" in boundaries_rendered
         ),
         "exact_clean_committed_source_bound": source_bound,
         "evidence_contains_no_sensitive_material": not sensitive_material_retained,
@@ -540,8 +711,9 @@ def _semantic_projection(
         "campaign_id": CAMPAIGN_ID,
         "study": dict(study),
         "measure_catalog": list(MEASURE_CATALOG),
+        "requirements_boundary": dict(REQUIREMENTS_BOUNDARY),
         "acceptance_gates": dict(gates),
-        "accepted": all(gates.values()),
+        "campaign_contract_passed": all(gates.values()),
         "evidence_limits": list(EVIDENCE_LIMITS),
     }
 
@@ -578,6 +750,7 @@ def _build_report(
         "runtime_versions": _runtime_versions(),
         "scale_contract": list(m6.SCALE_POINTS),
         "measure_catalog": list(MEASURE_CATALOG),
+        "requirements_boundary": dict(REQUIREMENTS_BOUNDARY),
         "assumption_contract": {
             "model_fields": list(REQUIRED_ASSUMPTION_FIELDS),
             "economic_case_fields": list(REQUIRED_ECONOMIC_CASE_FIELDS),
@@ -585,7 +758,7 @@ def _build_report(
         },
         "study": study,
         "acceptance_gates": gates,
-        "accepted": all(gates.values()),
+        "campaign_contract_passed": all(gates.values()),
         "semantic_projection_version": SEMANTIC_PROJECTION_VERSION,
         "semantic_outcome_sha256": _sha256_json(semantic_projection),
         "evidence_limits": list(EVIDENCE_LIMITS),
@@ -733,10 +906,11 @@ def _verify_report_payload(
         "runtime_versions",
         "scale_contract",
         "measure_catalog",
+        "requirements_boundary",
         "assumption_contract",
         "study",
         "acceptance_gates",
-        "accepted",
+        "campaign_contract_passed",
         "semantic_projection_version",
         "semantic_outcome_sha256",
         "evidence_limits",
@@ -780,6 +954,8 @@ def _verify_report_payload(
         raise CampaignError("evidence scale contract is not exact")
     if report.get("measure_catalog") != list(MEASURE_CATALOG):
         raise CampaignError("evidence measure catalog is not exact")
+    if report.get("requirements_boundary") != REQUIREMENTS_BOUNDARY:
+        raise CampaignError("evidence requirements boundary is not exact")
     if report.get("assumption_contract") != {
         "model_fields": list(REQUIRED_ASSUMPTION_FIELDS),
         "economic_case_fields": list(REQUIRED_ECONOMIC_CASE_FIELDS),
@@ -809,8 +985,8 @@ def _verify_report_payload(
     )
     if report.get("acceptance_gates") != recomputed_gates:
         raise CampaignError("retained acceptance gates do not match replayed outcomes")
-    if report.get("accepted") is not all(recomputed_gates.values()):
-        raise CampaignError("retained campaign acceptance is inconsistent")
+    if report.get("campaign_contract_passed") is not all(recomputed_gates.values()):
+        raise CampaignError("retained campaign-contract result is inconsistent")
     if report.get("semantic_projection_version") != SEMANTIC_PROJECTION_VERSION:
         raise CampaignError("semantic projection version is unsupported")
     semantic = _semantic_projection(study, recomputed_gates)
@@ -918,13 +1094,16 @@ def verify_evidence(path: Path) -> dict[str, Any]:
         raise CampaignError("source changed while M6 evidence was being verified")
     study = report["study"]
     return {
-        "accepted": report["accepted"],
+        "campaign_contract_passed": report["campaign_contract_passed"],
         "git_commit": source_binding["git_commit"],
         "source_fingerprint_sha256": source_binding["source_fingerprint_sha256"],
         "model_result_sha256": study["result_sha256"],
         "semantic_outcome_sha256": report["semantic_outcome_sha256"],
         "canonical_payload_sha256": report["integrity"]["canonical_payload_sha256"],
         "scale_points": report["scale_contract"],
+        "modeled_requirement_coverage": list(m6.MODELED_REQUIREMENT_COVERAGE),
+        "unresolved_tbrs": list(m6.UNRESOLVED_TBRS),
+        "g6_accepted": False,
         "private_or_sensitive_material_retained": False,
     }
 
@@ -936,6 +1115,7 @@ def build_plan() -> dict[str, Any]:
         "execution_mode": "plan_only",
         "scale_contract": list(m6.SCALE_POINTS),
         "measure_catalog": list(MEASURE_CATALOG),
+        "requirements_boundary": dict(REQUIREMENTS_BOUNDARY),
         "assumption_contract": {
             "model_fields": list(REQUIRED_ASSUMPTION_FIELDS),
             "economic_case_fields": list(REQUIRED_ECONOMIC_CASE_FIELDS),
@@ -989,7 +1169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         json.dumps(
             {
-                "accepted": retained["accepted"],
+                "campaign_contract_passed": retained["campaign_contract_passed"],
                 "evidence_path": str(evidence_path),
                 "git_commit": retained["source_binding"]["git_commit"],
                 "source_fingerprint_sha256": retained["source_binding"][
@@ -1000,6 +1180,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "canonical_payload_sha256": retained["integrity"][
                     "canonical_payload_sha256"
                 ],
+                "modeled_requirement_coverage": list(
+                    m6.MODELED_REQUIREMENT_COVERAGE
+                ),
+                "unresolved_tbrs": list(m6.UNRESOLVED_TBRS),
+                "g6_accepted": False,
                 "private_or_sensitive_material_retained": False,
             },
             indent=2,

@@ -15,8 +15,12 @@ import pytest
 from aegis_ot.m6_fleet import (
     BYTES_PER_GIB,
     DEFAULT_ECONOMIC_CASES,
+    G6_DISPOSITION,
     MODEL_KIND,
+    MODEL_SCHEMA_VERSION,
+    MODELED_REQUIREMENT_COVERAGE,
     SCALE_POINTS,
+    UNRESOLVED_TBRS,
     EconomicCase,
     FleetModelAssumptions,
     run_m6_fleet_study,
@@ -45,6 +49,7 @@ def test_study_covers_only_the_four_required_logical_agent_scales() -> None:
 
     assert report.scale_points == (10, 100, 1_000, 10_000) == SCALE_POINTS
     assert tuple(item.logical_agents for item in report.scales) == SCALE_POINTS
+    assert report.schema_version == MODEL_SCHEMA_VERSION == "aegis-ot-m6-fleet-study-v2"
     assert report.model_kind == MODEL_KIND
     assert report.logical_agent_definition.endswith(
         "not a VM, host, process, physical endpoint, or deployed system."
@@ -54,6 +59,7 @@ def test_study_covers_only_the_four_required_logical_agent_scales() -> None:
     for scale in report.scales:
         assert scale.queue.generated_events == scale.logical_agents * events_per_agent
         assert scale.queue.completed_events == scale.queue.generated_events
+        assert scale.action_workload.total_action_requests == scale.queue.generated_events
         assert scale.delegation_graph.nodes == scale.logical_agents
         assert scale.delegation_graph.edges == scale.logical_agents - 1
         assert scale.revocation.recipient_count == scale.logical_agents - 1
@@ -115,6 +121,16 @@ def test_seed_changes_traces_but_not_closed_workload_counts() -> None:
     assert [item.revocation.propagation_trace_sha256 for item in first.scales] != [
         item.revocation.propagation_trace_sha256 for item in second.scales
     ]
+    assert [item.action_workload.action_trace_sha256 for item in first.scales] != [
+        item.action_workload.action_trace_sha256 for item in second.scales
+    ]
+    assert [
+        item.approval_and_coordination.reconciliation_trace_sha256
+        for item in first.scales
+    ] != [
+        item.approval_and_coordination.reconciliation_trace_sha256
+        for item in second.scales
+    ]
 
 
 def test_units_and_decimal_encoding_are_explicit() -> None:
@@ -123,6 +139,10 @@ def test_units_and_decimal_encoding_are_explicit() -> None:
         "logical_agent": "logical_agent",
         "queue_throughput": "modeled_event/second",
         "event_count": "event",
+        "action_distribution": "basis-point (1 basis-point = 0.01 percent)",
+        "approval_concurrency": "modeled concurrent approval",
+        "replay_state": "entry and byte at model-horizon boundary",
+        "reconciliation_backlog": "modeled unresolved effect",
         "time": "microsecond",
         "service_utilization": "percent",
         "delegation_depth": "hop",
@@ -144,9 +164,11 @@ def test_units_and_decimal_encoding_are_explicit() -> None:
     }
     decoded = cast(dict[str, Any], json.loads(report.canonical_json()))
     first_queue = decoded["scales"][0]["queue"]
+    first_coordination = decoded["scales"][0]["approval_and_coordination"]
     first_cost = decoded["scales"][0]["economics"][0]
     assert isinstance(first_queue["modeled_throughput_events_per_second"], str)
     assert isinstance(first_queue["modeled_mean_queue_delay_microseconds"], str)
+    assert isinstance(first_coordination["modeled_mean_concurrent_approvals"], str)
     assert isinstance(first_cost["modeled_total_governance_cost_usd_per_month"], str)
 
 
@@ -186,6 +208,139 @@ def test_queue_graph_propagation_policy_and_evidence_relationships_are_auditable
         assert scale.evidence.evidence_bytes_per_model_horizon == (
             scale.queue.generated_events * assumptions.evidence_bytes_per_event
         )
+
+
+def test_action_and_conflict_distribution_is_fixed_and_exact_at_every_scale() -> None:
+    report = run_m6_fleet_study()
+    assumptions = report.assumptions
+
+    assert sum(
+        (
+            assumptions.nominal_low_risk_action_basis_points,
+            assumptions.provisional_unapproved_action_basis_points,
+            assumptions.conflicting_consequential_action_basis_points,
+            assumptions.containment_recovery_action_basis_points,
+            assumptions.read_only_action_basis_points,
+        )
+    ) == 10_000
+    assert [
+        item.action_workload.provisional_unapproved_action_requests
+        for item in report.scales
+    ] == [10, 100, 1_000, 10_000]
+    assert [
+        item.action_workload.conflicting_consequential_action_requests
+        for item in report.scales
+    ] == [5, 50, 500, 5_000]
+
+    for scale in report.scales:
+        workload = scale.action_workload
+        category_total = sum(
+            (
+                workload.nominal_low_risk_action_requests,
+                workload.provisional_unapproved_action_requests,
+                workload.conflicting_consequential_action_requests,
+                workload.containment_recovery_action_requests,
+                workload.read_only_action_requests,
+            )
+        )
+        assert category_total == workload.total_action_requests
+        assert workload.total_action_requests == scale.queue.generated_events
+        assert workload.distribution_status == (
+            "fixed_basis_point_shares_exact_largest_remainder_counts"
+        )
+        assert scale.approval_and_coordination.action_requests_requiring_approval == (
+            workload.provisional_unapproved_action_requests
+            + workload.conflicting_consequential_action_requests
+        )
+
+
+def test_largest_remainder_action_allocation_preserves_nondivisible_totals() -> None:
+    assumptions = replace(
+        FleetModelAssumptions(),
+        nominal_low_risk_action_basis_points=3_333,
+        provisional_unapproved_action_basis_points=2_222,
+        conflicting_consequential_action_basis_points=1_111,
+        containment_recovery_action_basis_points=2_222,
+        read_only_action_basis_points=1_112,
+    )
+    report = run_m6_fleet_study(assumptions=assumptions)
+
+    for scale in report.scales:
+        workload = scale.action_workload
+        assert sum(
+            (
+                workload.nominal_low_risk_action_requests,
+                workload.provisional_unapproved_action_requests,
+                workload.conflicting_consequential_action_requests,
+                workload.containment_recovery_action_requests,
+                workload.read_only_action_requests,
+            )
+        ) == workload.total_action_requests
+
+
+def test_approval_replay_pending_effect_and_reconciliation_outputs_scale() -> None:
+    report = run_m6_fleet_study()
+    coordination = [item.approval_and_coordination for item in report.scales]
+
+    assert [item.action_requests_requiring_approval for item in coordination] == [
+        15,
+        150,
+        1_500,
+        15_000,
+    ]
+    assert [item.modeled_mean_concurrent_approvals for item in coordination] == [
+        Decimal("0.500000"),
+        Decimal("5.000000"),
+        Decimal("50.000000"),
+        Decimal("500.000000"),
+    ]
+    assert [item.modeled_p95_concurrent_approvals for item in coordination] == sorted(
+        item.modeled_p95_concurrent_approvals for item in coordination
+    )
+    assert [item.modeled_peak_concurrent_approvals for item in coordination] == sorted(
+        item.modeled_peak_concurrent_approvals for item in coordination
+    )
+    assert [item.replay_state_entries_at_horizon for item in coordination] == [
+        50,
+        500,
+        5_000,
+        50_000,
+    ]
+    assert [item.modeled_replay_state_bytes_at_horizon for item in coordination] == [
+        entries * report.assumptions.replay_state_bytes_per_entry
+        for entries in (50, 500, 5_000, 50_000)
+    ]
+    assert [item.pending_effects_created for item in coordination] == [1, 11, 113, 1_125]
+    assert [item.unresolved_effects_at_horizon for item in coordination] == [0, 0, 0, 433]
+
+    for scale in report.scales:
+        result = scale.approval_and_coordination
+        assert result.pending_effect_candidate_action_requests == (
+            scale.action_workload.total_action_requests
+            - scale.action_workload.read_only_action_requests
+        )
+        assert result.reconciliation_completions_within_horizon + (
+            result.unresolved_effects_at_horizon
+        ) == result.pending_effects_created
+        assert result.modeled_maximum_reconciliation_backlog_effects >= (
+            result.modeled_p95_reconciliation_backlog_effects
+        )
+        assert result.approval_concurrency_sample_count == 600
+        assert result.reconciliation_backlog_sample_count == 600
+
+
+def test_zero_pending_effect_share_has_a_closed_zero_backlog_result() -> None:
+    report = run_m6_fleet_study(
+        assumptions=replace(FleetModelAssumptions(), pending_effect_basis_points=0)
+    )
+
+    for scale in report.scales:
+        result = scale.approval_and_coordination
+        assert result.pending_effects_created == 0
+        assert result.reconciliation_completions_within_horizon == 0
+        assert result.unresolved_effects_at_horizon == 0
+        assert result.modeled_p95_reconciliation_backlog_effects == 0
+        assert result.modeled_maximum_reconciliation_backlog_effects == 0
 
 
 def test_operator_span_and_incident_effort_are_reported_with_step_boundaries() -> None:
@@ -316,8 +471,30 @@ def test_report_preserves_the_non_empirical_claim_boundary() -> None:
     assert "no empirical performance or capacity measurement" in rendered
     assert "no deployment" in rendered
     assert "no independent validation or replication claim" in rendered
+    assert report.modeled_requirement_coverage == MODELED_REQUIREMENT_COVERAGE == (
+        "AOT-PERF-007",
+        "AOT-PERF-008",
+    )
+    assert report.unresolved_tbrs == UNRESOLVED_TBRS == (
+        "TBR-011",
+        "TBR-016",
+        "TBR-017",
+        "TBR-021",
+        "TBR-023",
+    )
+    assert report.g6_disposition == G6_DISPOSITION == (
+        "not_accepted_modeled_coverage_only"
+    )
+    assert "no aot-perf-007 or aot-perf-008 verification-completion claim" in rendered
+    assert "no tbr closure or g6 acceptance claim" in rendered
+    assert "does not accept g6" in rendered
     assert "not a vm" in rendered
+    assert "provisional or unapproved" in rendered
+    assert "never denotes execution authorization" in rendered
     assert "modeled_throughput_events_per_second" in rendered
+    assert "modeled_p95_concurrent_approvals" in rendered
+    assert "modeled_replay_state_bytes_at_horizon" in rendered
+    assert "modeled_p95_reconciliation_backlog_effects" in rendered
     assert "measured_throughput" not in rendered
     assert "benchmark_result" not in rendered
 
@@ -340,6 +517,46 @@ def test_report_preserves_the_non_empirical_claim_boundary() -> None:
             "arrival jitter",
         ),
         ({"maximum_simulated_events": 49_999}, ValueError, "10000-agent scale"),
+        (
+            {"nominal_low_risk_action_basis_points": True},
+            TypeError,
+            "nominal low-risk action share",
+        ),
+        (
+            {"provisional_unapproved_action_basis_points": 1_999},
+            ValueError,
+            "action distribution shares",
+        ),
+        (
+            {"pending_effect_basis_points": 10_001},
+            ValueError,
+            "pending-effect share",
+        ),
+        (
+            {"replay_state_bytes_per_entry": 0},
+            ValueError,
+            "replay state bytes per entry",
+        ),
+        (
+            {"reconciliation_worker_count": 0},
+            ValueError,
+            "reconciliation worker count",
+        ),
+        (
+            {"reconciliation_service_time_min_microseconds": 300_000},
+            ValueError,
+            "minimum reconciliation service time",
+        ),
+        (
+            {"concurrency_sample_microseconds": 60_000_001},
+            ValueError,
+            "concurrency sample interval",
+        ),
+        (
+            {"horizon_seconds": 86_400, "concurrency_sample_microseconds": 1},
+            ValueError,
+            "coordination sample count",
+        ),
         (
             {"operator_oversight_hours_per_operator_month": Decimal("NaN")},
             ValueError,

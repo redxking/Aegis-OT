@@ -79,17 +79,31 @@ def test_plan_is_read_only_fixed_and_never_claims_execution(
     plan = runner.build_plan()
 
     assert tuple(tmp_path.iterdir()) == before
-    assert plan["schema_version"] == "aegis-ot-m6-fleet-plan-v1"
+    assert plan["schema_version"] == "aegis-ot-m6-fleet-plan-v2"
     assert plan["execution_mode"] == "plan_only"
     assert plan["execution_claimed"] is False
     assert plan["scale_contract"] == [10, 100, 1_000, 10_000]
     assert plan["acceptance_gate_names"] == list(runner.ACCEPTANCE_GATE_NAMES)
-    assert len(plan["measure_catalog"]) == 9
+    assert len(plan["measure_catalog"]) == 12
     assert plan["assumption_contract"]["sensitivity_cases"] == [
         "low",
         "base",
         "high",
     ]
+    assert plan["requirements_boundary"] == {
+        "modeled_coverage": ["AOT-PERF-007", "AOT-PERF-008"],
+        "verification_completion_claimed": False,
+        "unresolved_tbrs": [
+            "TBR-011",
+            "TBR-016",
+            "TBR-017",
+            "TBR-021",
+            "TBR-023",
+        ],
+        "gate": "G6",
+        "gate_accepted": False,
+        "gate_disposition": "not_accepted_modeled_coverage_only",
+    }
 
 
 def test_campaign_accepts_every_required_measure_and_assumption_gate(
@@ -98,9 +112,12 @@ def test_campaign_accepts_every_required_measure_and_assumption_gate(
     binding = _source_binding(runner)
     report = runner._build_report(binding)
 
-    assert report["accepted"] is True
+    assert report["campaign_contract_passed"] is True
+    assert "accepted" not in report
     assert tuple(report["acceptance_gates"]) == runner.ACCEPTANCE_GATE_NAMES
     assert all(report["acceptance_gates"].values())
+    assert report["requirements_boundary"]["verification_completion_claimed"] is False
+    assert report["requirements_boundary"]["gate_accepted"] is False
     assert report["scale_contract"] == [10, 100, 1_000, 10_000]
     assert [item["logical_agents"] for item in report["study"]["scales"]] == [
         10,
@@ -133,6 +150,9 @@ def test_retained_study_contains_complete_measure_and_sensitivity_contract(
     assert [item["measure_id"] for item in report["measure_catalog"]] == [
         "logical_fleet_workload",
         "throughput_and_queue_delay",
+        "provisional_unapproved_and_conflict_distribution",
+        "approval_concurrency_and_replay_state",
+        "pending_effects_and_reconciliation",
         "delegation_complexity",
         "revocation_propagation",
         "policy_distribution",
@@ -169,7 +189,7 @@ def test_semantic_hash_is_deterministic_across_run_metadata(runner: Any) -> None
     assert first["semantic_outcome_sha256"] == second["semantic_outcome_sha256"]
     assert first["integrity"] != second["integrity"]
     assert first["semantic_outcome_sha256"] == (
-        "64318abc29d2bb660b15e6f4f85b5bdef4242f7b482a7e106cf78510ce6b71ca"
+        "a2d4a51032ef5019357032fc20d0b9e6779b14afc578cccb324830638a70752b"
     )
 
 
@@ -179,6 +199,7 @@ def test_report_preserves_modeled_measurement_and_effectiveness_boundaries(
     report = runner._build_report(_source_binding(runner))
     rendered = json.dumps(report, sort_keys=True).lower()
 
+    assert report["schema_version"] == "aegis-ot-m6-fleet-campaign-v2"
     assert report["study"]["evidence_classification"] == "synthetic_model_output_only"
     assert report["study"]["claim_scope"].endswith("modeled, not measured.")
     assert "no host benchmark" in rendered
@@ -187,6 +208,22 @@ def test_report_preserves_modeled_measurement_and_effectiveness_boundaries(
     assert "does not establish deployment" in rendered
     assert "operational effectiveness" in rendered
     assert "independent validation" in rendered
+    assert "provisional or unapproved" in rendered
+    assert "neither category denotes execution authorization" in rendered
+    assert report["requirements_boundary"] == runner.REQUIREMENTS_BOUNDARY
+    assert report["requirements_boundary"]["modeled_coverage"] == [
+        "AOT-PERF-007",
+        "AOT-PERF-008",
+    ]
+    assert report["requirements_boundary"]["unresolved_tbrs"] == [
+        "TBR-011",
+        "TBR-016",
+        "TBR-017",
+        "TBR-021",
+        "TBR-023",
+    ]
+    assert report["requirements_boundary"]["gate_accepted"] is False
+    assert "g6 is not accepted" in rendered
     assert report["material_handling"][
         "private_or_sensitive_material_retained"
     ] is False
@@ -208,7 +245,7 @@ def test_verifier_rejects_fully_rehashed_model_output_tampering(runner: Any) -> 
         sensitive_material_retained=False,
     )
     tampered["acceptance_gates"] = gates
-    tampered["accepted"] = all(gates.values())
+    tampered["campaign_contract_passed"] = all(gates.values())
     tampered["semantic_outcome_sha256"] = runner._sha256_json(
         runner._semantic_projection(tampered["study"], gates)
     )
@@ -236,6 +273,37 @@ def test_verifier_rejects_rehashed_sensitivity_input_tampering(runner: Any) -> N
     _rehash_report(runner, tampered)
 
     with pytest.raises(runner.CampaignError, match="does not replay exactly"):
+        runner._verify_report_payload(tampered, expected_source_binding=binding)
+
+
+def test_coordination_gates_reject_internally_inconsistent_modeled_counts(
+    runner: Any,
+) -> None:
+    report = runner._build_report(_source_binding(runner))
+    study = copy.deepcopy(report["study"])
+    scale = study["scales"][0]
+    scale["action_workload"]["provisional_unapproved_action_requests"] += 1
+
+    gates = runner._acceptance_gates(
+        study,
+        source_bound=True,
+        sensitive_material_retained=False,
+    )
+
+    assert gates["provisional_unapproved_and_conflict_distribution_retained"] is False
+    assert gates["approval_concurrency_and_replay_growth_retained"] is False
+    assert gates["pending_effect_and_reconciliation_backlog_retained"] is False
+
+
+def test_verifier_rejects_rehashed_requirements_boundary_tampering(
+    runner: Any,
+) -> None:
+    binding = _source_binding(runner)
+    tampered = runner._build_report(binding)
+    tampered["requirements_boundary"]["gate_accepted"] = True
+    _rehash_report(runner, tampered)
+
+    with pytest.raises(runner.CampaignError, match="requirements boundary"):
         runner._verify_report_payload(tampered, expected_source_binding=binding)
 
 
@@ -305,8 +373,21 @@ def test_retained_run_uses_unique_private_output_and_same_script_verification(
     assert stat.S_IMODE(first.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(first.stat().st_mode) == 0o600
     verification = runner.verify_evidence(first)
-    assert verification["accepted"] is True
+    assert verification["campaign_contract_passed"] is True
+    assert "accepted" not in verification
     assert verification["scale_points"] == [10, 100, 1_000, 10_000]
+    assert verification["modeled_requirement_coverage"] == [
+        "AOT-PERF-007",
+        "AOT-PERF-008",
+    ]
+    assert verification["unresolved_tbrs"] == [
+        "TBR-011",
+        "TBR-016",
+        "TBR-017",
+        "TBR-021",
+        "TBR-023",
+    ]
+    assert verification["g6_accepted"] is False
     assert verification["private_or_sensitive_material_retained"] is False
     assert os.path.commonpath((str(first.resolve()), str(runner.ROOT.resolve()))) != str(
         runner.ROOT.resolve()
