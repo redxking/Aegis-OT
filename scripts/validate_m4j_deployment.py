@@ -416,10 +416,17 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
     simulation = _role_addresses(topology, "simulation")
     workloads = {
         "management": ["orchestration", "evidence-retention"],
-        "trust": ["spire-server", "spire-bootstrap"],
+        "trust": [
+            "spire-server",
+            "spire-bootstrap",
+            "spire-agent",
+            "opa",
+            "observer",
+            "candidate",
+        ],
         "agents": ["agent-probe", "spire-agent"],
-        "gateway": ["opa", "segmented-gateway", "spire-agent"],
-        "ot": ["observer", "candidate", "ot-adapter", "spire-agent"],
+        "gateway": ["segmented-gateway", "spire-agent"],
+        "ot": ["ot-adapter", "spire-agent"],
         "simulation": ["plant", "spire-agent"],
     }
     roles = {
@@ -479,6 +486,15 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "unix",
             None,
         ),
+        "trust-spire-workload-api": _listener(
+            "trust",
+            "spire-agent",
+            "identity",
+            "local",
+            "/run/spire/agent/public/api.sock",
+            "unix",
+            None,
+        ),
         "agents-spire-workload-api": _listener(
             "agents",
             "spire-agent",
@@ -524,12 +540,32 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "tcp",
             8081,
         ),
-        "opa-api": _listener("gateway", "opa", "application", "local", "127.0.0.1", "tcp", 8181),
+        "opa-api": _listener(
+            "trust",
+            "opa",
+            "application",
+            "control_dmz",
+            trust["control_dmz"],
+            "tcp",
+            8181,
+        ),
         "observer-api": _listener(
-            "ot", "observer", "application", "control_dmz", ot["control_dmz"], "tcp", 8082
+            "trust",
+            "observer",
+            "application",
+            "control_dmz",
+            trust["control_dmz"],
+            "tcp",
+            8082,
         ),
         "candidate-api": _listener(
-            "ot", "candidate", "application", "control_dmz", ot["control_dmz"], "tcp", 8085
+            "trust",
+            "candidate",
+            "application",
+            "control_dmz",
+            trust["control_dmz"],
+            "tcp",
+            8085,
         ),
         "ot-adapter-api": _listener(
             "ot", "ot-adapter", "application", "control_dmz", ot["control_dmz"], "tcp", 8083
@@ -600,6 +636,15 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "local_unix_permissions",
         ),
         _edge(
+            "trust-spire-agent-to-server",
+            "trust",
+            "spire-agent",
+            "spire-server-enrollment",
+            "trust_enrollment",
+            "spire_node_api",
+            "join_token_bootstrap_then_mtls",
+        ),
+        _edge(
             "agents-spire-agent-to-server",
             "agents",
             "spire-agent",
@@ -654,19 +699,28 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "unix_peer_credentials",
         ),
         _edge(
+            "opa-to-local-spire-agent",
+            "trust",
+            "opa",
+            "trust-spire-workload-api",
+            "local",
+            "spire_workload_api",
+            "unix_peer_credentials",
+        ),
+        _edge(
             "observer-to-local-spire-agent",
-            "ot",
+            "trust",
             "observer",
-            "ot-spire-workload-api",
+            "trust-spire-workload-api",
             "local",
             "spire_workload_api",
             "unix_peer_credentials",
         ),
         _edge(
             "candidate-to-local-spire-agent",
-            "ot",
+            "trust",
             "candidate",
-            "ot-spire-workload-api",
+            "trust-spire-workload-api",
             "local",
             "spire_workload_api",
             "unix_peer_credentials",
@@ -703,9 +757,9 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
             "gateway",
             "segmented-gateway",
             "opa-api",
-            "local",
-            "http",
-            "loopback_only",
+            "control_dmz",
+            "https",
+            "spiffe_mtls",
         ),
         _edge(
             "segmented-gateway-to-observer",
@@ -745,7 +799,7 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
         ),
         _edge(
             "observer-to-plant",
-            "ot",
+            "trust",
             "observer",
             "plant-api",
             "simulation_lane",
@@ -754,7 +808,7 @@ def _expected_deployment(topology: dict[str, Any]) -> dict[str, Any]:
         ),
         _edge(
             "candidate-to-plant",
-            "ot",
+            "trust",
             "candidate",
             "plant-api",
             "simulation_lane",

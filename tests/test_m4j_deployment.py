@@ -104,7 +104,14 @@ def test_role_placement_is_closed_and_host_specific() -> None:
         },
         "trust": {
             "hostname": "aegis-trust",
-            "workloads": ["spire-server", "spire-bootstrap"],
+            "workloads": [
+                "spire-server",
+                "spire-bootstrap",
+                "spire-agent",
+                "opa",
+                "observer",
+                "candidate",
+            ],
             "infrastructure_services": ["sshd"],
         },
         "agents": {
@@ -114,12 +121,12 @@ def test_role_placement_is_closed_and_host_specific() -> None:
         },
         "gateway": {
             "hostname": "aegis-gateway",
-            "workloads": ["opa", "segmented-gateway", "spire-agent"],
+            "workloads": ["segmented-gateway", "spire-agent"],
             "infrastructure_services": ["sshd"],
         },
         "ot": {
             "hostname": "aegis-ot",
-            "workloads": ["observer", "candidate", "ot-adapter", "spire-agent"],
+            "workloads": ["ot-adapter", "spire-agent"],
             "infrastructure_services": ["sshd"],
         },
         "simulation": {
@@ -166,9 +173,9 @@ def test_listeners_bind_only_to_their_exact_topology_or_local_endpoints() -> Non
         if value["scope"] == "application"
     } == {
         "segmented-gateway-api": ("192.168.58.13", 8081),
-        "opa-api": ("127.0.0.1", 8181),
-        "observer-api": ("192.168.59.14", 8082),
-        "candidate-api": ("192.168.59.14", 8085),
+        "opa-api": ("192.168.59.11", 8181),
+        "observer-api": ("192.168.59.11", 8082),
+        "candidate-api": ("192.168.59.11", 8085),
         "ot-adapter-api": ("192.168.59.14", 8083),
         "plant-api": ("192.168.60.15", 8084),
     }
@@ -196,6 +203,7 @@ def test_peer_edges_deny_agent_bypass_and_bind_spire_enrollment() -> None:
     ]
     enrollment_edges = [edge for edge in edges if edge["protocol"] == "spire_node_api"]
     assert {edge["source_role"] for edge in enrollment_edges} == {
+        "trust",
         "agents",
         "gateway",
         "ot",
@@ -205,6 +213,25 @@ def test_peer_edges_deny_agent_bypass_and_bind_spire_enrollment() -> None:
     assert all(
         edge["destination_listener"] == "spire-server-enrollment" for edge in enrollment_edges
     )
+    assert deployment["roles"]["trust"]["workloads"][-3:] == [
+        "opa",
+        "observer",
+        "candidate",
+    ]
+    assert deployment["roles"]["gateway"]["workloads"] == [
+        "segmented-gateway",
+        "spire-agent",
+    ]
+    assert deployment["roles"]["ot"]["workloads"] == ["ot-adapter", "spire-agent"]
+    assert next(edge for edge in edges if edge["id"] == "segmented-gateway-to-opa") == {
+        "id": "segmented-gateway-to-opa",
+        "source_role": "gateway",
+        "source_service": "segmented-gateway",
+        "destination_listener": "opa-api",
+        "network": "control_dmz",
+        "protocol": "https",
+        "authentication": "spiffe_mtls",
+    }
     assert not [
         edge
         for edge in edges
@@ -279,7 +306,8 @@ def test_validator_fails_closed_on_deployment_drift(tmp_path: Path, case: str) -
     elif case == "missing_policy_field":
         deployment["policy"].pop("default_peer_policy")
     elif case == "wrong_role_placement":
-        deployment["roles"]["gateway"]["workloads"].remove("opa")
+        deployment["roles"]["trust"]["workloads"].remove("opa")
+        deployment["roles"]["gateway"]["workloads"].insert(0, "opa")
     elif case == "management_application_listener":
         deployment["listeners"]["management-api"] = {
             "role": "management",

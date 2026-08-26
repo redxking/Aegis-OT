@@ -26,7 +26,7 @@ roles:
     infrastructure_services: [sshd]
   trust:
     hostname: aegis-trust
-    workloads: [spire-server, spire-bootstrap]
+    workloads: [spire-server, spire-bootstrap, spire-agent, opa, observer, candidate]
     infrastructure_services: [sshd]
   agents:
     hostname: aegis-agents
@@ -34,11 +34,11 @@ roles:
     infrastructure_services: [sshd]
   gateway:
     hostname: aegis-gateway
-    workloads: [opa, segmented-gateway, spire-agent]
+    workloads: [segmented-gateway, spire-agent]
     infrastructure_services: [sshd]
   ot:
     hostname: aegis-ot
-    workloads: [observer, candidate, ot-adapter, spire-agent]
+    workloads: [ot-adapter, spire-agent]
     infrastructure_services: [sshd]
   simulation:
     hostname: aegis-simulation
@@ -110,6 +110,14 @@ listeners:
     bind_address: /run/spire/server/private/api.sock
     transport: unix
     port: null
+  trust-spire-workload-api:
+    role: trust
+    service: spire-agent
+    scope: identity
+    network: local
+    bind_address: /run/spire/agent/public/api.sock
+    transport: unix
+    port: null
   agents-spire-workload-api:
     role: agents
     service: spire-agent
@@ -151,27 +159,27 @@ listeners:
     transport: tcp
     port: 8081
   opa-api:
-    role: gateway
+    role: trust
     service: opa
     scope: application
-    network: local
-    bind_address: 127.0.0.1
+    network: control_dmz
+    bind_address: 192.168.59.11
     transport: tcp
     port: 8181
   observer-api:
-    role: ot
+    role: trust
     service: observer
     scope: application
     network: control_dmz
-    bind_address: 192.168.59.14
+    bind_address: 192.168.59.11
     transport: tcp
     port: 8082
   candidate-api:
-    role: ot
+    role: trust
     service: candidate
     scope: application
     network: control_dmz
-    bind_address: 192.168.59.14
+    bind_address: 192.168.59.11
     transport: tcp
     port: 8085
   ot-adapter-api:
@@ -250,6 +258,13 @@ peer_edges:
     network: local
     protocol: spire_admin_api
     authentication: local_unix_permissions
+  - id: trust-spire-agent-to-server
+    source_role: trust
+    source_service: spire-agent
+    destination_listener: spire-server-enrollment
+    network: trust_enrollment
+    protocol: spire_node_api
+    authentication: join_token_bootstrap_then_mtls
   - id: agents-spire-agent-to-server
     source_role: agents
     source_service: spire-agent
@@ -292,17 +307,24 @@ peer_edges:
     network: local
     protocol: spire_workload_api
     authentication: unix_peer_credentials
+  - id: opa-to-local-spire-agent
+    source_role: trust
+    source_service: opa
+    destination_listener: trust-spire-workload-api
+    network: local
+    protocol: spire_workload_api
+    authentication: unix_peer_credentials
   - id: observer-to-local-spire-agent
-    source_role: ot
+    source_role: trust
     source_service: observer
-    destination_listener: ot-spire-workload-api
+    destination_listener: trust-spire-workload-api
     network: local
     protocol: spire_workload_api
     authentication: unix_peer_credentials
   - id: candidate-to-local-spire-agent
-    source_role: ot
+    source_role: trust
     source_service: candidate
-    destination_listener: ot-spire-workload-api
+    destination_listener: trust-spire-workload-api
     network: local
     protocol: spire_workload_api
     authentication: unix_peer_credentials
@@ -331,9 +353,9 @@ peer_edges:
     source_role: gateway
     source_service: segmented-gateway
     destination_listener: opa-api
-    network: local
-    protocol: http
-    authentication: loopback_only
+    network: control_dmz
+    protocol: https
+    authentication: spiffe_mtls
   - id: segmented-gateway-to-observer
     source_role: gateway
     source_service: segmented-gateway
@@ -363,14 +385,14 @@ peer_edges:
     protocol: https
     authentication: spiffe_mtls
   - id: observer-to-plant
-    source_role: ot
+    source_role: trust
     source_service: observer
     destination_listener: plant-api
     network: simulation_lane
     protocol: https
     authentication: spiffe_mtls
   - id: candidate-to-plant
-    source_role: ot
+    source_role: trust
     source_service: candidate
     destination_listener: plant-api
     network: simulation_lane
