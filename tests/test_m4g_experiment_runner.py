@@ -237,6 +237,12 @@ def test_rollback_helpers_use_one_shot_containers_when_runtimes_are_exited(
         identity_prefix="GATEWAY",
         check=False,
     )
+    runner._local_trust_verifier_probe(
+        ("docker", "compose"),
+        service="agent-probe",
+        identity_prefix="AGENT",
+        check=False,
+    )
 
     for invocation in calls:
         assert "run" in invocation
@@ -244,6 +250,9 @@ def test_rollback_helpers_use_one_shot_containers_when_runtimes_are_exited(
         assert "--no-deps" in invocation
         assert "--entrypoint" in invocation
         assert "exec" not in invocation
+    agent_invocation = calls[-1]
+    assert agent_invocation[2:4] == ("--profile", "experiment")
+    assert "AEGIS_M4G_TRUST_TEST_PREFIX=AGENT" in agent_invocation
 
 
 def test_rollback_recreation_requires_unavailable_health_not_ready_health(

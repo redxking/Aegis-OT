@@ -1191,7 +1191,10 @@ from aegis_ot.workload_runtime import (
     verifier_from_environment,
 )
 prefix = os.environ['AEGIS_M4G_TRUST_TEST_PREFIX']
-if prefix == 'GATEWAY':
+if prefix == 'AGENT':
+    role = WorkloadRole.AGENT
+    audience = GATEWAY_CAPABILITY_AUDIENCE
+elif prefix == 'GATEWAY':
     role = WorkloadRole.GATEWAY
     audience = OT_CAPABILITY_AUDIENCE
 elif prefix == 'OT':
@@ -1240,8 +1243,10 @@ def _local_trust_verifier_probe(
     identity_prefix: str,
     check: bool,
 ) -> subprocess.CompletedProcess[str]:
+    profile = ("--profile", "experiment") if service == "agent-probe" else ()
     return m4d._run(
         *prefix,
+        *profile,
         "run",
         "--rm",
         "--no-deps",
@@ -1429,7 +1434,12 @@ def _restart_durable_bundle_rollback_case(
             material=sequence_one_bundle,
         )
         rollback_restart = _recreate_gateway_ot(prefix, await_ready=False)
-        agent_probe = _run_agent_probe(prefix, check=False)
+        agent_probe = _local_trust_verifier_probe(
+            prefix,
+            service="agent-probe",
+            identity_prefix="AGENT",
+            check=False,
+        )
         gateway_probe = _local_trust_verifier_probe(
             prefix,
             service="segmented-gateway",
@@ -1487,22 +1497,40 @@ def _restart_durable_bundle_rollback_case(
         "gateway": _rollback_rejected(gateway_probe),
         "ot-adapter": _rollback_rejected(ot_probe),
     }
-    accepted = (
-        _trust_sequence_snapshot_at(sequence_two_before_restart, sequence=2)
-        and _gateway_ot_recreated(intact_restart)
-        and _probe_accepted(intact_restart_probe)
-        and _trust_sequence_snapshot_at(sequence_two_after_restart, sequence=2)
-        and mutation.get("present") is True
-        and _gateway_ot_recreated(rollback_restart)
-        and _gateway_ot_failed_closed(rollback_restart)
-        and all(verifier_rejections.values())
-        and no_effect
-        and _trust_sequence_snapshot_at(sequence_after_rejection, sequence=2)
-        and bundle_restored
-        and _gateway_ot_recreated(recovery_restart)
-        and _probe_accepted(recovery_probe)
-        and _trust_sequence_snapshot_at(sequence_after_recovery, sequence=2)
-    )
+    acceptance = {
+        "sequence_two_floors_present_before_restart": (
+            _trust_sequence_snapshot_at(sequence_two_before_restart, sequence=2)
+        ),
+        "intact_gateway_ot_containers_recreated": _gateway_ot_recreated(
+            intact_restart
+        ),
+        "intact_restart_probe_accepted": _probe_accepted(intact_restart_probe),
+        "sequence_two_floors_present_after_restart": (
+            _trust_sequence_snapshot_at(sequence_two_after_restart, sequence=2)
+        ),
+        "signed_sequence_one_installed": mutation.get("present") is True,
+        "rollback_gateway_ot_containers_recreated": _gateway_ot_recreated(
+            rollback_restart
+        ),
+        "rollback_gateway_ot_runtimes_unavailable": _gateway_ot_failed_closed(
+            rollback_restart
+        ),
+        "all_role_verifiers_rejected_sequence_rollback": all(
+            verifier_rejections.values()
+        ),
+        "plant_effect_absent": no_effect,
+        "sequence_two_floors_preserved_after_rejection": (
+            _trust_sequence_snapshot_at(sequence_after_rejection, sequence=2)
+        ),
+        "sequence_two_bundle_restored": bundle_restored,
+        "recovery_gateway_ot_containers_recreated": _gateway_ot_recreated(
+            recovery_restart
+        ),
+        "recovery_probe_accepted": _probe_accepted(recovery_probe),
+        "sequence_two_floors_present_after_recovery": (
+            _trust_sequence_snapshot_at(sequence_after_recovery, sequence=2)
+        ),
+    }
     return {
         "condition": "signed_sequence_one_after_intact_sequence_two_restart",
         "sequence_two_before_restart": sequence_two_before_restart,
@@ -1526,7 +1554,8 @@ def _restart_durable_bundle_rollback_case(
         "recovery_restart": recovery_restart,
         "recovery_probe": recovery_probe,
         "sequence_after_recovery": sequence_after_recovery,
-        "accepted": accepted,
+        "acceptance": acceptance,
+        "accepted": all(acceptance.values()),
     }
 
 
@@ -2103,9 +2132,18 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
             _assert_checkout(commit)
             if evidence["accepted"] is not True:
                 failed = _failed_acceptance_names(acceptance)
+                restart_failed = _failed_acceptance_names(
+                    restart_durable_rollback.get("acceptance", {})
+                )
+                restart_detail = (
+                    "; restart subcriteria failed: " + ", ".join(restart_failed)
+                    if restart_failed
+                    else ""
+                )
                 raise m4d.ExperimentError(
                     "M4g workload-identity acceptance criteria failed: "
                     + ", ".join(failed)
+                    + restart_detail
                 )
     finally:
         if project_created:
