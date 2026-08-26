@@ -153,5 +153,5 @@
   <polyline points="700,915 300,915" class="return-flow"/>
   <text x="500" y="894" class="line-label" text-anchor="middle">Bound post-observation + terminal status</text>
   <rect x="235" y="970" width="1285" height="82" rx="10" class="active"/>
-  <text x="878" y="998" class="box-text" text-anchor="middle"><tspan x="878" dy="0">Policy denial or unsafe candidate → no dispatch • missing consequential evidence → unknown_effect • automatic_retry_count = 0</tspan><tspan x="878" dy="22">M4i prepare / commit / query remains active development and is not a current branch of this transaction</tspan></text>
+  <text x="878" y="998" class="box-text" text-anchor="middle"><tspan x="878" dy="0">Policy denial or unsafe candidate → no dispatch • missing consequential evidence → unknown_effect • automatic_retry_count = 0</tspan><tspan x="878" dy="22">M4i prepare / commit / query is an optional overlay and is not a default branch of this transaction</tspan></text>
 </svg>

@@ -242,7 +242,7 @@ def system_overview() -> Diagram:
     diagram = Diagram(
         "Aegis-OT segmented capability architecture",
         "Current single-host research configuration • simulated OT only",
-        "The bounded agent reaches only the segmented gateway. The gateway checks OPA and uses separate observer, candidate, and OT-adapter services. Only the OT adapter can invoke plant apply. Optional identity and transport controls cover consequence-path workloads. M4i coordination is active development. The public demo is a separate read-only service using build-time packaged evidence.",
+        "The bounded agent reaches only the segmented gateway. The gateway checks OPA and uses separate observer, candidate, and OT-adapter services. Only the OT adapter can invoke plant apply. Optional identity and transport controls cover consequence-path workloads. M4i coordination is an optional bounded overlay with retained single-host evidence. The public demo is a separate read-only service using build-time packaged evidence.",
         height=1000,
     )
     diagram.lane(45, 110, 1510, 590, "Consequence path")
@@ -344,14 +344,14 @@ def system_overview() -> Diagram:
         diagram.line(Point(1015, y), Point(1085, y), css="connector")
     diagram.line(Point(1085, 268), Point(1085, 498), css="connector")
     diagram.arrow((Point(1085, 383), Point(1170, 383)), kind="return-flow")
-    diagram.rect(350, 585, 1090, 74, css="active", radius=12)
-    diagram.text(375, 615, "M4i EFFECT COORDINATION • ACTIVE DEVELOPMENT", css="section-title")
+    diagram.rect(350, 585, 1090, 74, css="evidence", radius=12)
+    diagram.text(375, 615, "M4i EFFECT COORDINATION • BOUNDED OPTIONAL OVERLAY", css="section-title")
     diagram.text(
         375,
         641,
         "Gateway journal  ↔  signed prepare / commit / query  ↔  effect-coordinator journal",
     )
-    diagram.text(1415, 641, "No retained campaign • no exactly-once claim", anchor="end")
+    diagram.text(1415, 641, "Retained single-host campaign • no exactly-once claim", anchor="end")
     diagram.lane(45, 735, 1510, 185, "Separate read-only evidence path")
     diagram.box(185, 800, 225, 78, "Browser / reviewer", title_y=45, kind="evidence")
     diagram.box(
@@ -782,7 +782,7 @@ def assurance_overlay_stack() -> Diagram:
     diagram = Diagram(
         "Assurance overlay stack",
         "Compose overlays are ordered experiments, not features enabled by the default command",
-        "Each overlay extends the layers below it. The final coordination overlay is active development and does not currently form a working end-to-end control path.",
+        "Each overlay extends the layers below it. The final coordination overlay is optional, has retained single-host evidence, and is not the default control path.",
     )
     x = 220
     width = 1160
@@ -833,8 +833,8 @@ def assurance_overlay_stack() -> Diagram:
             "COORDINATION",
             "docker-compose.coordination.yml",
             "Two journals • prepare / commit / query protocol",
-            "active",
-            "ACTIVE DEVELOPMENT",
+            "retained",
+            "RETAINED SINGLE-HOST EVIDENCE",
         ),
     )
     for index, (label, filename, purpose, status, badge_label) in enumerate(layers):
@@ -854,11 +854,11 @@ def assurance_overlay_stack() -> Diagram:
             diagram.arrow((Point(800, y + 66), Point(800, y + 91)), kind="optional-flow")
     diagram.box(40, 130, 145, 66, "Default", ("base only",), kind="terminal-good", title_y=25)
     diagram.arrow((Point(185, 163), Point(220, 163)), kind="return-flow")
-    diagram.rect(220, 785, 1160, 58, css="active", radius=12)
+    diagram.rect(220, 785, 1160, 58, css="evidence", radius=12)
     diagram.text(
         800,
         820,
-        "M4i is component-tested, but the current gateway runtime does not instantiate the coordinated port; required mode rejects the legacy execute path.",
+        "M4i is exercised through the optional coordination overlay; the default gateway remains non-coordinated and required mode rejects the legacy execute path.",
         css="body-text",
         anchor="middle",
     )
@@ -926,7 +926,7 @@ def action_transaction_sequence() -> Diagram:
         998,
         (
             "Policy denial or unsafe candidate → no dispatch • missing consequential evidence → unknown_effect • automatic_retry_count = 0",
-            "M4i prepare / commit / query remains active development and is not a current branch of this transaction",
+            "M4i prepare / commit / query is an optional overlay and is not a default branch of this transaction",
         ),
         css="box-text",
         anchor="middle",
@@ -1015,7 +1015,7 @@ def outcome_state_model() -> Diagram:
         580,
         1510,
         355,
-        "M4i effect-coordinator state machine • active development",
+        "M4i effect-coordinator state machine • bounded optional overlay",
         css="lane-amber",
     )
     states = (
@@ -1076,11 +1076,11 @@ def outcome_state_model() -> Diagram:
         css="small-text",
         anchor="middle",
     )
-    diagram.status(80, 965, "NOT WIRED END TO END", "active")
+    diagram.status(80, 965, "RETAINED SINGLE-HOST", "retained")
     diagram.text(
         1515,
         985,
-        "No retained campaign • no consensus • no exactly-once-effect claim",
+        "Retained local campaign • no consensus • no exactly-once-effect claim",
         css="small-text",
         anchor="end",
     )
@@ -1271,8 +1271,8 @@ def replay_effect_coordination() -> Diagram:
     diagram.arrow((Point(1010, 260), Point(1125, 260)), kind="active-flow")
     diagram.status(211, 540, "INTEGRATED", "implemented")
     diagram.status(746, 540, "INTEGRATED", "implemented")
-    diagram.status(1250, 540, "NOT WIRED END TO END", "active")
-    diagram.lane(55, 590, 1430, 235, "M4i protocol boundary • active development", css="lane-amber")
+    diagram.status(1250, 540, "RETAINED SINGLE-HOST", "retained")
+    diagram.lane(55, 590, 1430, 235, "M4i protocol boundary • bounded optional overlay", css="lane-amber")
     diagram.box(
         105,
         650,

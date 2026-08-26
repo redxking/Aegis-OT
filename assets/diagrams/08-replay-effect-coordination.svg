@@ -84,10 +84,10 @@
   <text x="265" y="559" class="status-text" text-anchor="middle">INTEGRATED</text>
   <rect x="746" y="540" width="108" height="28" rx="14" class="status-implemented"/>
   <text x="800" y="559" class="status-text" text-anchor="middle">INTEGRATED</text>
-  <rect x="1250" y="540" width="178" height="28" rx="14" class="status-active"/>
-  <text x="1339" y="559" class="status-text" text-anchor="middle">NOT WIRED END TO END</text>
+  <rect x="1250" y="540" width="178" height="28" rx="14" class="status-retained"/>
+  <text x="1339" y="559" class="status-text" text-anchor="middle">RETAINED SINGLE-HOST</text>
   <rect x="55" y="590" width="1430" height="235" rx="18" class="lane-amber"/>
-  <text x="79" y="622" class="lane-title" text-anchor="start">M4i protocol boundary • active development</text>
+  <text x="79" y="622" class="lane-title" text-anchor="start">M4i protocol boundary • bounded optional overlay</text>
   <rect x="105" y="650" width="300" height="95" rx="14" class="evidence"/>
   <text x="255" y="684" class="box-title" text-anchor="middle">Gateway journal</text>
   <text x="255" y="713" class="box-text" text-anchor="middle"><tspan x="255" dy="0">RECEIVED</tspan><tspan x="255" dy="23">→ DISPATCH_ARMED</tspan></text>

@@ -30,7 +30,7 @@ readiness, or independent validation.
 
 ## Architecture
 
-[![Aegis-OT architecture showing the sole authorization gateway, policy service, signed observer, candidate evaluator, OT adapter, synthetic plant, optional identity transport, active-development M4i coordination, and separate read-only evidence path](assets/diagrams/00-system-overview.svg)](assets/diagrams/00-system-overview.svg)
+[![Aegis-OT architecture showing the sole authorization gateway, policy service, signed observer, candidate evaluator, OT adapter, synthetic plant, optional identity transport, bounded M4i coordination, and separate read-only evidence path](assets/diagrams/00-system-overview.svg)](assets/diagrams/00-system-overview.svg)
 
 The gateway is the only authorization route. The agent can propose an action
 but has no direct plant capability. The observer, candidate evaluator, and OT
@@ -39,9 +39,10 @@ adapter reaches the consequential apply path. The public evidence demo is a
 separate read-only service and does not expose the mutable research API.
 
 The diagram shows the segmented capability configuration assembled with
-`docker-compose.capability.yml` and its evidence boundary. M4i coordination and
-the SPIRE/mTLS path are implemented, but neither has an immutable accepted
-campaign retained under `results/`. The separate M4j contract defines a
+`docker-compose.capability.yml` and its evidence boundary. M4i coordination has
+an accepted single-host campaign retained under `results/`; the SPIRE/mTLS path
+is implemented but has no immutable accepted campaign retained there. The
+separate M4j contract defines a
 six-host lab path; the retained depicted evidence remains single-host research
 evidence against a synthetic plant.
 
@@ -148,6 +149,7 @@ name, and a new output path. They refuse to overwrite retained evidence.
 | M4e | `scripts/run_m4e_experiment.py` | Signed gateway/OT transport and hostile-message cases |
 | M4f | `scripts/run_m4f_experiment.py` | Durable exact-envelope replay across OT-adapter replacement |
 | M4g | `scripts/run_m4g_experiment.py` | Application workload credentials, rotation, and replay attribution |
+| M4i | `scripts/run_m4i_experiment.py` | At-most-one commit transmission, query recovery, restart recovery, and fail-closed journal corruption |
 | SPIRE | `scripts/run_m4g_spire_mtls_experiment.py` | X.509-SVID issuance and internal mTLS; no accepted result is retained |
 
 The default `docker compose up` path does not enable the optional assurance
@@ -162,9 +164,9 @@ docker compose \
 ```
 
 M4i has committed runtime coordination, durable journals, reconciliation, and
-campaign code. There is no immutable accepted M4i package retained under
-`results/`, consensus result, rollback-resistant external anchor, or
-exactly-once-effect evidence. The [M4j lab guide](docs/reproducibility/M4J_LAB.md)
+an accepted single-host campaign at `results/m4i-coordination-evidence.json`.
+That result does not establish consensus, a rollback-resistant external anchor,
+or exactly-once-effect behavior. The [M4j lab guide](docs/reproducibility/M4J_LAB.md)
 provides the compatible-host deployment and live-probe sequence.
 
 Copy `.env.example` to `.env` only when deliberately overriding an image. Overrides must remain version-and-digest pinned.
@@ -233,7 +235,7 @@ Operation-specific parameters are closed sets. Unknown keys, nonnumeric values, 
 | M4b-M4c capability path | Root-signed packages and fault campaigns | Same-host capability separation, consequence checks, replay, contradiction, and unknown-effect handling | Independent sensing, hostile-host resistance, or failure-rate estimates |
 | M4d-M4f segmented path | Reproduced Docker experiment reports | Network membership, bypass denial, signed transport, and bounded durable replay | Multi-host isolation, exactly-once effects, or rollback resistance |
 | M4g identity path | Accepted application-credential campaign | Workload credential rejection, rotation, and stable replay attribution | Retained SPIRE/mTLS acceptance, protected key storage, or external validation |
-| M4i coordination | Runtime, journals, reconciliation, and campaign code | Implemented coordination behavior | An immutable retained campaign, consensus, or exactly-once-effect result |
+| M4i coordination | Accepted single-host coordination and recovery campaign | At-most-one commit transmission in the tested flow, query recovery, restart recovery, and fail-closed corrupt state | Consensus, hostile-host rollback resistance, independently anchored state, or exactly-once effects |
 | M4j six-host deployment | Exact-source builder, six-role provisioning, SPIRE registration, workload deployer, signed probe, and network acceptance runner | A runnable compatible-host lab contract | A retained live six-host result, hostile-hypervisor resistance, or production readiness |
 | M5 compromise and degraded operation | Deterministic admission, quarantine, recovery, and degraded-operation code and runners | Implemented fail-closed modeled behavior | Operational mission-continuity evidence or external validation |
 | M6 fleet and economics | Deterministic logical fleet and sensitivity model with an offline verifier | Reproducible modeled scaling behavior | Empirical fleet performance or validated cost forecasts |

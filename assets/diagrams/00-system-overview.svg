@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
   <title id="title">Aegis-OT segmented capability architecture</title>
-  <desc id="description">The bounded agent reaches only the segmented gateway. The gateway checks OPA and uses separate observer, candidate, and OT-adapter services. Only the OT adapter can invoke plant apply. Optional identity and transport controls cover consequence-path workloads. M4i coordination is active development. The public demo is a separate read-only service using build-time packaged evidence.</desc>
+  <desc id="description">The bounded agent reaches only the segmented gateway. The gateway checks OPA and uses separate observer, candidate, and OT-adapter services. Only the OT adapter can invoke plant apply. Optional identity and transport controls cover consequence-path workloads. M4i coordination is an optional bounded overlay with retained single-host evidence. The public demo is a separate read-only service using build-time packaged evidence.</desc>
   <metadata>Author: Angelis Pseftis</metadata>
   <defs>
     <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
@@ -101,10 +101,10 @@
   <line x1="1015" y1="498" x2="1085" y2="498" class="connector"/>
   <line x1="1085" y1="268" x2="1085" y2="498" class="connector"/>
   <polyline points="1085,383 1170,383" class="return-flow"/>
-  <rect x="350" y="585" width="1090" height="74" rx="12" class="active"/>
-  <text x="375" y="615" class="section-title" text-anchor="start">M4i EFFECT COORDINATION • ACTIVE DEVELOPMENT</text>
+  <rect x="350" y="585" width="1090" height="74" rx="12" class="evidence"/>
+  <text x="375" y="615" class="section-title" text-anchor="start">M4i EFFECT COORDINATION • BOUNDED OPTIONAL OVERLAY</text>
   <text x="375" y="641" class="body-text" text-anchor="start">Gateway journal  ↔  signed prepare / commit / query  ↔  effect-coordinator journal</text>
-  <text x="1415" y="641" class="body-text" text-anchor="end">No retained campaign • no exactly-once claim</text>
+  <text x="1415" y="641" class="body-text" text-anchor="end">Retained single-host campaign • no exactly-once claim</text>
   <rect x="45" y="735" width="1510" height="185" rx="18" class="lane"/>
   <text x="69" y="767" class="lane-title" text-anchor="start">Separate read-only evidence path</text>
   <rect x="185" y="800" width="225" height="78" rx="14" class="evidence"/>

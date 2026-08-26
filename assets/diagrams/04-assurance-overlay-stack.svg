@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
   <title id="title">Assurance overlay stack</title>
-  <desc id="description">Each overlay extends the layers below it. The final coordination overlay is active development and does not currently form a working end-to-end control path.</desc>
+  <desc id="description">Each overlay extends the layers below it. The final coordination overlay is optional, has retained single-host evidence, and is not the default control path.</desc>
   <metadata>Author: Angelis Pseftis</metadata>
   <defs>
     <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
@@ -99,16 +99,16 @@
   <rect x="1136" y="603" width="226" height="28" rx="14" class="status-optional"/>
   <text x="1249" y="622" class="status-text" text-anchor="middle">OPTIONAL • NO RETAINED RUN</text>
   <polyline points="800,651 800,676" class="optional-flow"/>
-  <rect x="220" y="676" width="1160" height="66" rx="12" class="active"/>
+  <rect x="220" y="676" width="1160" height="66" rx="12" class="component"/>
   <text x="244" y="703" class="box-title" text-anchor="start">COORDINATION</text>
   <text x="425" y="703" class="line-label" text-anchor="start">docker-compose.coordination.yml</text>
   <text x="425" y="727" class="small-text" text-anchor="start">Two journals • prepare / commit / query protocol</text>
-  <rect x="1200" y="694" width="162" height="28" rx="14" class="status-active"/>
-  <text x="1281" y="713" class="status-text" text-anchor="middle">ACTIVE DEVELOPMENT</text>
+  <rect x="1112" y="694" width="250" height="28" rx="14" class="status-retained"/>
+  <text x="1237" y="713" class="status-text" text-anchor="middle">RETAINED SINGLE-HOST EVIDENCE</text>
   <rect x="40" y="130" width="145" height="66" rx="14" class="terminal-good"/>
   <text x="112" y="155" class="box-title" text-anchor="middle">Default</text>
   <text x="112" y="184" class="box-text" text-anchor="middle"><tspan x="112" dy="0">base only</tspan></text>
   <polyline points="185,163 220,163" class="return-flow"/>
-  <rect x="220" y="785" width="1160" height="58" rx="12" class="active"/>
-  <text x="800" y="820" class="body-text" text-anchor="middle">M4i is component-tested, but the current gateway runtime does not instantiate the coordinated port; required mode rejects the legacy execute path.</text>
+  <rect x="220" y="785" width="1160" height="58" rx="12" class="evidence"/>
+  <text x="800" y="820" class="body-text" text-anchor="middle">M4i is exercised through the optional coordination overlay; the default gateway remains non-coordinated and required mode rejects the legacy execute path.</text>
 </svg>

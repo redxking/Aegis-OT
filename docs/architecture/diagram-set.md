@@ -30,7 +30,7 @@ Start with the overview and context views. Use the behavioral views to trace a p
 - **Active development** means the repository contains building blocks or focused tests, but the path is not a supported end-to-end capability.
 - **Outside scope** identifies an actor, environment, or claim that the current single-host synthetic configuration does not establish.
 
-The M4i effect-coordination contracts, two journals, transport class, runtime endpoints, initializer, and focused tests are present. The current gateway builder still uses the non-coordinated virtual-PLC port, and the coordination overlay requires a path that the normal action runtime does not invoke. M4i therefore remains dashed in these views. There is no retained M4i campaign, consensus result, hostile rollback resistance, or exactly-once-effect claim.
+The M4i effect-coordination contracts, two journals, transport class, runtime endpoints, initializer, and optional overlay are present. The accepted retained single-host campaign exercises at-most-one commit transmission, query recovery, restart recovery, and fail-closed corrupt state. The default gateway path remains non-coordinated, so M4i remains a dashed optional overlay in these views. The retained result does not establish consensus, hostile-host rollback resistance, an independently hosted anchor, or exactly-once effects.
 
 The optional SPIRE overlay issues X.509-SVIDs for the gateway, observer, candidate, OT adapter, and plant, protecting their internal capability links with mTLS. Agent-to-gateway, host-to-gateway, and gateway-to-OPA remain HTTP. Application workload credentials separately authenticate the agent, gateway, and OT adapter. Deleting a SPIRE registration prevents fresh issuance; it is not immediate revocation of an already-issued certificate.
 
@@ -62,7 +62,7 @@ The optional SPIRE overlay issues X.509-SVIDs for the gateway, observer, candida
 
 ### 06 — Outcome and effect states
 
-![Aegis-OT capability terminal classifications and active-development M4i effect coordination state machine](../../assets/diagrams/06-outcome-state-model.svg)
+![Aegis-OT capability terminal classifications and bounded optional M4i effect coordination state machine](../../assets/diagrams/06-outcome-state-model.svg)
 
 ### 07 — Identity and transport trust
 

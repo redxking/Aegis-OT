@@ -98,7 +98,7 @@
   <polyline points="1060,245 1415,365" class="flow"/>
   <text x="800" y="510" class="small-text" text-anchor="middle">No automatic retry after consequential dispatch • terminal status is bounded transaction evidence, not field validation</text>
   <rect x="45" y="580" width="1510" height="355" rx="18" class="lane-amber"/>
-  <text x="69" y="612" class="lane-title" text-anchor="start">M4i effect-coordinator state machine • active development</text>
+  <text x="69" y="612" class="lane-title" text-anchor="start">M4i effect-coordinator state machine • bounded optional overlay</text>
   <rect x="85" y="650" width="200" height="65" rx="14" class="primary"/>
   <text x="185" y="690" class="box-title" text-anchor="middle">RECEIVED</text>
   <rect x="355" y="650" width="250" height="65" rx="14" class="policy"/>
@@ -126,7 +126,7 @@
   <polyline points="1150,785 1035,745 1035,600 1180,600 1180,620" class="return-flow"/>
   <polyline points="1450,785 1525,745 1525,590 1420,590 1420,620" class="return-flow"/>
   <text x="800" y="915" class="small-text" text-anchor="middle">Nonterminal knowledge states: COMMIT_ACCEPTED, UNKNOWN_EFFECT • terminal: NOT_DISPATCHED, APPLIED, REJECTED</text>
-  <rect x="80" y="965" width="178" height="28" rx="14" class="status-active"/>
-  <text x="169" y="984" class="status-text" text-anchor="middle">NOT WIRED END TO END</text>
-  <text x="1515" y="985" class="small-text" text-anchor="end">No retained campaign • no consensus • no exactly-once-effect claim</text>
+  <rect x="80" y="965" width="178" height="28" rx="14" class="status-retained"/>
+  <text x="169" y="984" class="status-text" text-anchor="middle">RETAINED SINGLE-HOST</text>
+  <text x="1515" y="985" class="small-text" text-anchor="end">Retained local campaign • no consensus • no exactly-once-effect claim</text>
 </svg>
