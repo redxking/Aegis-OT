@@ -329,6 +329,8 @@ def _runtime(
     observer_boot_epoch: str = OBSERVER_BOOT,
     plant_at_post: bool = False,
     hook: Any = None,
+    anchor_required: bool = False,
+    anchor_admission: Any = None,
 ) -> tuple[CapabilityOtRuntime, CoordinatedDevice, CountingReplay]:
     device = CoordinatedDevice(
         artifacts=artifacts,
@@ -381,6 +383,8 @@ def _runtime(
         coordination_required=True,
         coordination_journal=journal,
         plant_health_loader=loader,
+        coordination_anchor_required=anchor_required,
+        coordination_anchor_admission=anchor_admission,
         after_coordination_terminal_persist=hook,
         clock=clock,
     )
@@ -392,6 +396,8 @@ def _harness(
     artifacts: RuntimeArtifacts,
     *,
     hook: Any = None,
+    anchor_required: bool = False,
+    anchor_admission: Any = None,
 ) -> OtHarness:
     tmp_path.chmod(0o700)
     identities = _identities(tmp_path)
@@ -406,6 +412,8 @@ def _harness(
         journal,
         clock,
         hook=hook,
+        anchor_required=anchor_required,
+        anchor_admission=anchor_admission,
     )
     return OtHarness(
         runtime=runtime,

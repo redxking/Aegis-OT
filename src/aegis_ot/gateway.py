@@ -7,7 +7,9 @@ from datetime import UTC, datetime, timedelta
 from .delegation import DelegationValidator
 from .evidence import EvidenceChain
 from .identity import IdentityVerifier
+from .m5_degraded import DegradedOperationGate
 from .models import ActionProposal, Decision, DecisionOutcome, SystemState
+from .physical_models import canonical_digest
 from .policy import PolicyEngine
 from .replay import ReplayLedger
 from .safety import SafetyKernel
@@ -23,6 +25,7 @@ class AegisGateway:
         replay: ReplayLedger,
         evidence: EvidenceChain,
         maximum_state_age: timedelta = timedelta(seconds=5),
+        degraded_operation: DegradedOperationGate | None = None,
     ) -> None:
         self.identity = identity
         self.delegation = delegation
@@ -31,6 +34,7 @@ class AegisGateway:
         self.replay = replay
         self.evidence = evidence
         self.maximum_state_age = maximum_state_age
+        self.degraded_operation = degraded_operation
 
     def decide(
         self,
@@ -41,6 +45,49 @@ class AegisGateway:
         evaluated_at = now or datetime.now(UTC)
         reasons: list[str] = []
         outcome = DecisionOutcome.DENY
+        degraded_admission: dict[str, object] | None = None
+
+        # This gate is deliberately first. A denied degraded-mode admission
+        # must not invoke identity, delegation, policy, safety, or replay and
+        # cannot consume a nonce that may later be evaluated in normal mode.
+        if self.degraded_operation is not None:
+            untrusted_proposal_sha256 = canonical_digest(proposal)
+            untrusted_proposal_id = f"untrusted:{untrusted_proposal_sha256}"
+            try:
+                admission = self.degraded_operation.evaluate(
+                    proposal,
+                    now=evaluated_at,
+                )
+            except Exception:
+                reasons.append("degraded_admission_unavailable")
+            else:
+                degraded_admission = admission.model_dump(mode="json")
+                if not admission.may_enter_primary_assurance:
+                    reasons.extend(admission.reasons)
+            if reasons:
+                provisional = Decision(
+                    proposal_id=untrusted_proposal_id,
+                    outcome=DecisionOutcome.DENY,
+                    reasons=tuple(reasons),
+                    policy_version="not-evaluated:m5-degraded-pre-authorization",
+                    safety_version="not-evaluated:m5-degraded-pre-authorization",
+                    state_version=state.version,
+                )
+                evidence_record = self.evidence.append(
+                    proposal_id=untrusted_proposal_id,
+                    decision_id=provisional.decision_id,
+                    payload={
+                        "event_type": "m5_degraded_pre_authorization_denial",
+                        "untrusted_proposal_sha256": untrusted_proposal_sha256,
+                        "decision": provisional.model_dump(mode="json"),
+                        "trusted_state_sha256": canonical_digest(state),
+                        "predicted_state": None,
+                        "degraded_admission": degraded_admission,
+                    },
+                )
+                return provisional.model_copy(
+                    update={"evidence_record_hash": evidence_record.record_hash}
+                )
 
         identity_verified = self.identity.verify(proposal.actor_id)
         if not identity_verified:
@@ -82,15 +129,18 @@ class AegisGateway:
             safety_version=self.safety.version,
             state_version=state.version,
         )
+        evidence_payload: dict[str, object] = {
+            "proposal": proposal.model_dump(mode="json"),
+            "decision": provisional.model_dump(mode="json"),
+            "state": state.model_dump(mode="json"),
+            "predicted_state": safety.predicted_state.model_dump(mode="json"),
+            "identity_version": self.identity.version,
+        }
+        if degraded_admission is not None:
+            evidence_payload["degraded_admission"] = degraded_admission
         evidence_record = self.evidence.append(
             proposal_id=proposal.proposal_id,
             decision_id=provisional.decision_id,
-            payload={
-                "proposal": proposal.model_dump(mode="json"),
-                "decision": provisional.model_dump(mode="json"),
-                "state": state.model_dump(mode="json"),
-                "predicted_state": safety.predicted_state.model_dump(mode="json"),
-                "identity_version": self.identity.version,
-            },
+            payload=evidence_payload,
         )
         return provisional.model_copy(update={"evidence_record_hash": evidence_record.record_hash})

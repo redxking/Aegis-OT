@@ -50,6 +50,12 @@ from .capability_plc import (
     OrderlyRestartReplayReservations,
     PlcProcessInfo,
 )
+from .coordination_anchor import (
+    AnchoredRecoveryStatus,
+    CoordinationAnchorAdmissionError,
+    CoordinationAnchorAdmissionPhase,
+    CoordinationAnchorAdmissionPort,
+)
 from .coordination_journal import (
     CommitAdmissionStatus,
     CoordinationCollisionError,
@@ -84,6 +90,12 @@ from .coordination_recovery import (
     validate_coordination_recovery,
 )
 from .factory import LocalLab, build_local_lab
+from .m5_degraded import (
+    DegradedOperationGate,
+    FileDegradedAuthorizationSource,
+    FileDegradedOperationStateStore,
+    FileDegradedSnapshotSource,
+)
 from .models import Decision
 from .pandapower_plant import PandapowerCigreMVPlant, PhysicalSimulationError
 from .physical_control import (
@@ -861,6 +873,8 @@ class CapabilityOtRuntime:
         coordination_required: bool = False,
         coordination_journal: DurableEffectCoordinationJournal | None = None,
         plant_health_loader: Callable[[], PlantHealthMetadata] | None = None,
+        coordination_anchor_required: bool = False,
+        coordination_anchor_admission: CoordinationAnchorAdmissionPort | None = None,
         after_coordination_terminal_persist: Callable[[], None] | None = None,
         clock: Clock = utc_now,
     ) -> None:
@@ -879,11 +893,20 @@ class CapabilityOtRuntime:
         if not coordination_required and (
             coordination_journal is not None
             or plant_health_loader is not None
+            or coordination_anchor_required
+            or coordination_anchor_admission is not None
             or after_coordination_terminal_persist is not None
         ):
             raise ValueError(
-                "coordination journal, plant-health loader, and terminal hook require "
+                "coordination state, anchor admission, and terminal hook require "
                 "effect coordination"
+            )
+        if coordination_required and (
+            coordination_anchor_required
+            != (coordination_anchor_admission is not None)
+        ):
+            raise ValueError(
+                "required coordination anchoring needs exactly one anchor admission port"
             )
         if device.acknowledgment_key_id != key_id or device.plc_id != plc_id:
             raise ValueError("OT runtime identity does not match its virtual PLC")
@@ -930,6 +953,8 @@ class CapabilityOtRuntime:
         self.local_workload_identity = local_workload_identity
         self.coordination_required = coordination_required
         self.coordination_journal = coordination_journal
+        self.coordination_anchor_required = coordination_anchor_required
+        self.coordination_anchor_admission = coordination_anchor_admission
         self._plant_health_loader = plant_health_loader
         self._coordination_recovery: CoordinationRecoveryResult | None = None
         self._coordination_recovery_plant: PlantHealthMetadata | None = None
@@ -945,6 +970,44 @@ class CapabilityOtRuntime:
         if coordination_required:
             with self._coordination_lock:
                 self._refresh_coordination_recovery_locked()
+
+    def _require_anchor_admission_locked(
+        self,
+        *,
+        phase: CoordinationAnchorAdmissionPhase,
+        effect_id: str,
+        request_sha256: str,
+        evaluated_at: datetime,
+    ) -> None:
+        if not self.coordination_anchor_required:
+            return
+        port = self.coordination_anchor_admission
+        if port is None:
+            raise CapabilityRuntimeUnavailable(
+                f"effect_coordination_anchor_{phase.value}_unavailable"
+            )
+        try:
+            decision = port.require_admission(
+                phase=phase,
+                effect_id=effect_id,
+                request_sha256=request_sha256,
+                evaluated_at=evaluated_at,
+            )
+        except CoordinationAnchorAdmissionError as exc:
+            raise CapabilityRuntimeUnavailable(
+                f"effect_coordination_anchor_{phase.value}_unavailable"
+            ) from exc
+        except Exception as exc:
+            raise CapabilityRuntimeUnavailable(
+                f"effect_coordination_anchor_{phase.value}_unavailable"
+            ) from exc
+        if (
+            decision.status is not AnchoredRecoveryStatus.ADMISSION_READY
+            or not decision.admission_allowed
+        ):
+            raise CapabilityRuntimeUnavailable(
+                f"effect_coordination_anchor_{phase.value}_unavailable"
+            )
 
     @staticmethod
     def _same_pinned_plant_identity(
@@ -1353,6 +1416,12 @@ class CapabilityOtRuntime:
             raise CapabilityAdmissionRejected("effect_prepare_authentication_rejected")
         try:
             with self._coordination_lock:
+                self._require_anchor_admission_locked(
+                    phase=CoordinationAnchorAdmissionPhase.PREPARE,
+                    effect_id=request.effect.effect_id,
+                    request_sha256=request.digest,
+                    evaluated_at=evaluated_at,
+                )
                 self._require_coordination_alignment_locked(prepare_request=request)
                 pending = context.journal.pending()
                 if any(record.effect != request.effect for record in pending):
@@ -1479,6 +1548,12 @@ class CapabilityOtRuntime:
             )
 
         with self._coordination_lock:
+            self._require_anchor_admission_locked(
+                phase=CoordinationAnchorAdmissionPhase.COMMIT,
+                effect_id=request.effect.effect_id,
+                request_sha256=request.digest,
+                evaluated_at=evaluated_at,
+            )
             self._require_coordination_alignment_locked(
                 commit_request=request,
             )
@@ -2077,6 +2152,7 @@ class CapabilityGatewayRuntime:
         agent_workload_subject: str | None = None,
         coordination_required: bool = False,
         coordination_journal: DurableGatewayCoordinationJournal | None = None,
+        degraded_operation: DegradedOperationGate | None = None,
         clock: Clock = utc_now,
     ) -> None:
         if (agent_workload_verifier is None) != (agent_workload_subject is None):
@@ -2105,6 +2181,7 @@ class CapabilityGatewayRuntime:
         self.agent_workload_subject = agent_workload_subject
         self.coordination_required = coordination_required
         self.coordination_journal = coordination_journal
+        self.degraded_operation = degraded_operation
         self.clock = clock
         # Agent-facing pre-capture and action entry points share this lock.  A
         # capture flood therefore cannot evict the active predecessor after an
@@ -2291,10 +2368,57 @@ class CapabilityGatewayRuntime:
         self,
         request: CapabilityActionRequest | WorkloadAuthenticatedCapabilityAction,
     ) -> SegmentedCapabilityClosedLoopResult:
+        # This is the active full-capability action entry.  Degraded admission
+        # therefore precedes workload identity, policy/safety, replay,
+        # coordination, permit creation, and dispatch.  Reconciliation has a
+        # separate method and remains available to close an uncertain effect.
+        action = (
+            request.request
+            if isinstance(request, WorkloadAuthenticatedCapabilityAction)
+            else request
+        )
+        evaluated_at = self.clock()
+        if self.degraded_operation is not None:
+            untrusted_action_sha256 = action.digest
+            try:
+                admission = self.degraded_operation.evaluate(
+                    action.proposal,
+                    now=evaluated_at,
+                )
+            except Exception:
+                self.authorization.gateway.evidence.append(
+                    proposal_id=f"untrusted:{untrusted_action_sha256}",
+                    decision_id=f"m5-degraded-admission:{untrusted_action_sha256}",
+                    payload={
+                        "event_type": "m5_degraded_runtime_admission",
+                        "entrypoint": "agent-to-segmented-gateway",
+                        "untrusted_action_sha256": untrusted_action_sha256,
+                        "outcome": "unavailable",
+                        "reason": "m5_degraded_admission_unavailable",
+                        "execution_authorized": False,
+                    },
+                )
+                raise CapabilityAdmissionRejected(
+                    "m5_degraded_admission_unavailable"
+                ) from None
+            if not admission.may_enter_primary_assurance:
+                self.authorization.gateway.evidence.append(
+                    proposal_id=f"untrusted:{untrusted_action_sha256}",
+                    decision_id=f"m5-degraded-admission:{untrusted_action_sha256}",
+                    payload={
+                        "event_type": "m5_degraded_runtime_admission",
+                        "entrypoint": "agent-to-segmented-gateway",
+                        "untrusted_action_sha256": untrusted_action_sha256,
+                        "admission": admission.model_dump(mode="json"),
+                        "execution_authorized": False,
+                    },
+                )
+                raise CapabilityAdmissionRejected(
+                    f"m5_degraded_{admission.outcome.value}"
+                )
         if self.agent_workload_verifier is not None:
             if not isinstance(request, WorkloadAuthenticatedCapabilityAction):
                 raise CapabilityAdmissionRejected("agent_workload_credential_required")
-            evaluated_at = self.clock()
             assert self.agent_workload_subject is not None
             try:
                 verification = self.agent_workload_verifier.verify_credential_with_receipt(
@@ -2331,7 +2455,6 @@ class CapabilityGatewayRuntime:
         else:
             if isinstance(request, WorkloadAuthenticatedCapabilityAction):
                 raise CapabilityAdmissionRejected("workload_identity_is_disabled")
-            action = request
         with self._transaction_lock:
             if self.coordination_required:
                 journal = self.coordination_journal
@@ -2444,6 +2567,53 @@ def _expected_environment(name: str) -> str:
     if not value:
         raise CapabilityRuntimeUnavailable(f"required runtime setting is missing: {name}")
     return value
+
+
+def _configured_m5_degraded_gate() -> DegradedOperationGate | None:
+    settings = {
+        "authority_id": os.getenv("AEGIS_M5_DEGRADED_AUTHORITY_ID"),
+        "authority_key": os.getenv(
+            "AEGIS_M5_DEGRADED_AUTHORITY_PUBLIC_KEY_FILE"
+        ),
+        "snapshot": os.getenv("AEGIS_M5_DEGRADED_SNAPSHOT_FILE"),
+        "authorization": os.getenv("AEGIS_M5_DEGRADED_AUTHORIZATION_FILE"),
+        "state": os.getenv("AEGIS_M5_DEGRADED_STATE_FILE"),
+    }
+    if not any(settings.values()):
+        return None
+    if not all(settings.values()):
+        raise CapabilityRuntimeUnavailable(
+            "M5 degraded operation configuration is incomplete"
+        )
+    paths = {
+        name: Path(value)
+        for name, value in settings.items()
+        if name != "authority_id" and value is not None
+    }
+    if any(not path.is_absolute() for path in paths.values()):
+        raise CapabilityRuntimeUnavailable(
+            "M5 degraded operation file paths must be absolute"
+        )
+    assert settings["authority_id"] is not None
+    gate = DegradedOperationGate(
+        authority_id=settings["authority_id"],
+        authority_public_key=_load_public_key(str(paths["authority_key"])),
+        snapshot_source=FileDegradedSnapshotSource(paths["snapshot"]),
+        authorization_source=FileDegradedAuthorizationSource(paths["authorization"]),
+        state_store=FileDegradedOperationStateStore(
+            paths["state"],
+            authority_id=settings["authority_id"],
+        ),
+    )
+    try:
+        gate.snapshot_source()
+        gate.authorization_source()
+        gate.state_store.read()
+    except Exception as exc:
+        raise CapabilityRuntimeUnavailable(
+            "M5 degraded operation configuration is invalid"
+        ) from exc
+    return gate
 
 
 def _plant_process_info(health: PlantHealthMetadata) -> PlantProcessInfo:
@@ -2859,6 +3029,7 @@ def _build_ot_runtime() -> CapabilityOtRuntime:
 def _build_gateway_runtime() -> CapabilityGatewayRuntime:
     coordination_required = effect_coordination_enabled()
     identity_required = workload_identity_enabled()
+    degraded_operation = _configured_m5_degraded_gate()
     if coordination_required and not identity_required:
         raise CapabilityRuntimeUnavailable(
             "required effect coordination needs workload identity"
@@ -2984,6 +3155,7 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         }
     )
     authorization = build_local_lab()
+    authorization.gateway.degraded_operation = degraded_operation
     opa_url = os.getenv("AEGIS_OPA_URL", "http://opa:8181")
     authorization.gateway.policy = OpaBackedPolicy(
         opa_url,
@@ -3080,6 +3252,7 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
             ),
             coordination_required=coordination_required,
             coordination_journal=coordination_journal,
+            degraded_operation=degraded_operation,
         )
     except Exception:
         if coordination_journal is not None:
