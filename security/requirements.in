@@ -1,0 +1,3 @@
+# Network-backed CI vulnerability scanner only. Application dependencies remain
+# declared in pyproject.toml and requirements.lock.
+pip-audit==2.10.1

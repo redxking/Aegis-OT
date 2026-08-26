@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 @pytest.fixture
@@ -100,6 +103,11 @@ def _repository(bundler: Any, root: Path) -> str:
     (root / "SECURITY.md").write_text(
         "# Security\nSynthetic authorized research only.\n", encoding="utf-8"
     )
+    release_policy = root / "config" / "release-security-policy.json"
+    release_policy.parent.mkdir()
+    release_policy.write_bytes(
+        Path(__file__).parents[1].joinpath("config", "release-security-policy.json").read_bytes()
+    )
     formal = root / "results" / "formal" / "m1-authorization-conformance"
     formal.mkdir(parents=True)
     (formal / "manifest.json").write_text('{"bounded":true}\n', encoding="utf-8")
@@ -129,6 +137,28 @@ def _canonical(value: object) -> bytes:
         )
         + "\n"
     ).encode("utf-8")
+
+
+def _signing_keys(tmp_path: Path, stem: str = "m7") -> tuple[Path, Path]:
+    private_key = Ed25519PrivateKey.generate()
+    private_path = tmp_path / f"{stem}-private.pem"
+    public_path = tmp_path / f"{stem}-public.pem"
+    private_path.write_bytes(
+        private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    private_path.chmod(0o600)
+    public_path.write_bytes(
+        private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    )
+    public_path.chmod(0o644)
+    return private_path, public_path
 
 
 def _refresh_descriptor(bundle: Path, artifact_name: str) -> None:
@@ -266,6 +296,112 @@ def test_standalone_verifier_runs_without_checkout_imports(
     )
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["valid"] is True
+
+
+def test_signed_bundle_verifies_in_explicit_trusted_key_mode(
+    bundler: Any,
+    repository: tuple[Path, str],
+    tmp_path: Path,
+) -> None:
+    _root, commit = repository
+    private_key, public_key = _signing_keys(tmp_path)
+    bundle = tmp_path / "signed-bundle"
+
+    built = bundler.build_bundle(
+        bundle,
+        commit_reference=commit,
+        signing_private_key=private_key,
+    )
+
+    assert {path.name for path in bundle.iterdir()} == bundler.SIGNED_BUNDLE_NAMES
+    assert built["attestation"]["signature_present"] is True
+    assert built["attestation"]["trust_mode"] == "embedded_key_untrusted"
+    manifest = _json(bundle / "manifest.json")
+    assert manifest["attestation"]["signature"] == "ed25519_detached_manifest"
+    assert bundler.SIGNATURE_NAME not in manifest["artifacts"]
+
+    verified = bundler.verify_bundle(
+        bundle,
+        expected_commit=commit,
+        trusted_public_key=public_key,
+        require_signature=True,
+    )
+    assert verified["valid"] is True
+    assert verified["attestation"]["cryptographic_signature_valid"] is True
+    assert verified["attestation"]["trust_mode"] == "caller_supplied_trusted_key_matched"
+    assert verified["attestation"]["external_custody"] == "not_established"
+    assert verified["attestation"]["release_authorization"] == "not_established"
+
+    standalone = subprocess.run(  # noqa: S603 - fixed interpreter and fixture path
+        (
+            sys.executable,
+            str(bundle / bundler.VERIFIER_NAME),
+            "verify",
+            "--bundle",
+            str(bundle),
+            "--expected-commit",
+            commit,
+            "--require-signature",
+            "--trusted-public-key",
+            str(public_key),
+        ),
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert standalone.returncode == 0, standalone.stderr
+    assert (
+        json.loads(standalone.stdout)["attestation"]["trust_mode"]
+        == "caller_supplied_trusted_key_matched"
+    )
+
+
+def test_signed_bundle_rejects_wrong_trusted_key_and_signature_tamper(
+    bundler: Any,
+    repository: tuple[Path, str],
+    tmp_path: Path,
+) -> None:
+    _root, commit = repository
+    private_key, _public_key = _signing_keys(tmp_path, "correct")
+    _wrong_private, wrong_public = _signing_keys(tmp_path, "wrong")
+    bundle = tmp_path / "signed-bundle"
+    bundler.build_bundle(bundle, signing_private_key=private_key)
+
+    with pytest.raises(bundler.BundleError, match="caller-supplied trusted key"):
+        bundler.verify_bundle(
+            bundle,
+            expected_commit=commit,
+            trusted_public_key=wrong_public,
+            require_signature=True,
+        )
+
+    signature_path = bundle / bundler.SIGNATURE_NAME
+    signature = _json(signature_path)
+    signature["signature_base64"] = base64.b64encode(b"\0" * 64).decode("ascii")
+    signature_path.write_bytes(_canonical(signature))
+    with pytest.raises(bundler.BundleError, match="signature is invalid"):
+        bundler.verify_bundle(bundle, expected_commit=commit, require_signature=True)
+
+
+def test_trusted_key_mode_rejects_unsigned_bundle_and_exposed_signing_key(
+    bundler: Any,
+    repository: tuple[Path, str],
+    tmp_path: Path,
+) -> None:
+    _root, _commit = repository
+    private_key, public_key = _signing_keys(tmp_path)
+    unsigned = tmp_path / "unsigned"
+    bundler.build_bundle(unsigned)
+
+    with pytest.raises(bundler.BundleError, match="required.*unsigned"):
+        bundler.verify_bundle(unsigned, require_signature=True)
+    with pytest.raises(bundler.BundleError, match="trusted key.*unsigned"):
+        bundler.verify_bundle(unsigned, trusted_public_key=public_key)
+
+    private_key.chmod(0o644)
+    with pytest.raises(bundler.BundleError, match="permissions are not private"):
+        bundler.build_bundle(tmp_path / "exposed", signing_private_key=private_key)
 
 
 def test_safe_extraction_preserves_exact_content_and_executable_mode(

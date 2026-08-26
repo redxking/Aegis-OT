@@ -6,15 +6,17 @@ environment, a source-derived SPDX SBOM, and an explicitly unexecuted
 replication protocol.  It does not fetch dependencies, build images, run the
 protocol, publish anything, or establish independent validation.
 
-The verifier uses only the Python standard library.  It reconstructs the Git
-tree object from the archived files and verifies the raw Git commit object, so
-the source binding does not depend on a checkout or a Git executable.
+Unsigned verification uses only the Python standard library.  The optional
+Ed25519 signing and trusted-key verification mode uses the project's pinned
+``cryptography`` dependency.  Git-tree and raw-commit reconstruction remain
+offline and do not depend on a checkout or a Git executable.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import ctypes
 import errno
 import hashlib
@@ -32,18 +34,19 @@ import tomllib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 
-SCHEMA_VERSION = "aegis-ot-m7-replication-bundle-v1"
-VERIFICATION_SCHEMA_VERSION = "aegis-ot-m7-replication-verification-v1"
+SCHEMA_VERSION = "aegis-ot-m7-replication-bundle-v2"
+VERIFICATION_SCHEMA_VERSION = "aegis-ot-m7-replication-verification-v2"
 SOURCE_INDEX_SCHEMA_VERSION = "aegis-ot-m7-source-index-v1"
 SOURCE_COMMIT_SCHEMA_VERSION = "aegis-ot-m7-source-commit-v1"
 INPUTS_SCHEMA_VERSION = "aegis-ot-m7-reproduction-inputs-v1"
 PROTOCOL_SCHEMA_VERSION = "aegis-ot-m7-replication-protocol-v1"
 EVIDENCE_SCHEMA_VERSION = "aegis-ot-m7-milestone-evidence-inventory-v1"
+SIGNATURE_SCHEMA_VERSION = "aegis-ot-m7-manifest-signature-v1"
 
 SOURCE_PREFIX = "aegis-ot-source"
 SOURCE_ARCHIVE_NAME = "source.tar"
@@ -55,7 +58,9 @@ PROTOCOL_NAME = "replication-protocol.json"
 EVIDENCE_NAME = "milestone-evidence-inventory.json"
 VERIFIER_NAME = "verify_m7_replication_bundle.py"
 MANIFEST_NAME = "manifest.json"
+SIGNATURE_NAME = "manifest.signature.json"
 BUILDER_SOURCE_PATH = "scripts/build_m7_replication_bundle.py"
+RELEASE_SECURITY_POLICY_PATH = "config/release-security-policy.json"
 
 ARTIFACT_NAMES = (
     SOURCE_ARCHIVE_NAME,
@@ -68,12 +73,14 @@ ARTIFACT_NAMES = (
     VERIFIER_NAME,
 )
 BUNDLE_NAMES = frozenset((*ARTIFACT_NAMES, MANIFEST_NAME))
+SIGNED_BUNDLE_NAMES = frozenset((*BUNDLE_NAMES, SIGNATURE_NAME))
 
 MAX_JSON_BYTES = 64 * 1024 * 1024
 MAX_SOURCE_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_SOURCE_FILE_BYTES = 128 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 512 * 1024 * 1024
 MAX_SOURCE_FILES = 20_000
+MAX_KEY_BYTES = 64 * 1024
 
 _OBJECT_ID = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -100,9 +107,12 @@ _UNSAFE_SECRET_NAMES = frozenset(
 )
 
 CLAIM_BOUNDARIES = (
-    "This is an unsigned, locally constructed replication-candidate bundle; "
-    "its verifier establishes internal consistency and exact source identity, "
-    "not external authenticity or custody.",
+    "This is a locally constructed replication-candidate bundle. An unsigned "
+    "bundle has no signer binding; an embedded-key Ed25519 signature establishes "
+    "cryptographic integrity but not external key trust, authenticity, or custody.",
+    "Caller-supplied trusted-key verification establishes an exact key match and "
+    "valid signature only; it does not establish signer custody, release approval, "
+    "independent validation, publication, or deployment.",
     "The bundle does not execute its replication protocol and does not establish "
     "independent replication or independent validation.",
     "The bundle is not a publication, public release, deployment, production-"
@@ -111,6 +121,13 @@ CLAIM_BOUNDARIES = (
     "container images, VM boxes, and external toolchains are not vendored.",
     "Committed evidence-file presence is inventory only; this builder does not "
     "reinterpret, accept, or independently validate milestone evidence.",
+)
+
+SIGNATURE_BOUNDARY = (
+    "The detached Ed25519 signature binds the exact canonical manifest bytes. "
+    "The embedded public key is self-asserted. External authenticity requires a "
+    "separately trusted public key supplied by the verifier caller, and even that "
+    "does not establish custody, approval, publication, or independent validation."
 )
 
 SECURITY_USE_BOUNDARY = (
@@ -1072,6 +1089,10 @@ def _replication_protocol(revision: dict[str, Any]) -> dict[str, Any]:
         },
         "prerequisites": [
             "A separately trusted copy or digest of this verifier and the expected Git commit.",
+            (
+                "For trusted-signature mode, a separately obtained Ed25519 public key; "
+                "the embedded key is not a trust anchor."
+            ),
             "CPython 3.11 or newer for offline bundle verification and extraction.",
             "An isolated reconstruction host; dependency access or a separately acquired cache.",
             (
@@ -1098,6 +1119,19 @@ def _replication_protocol(revision: dict[str, Any]) -> dict[str, Any]:
                 ),
                 "expected_result": (
                     "new no-clobber directory containing only verified regular files"
+                ),
+            },
+            {
+                "id": "verify_trusted_signature_if_required",
+                "state": "not_executed_by_bundle",
+                "command": (
+                    "python verify_m7_replication_bundle.py verify --bundle . "
+                    f"--expected-commit {revision['commit']} --require-signature "
+                    "--trusted-public-key <trusted-ed25519-public-key.pem>"
+                ),
+                "expected_result": (
+                    "valid Ed25519 signature and exact caller-supplied key match; "
+                    "unsigned or wrong-key bundles fail closed"
                 ),
             },
             {
@@ -1170,11 +1204,20 @@ def _manifest(
     revision: dict[str, Any],
     artifact_descriptors: dict[str, dict[str, Any]],
     files: dict[str, bytes],
+    *,
+    signer_key_id: str | None = None,
 ) -> dict[str, Any]:
     license_material = files.get("LICENSE")
     security_material = files.get("SECURITY.md")
-    if license_material is None or security_material is None:
-        raise BundleError("source tree must contain LICENSE and SECURITY.md")
+    release_policy_material = files.get(RELEASE_SECURITY_POLICY_PATH)
+    if (
+        license_material is None
+        or security_material is None
+        or release_policy_material is None
+    ):
+        raise BundleError(
+            "source tree must contain LICENSE, SECURITY.md, and the release security policy"
+        )
     _project_name, _project_version, license_identifier = _project_metadata(files)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1202,6 +1245,8 @@ def _manifest(
         "security": {
             "policy_path": "SECURITY.md",
             "policy_sha256": hashlib.sha256(security_material).hexdigest(),
+            "release_policy_path": RELEASE_SECURITY_POLICY_PATH,
+            "release_policy_sha256": hashlib.sha256(release_policy_material).hexdigest(),
             "authorized_use_boundary": SECURITY_USE_BOUNDARY,
             "secret_path_screen": "bounded_filename_heuristic_only",
         },
@@ -1215,7 +1260,17 @@ def _manifest(
             "sbom": "SPDX-2.3 source_and_declared_input_inventory",
         },
         "attestation": {
-            "signature": "none",
+            "signature": (
+                "ed25519_detached_manifest"
+                if signer_key_id is not None
+                else "none"
+            ),
+            "signer_key_id": signer_key_id,
+            "embedded_public_key_trust": (
+                "self_asserted_not_trusted"
+                if signer_key_id is not None
+                else "not_applicable_unsigned"
+            ),
             "external_custody": "not_established",
             "independent_replication": "not_established",
             "independent_validation": "not_established",
@@ -1294,7 +1349,12 @@ def _publish_directory_noreplace(source: Path, destination: Path) -> None:
     )
 
 
-def _read_regular(path: Path, *, maximum: int) -> bytes:
+def _read_regular(
+    path: Path,
+    *,
+    maximum: int,
+    require_private: bool = False,
+) -> bytes:
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)
@@ -1308,6 +1368,8 @@ def _read_regular(path: Path, *, maximum: int) -> bytes:
             or metadata.st_size > maximum
         ):
             raise BundleError(f"bundle artifact size or type is invalid: {path.name}")
+        if require_private and stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise BundleError("M7 signing key permissions are not private")
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -1325,23 +1387,186 @@ def _read_regular(path: Path, *, maximum: int) -> bytes:
         os.close(descriptor)
 
 
-def _validate_private_bundle_directory(bundle: Path) -> Path:
+def _read_external_key(path: Path, *, private: bool) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise BundleError("key path must be a regular non-symlink file")
+    resolved = path.resolve(strict=True)
+    if private and resolved.is_relative_to(ROOT.resolve(strict=True)):
+        raise BundleError("M7 signing key must be stored outside the source checkout")
+    return _read_regular(
+        resolved,
+        maximum=MAX_KEY_BYTES,
+        require_private=private,
+    )
+
+
+def _ed25519_dependencies() -> tuple[Any, Any, Any, Any]:
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+            Ed25519PublicKey,
+        )
+    except ImportError as exc:
+        raise BundleError(
+            "Ed25519 signing or signature verification requires the pinned "
+            "cryptography dependency"
+        ) from exc
+    return serialization, Ed25519PrivateKey, Ed25519PublicKey, InvalidSignature
+
+
+def _signing_identity(private_key_path: Path) -> tuple[Any, bytes, str]:
+    serialization, private_type, _public_type, _invalid_signature = _ed25519_dependencies()
+    material = _read_external_key(private_key_path, private=True)
+    try:
+        private_key = serialization.load_pem_private_key(material, password=None)
+    except (TypeError, ValueError) as exc:
+        raise BundleError("M7 signing key is not an unencrypted PEM private key") from exc
+    if not isinstance(private_key, private_type):
+        raise BundleError("M7 signing key is not an Ed25519 private key")
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    key_id = f"sha256:{hashlib.sha256(public_key).hexdigest()}"
+    return private_key, public_key, key_id
+
+
+def _load_trusted_public_key(public_key_path: Path) -> bytes:
+    serialization, _private_type, public_type, _invalid_signature = _ed25519_dependencies()
+    material = _read_external_key(public_key_path, private=False)
+    try:
+        public_key = serialization.load_pem_public_key(material)
+    except (TypeError, ValueError) as exc:
+        raise BundleError("trusted M7 public key is not PEM") from exc
+    if not isinstance(public_key, public_type):
+        raise BundleError("trusted M7 public key is not an Ed25519 public key")
+    return cast(
+        bytes,
+        public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        ),
+    )
+
+
+def _canonical_base64(value: object, *, label: str, size: int) -> bytes:
+    if not isinstance(value, str):
+        raise BundleError(f"{label} is not a base64 string")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise BundleError(f"{label} is not canonical base64") from exc
+    if len(decoded) != size or base64.b64encode(decoded).decode("ascii") != value:
+        raise BundleError(f"{label} length or encoding is invalid")
+    return decoded
+
+
+def _signature_artifact(
+    manifest_material: bytes,
+    *,
+    private_key: Any,
+    public_key: bytes,
+    key_id: str,
+) -> dict[str, Any]:
+    signature = private_key.sign(manifest_material)
+    return {
+        "schema_version": SIGNATURE_SCHEMA_VERSION,
+        "algorithm": "Ed25519",
+        "signed_artifact": MANIFEST_NAME,
+        "signed_artifact_sha256": hashlib.sha256(manifest_material).hexdigest(),
+        "signer_key_id": key_id,
+        "public_key_base64": base64.b64encode(public_key).decode("ascii"),
+        "signature_base64": base64.b64encode(signature).decode("ascii"),
+        "trust_state": "embedded_key_self_asserted",
+        "authenticity_boundary": SIGNATURE_BOUNDARY,
+    }
+
+
+def _verify_signature_artifact(
+    value: dict[str, Any],
+    manifest_material: bytes,
+    *,
+    trusted_public_key: Path | None,
+) -> dict[str, Any]:
+    expected_keys = {
+        "schema_version",
+        "algorithm",
+        "signed_artifact",
+        "signed_artifact_sha256",
+        "signer_key_id",
+        "public_key_base64",
+        "signature_base64",
+        "trust_state",
+        "authenticity_boundary",
+    }
+    if set(value) != expected_keys:
+        raise BundleError("M7 signature artifact does not match the closed schema")
+    if (
+        value.get("schema_version") != SIGNATURE_SCHEMA_VERSION
+        or value.get("algorithm") != "Ed25519"
+        or value.get("signed_artifact") != MANIFEST_NAME
+        or value.get("trust_state") != "embedded_key_self_asserted"
+        or value.get("authenticity_boundary") != SIGNATURE_BOUNDARY
+    ):
+        raise BundleError("M7 signature artifact semantics are invalid")
+    digest = value.get("signed_artifact_sha256")
+    if not isinstance(digest, str) or _SHA256.fullmatch(digest) is None:
+        raise BundleError("M7 signature artifact manifest digest is malformed")
+    if digest != hashlib.sha256(manifest_material).hexdigest():
+        raise BundleError("M7 signature does not bind the exact manifest bytes")
+    public_key = _canonical_base64(
+        value.get("public_key_base64"), label="M7 embedded public key", size=32
+    )
+    signature = _canonical_base64(
+        value.get("signature_base64"), label="M7 signature", size=64
+    )
+    key_id = f"sha256:{hashlib.sha256(public_key).hexdigest()}"
+    if value.get("signer_key_id") != key_id:
+        raise BundleError("M7 signature signer key ID is inconsistent")
+    _serialization, _private_type, public_type, invalid_signature = _ed25519_dependencies()
+    try:
+        public_type.from_public_bytes(public_key).verify(signature, manifest_material)
+    except invalid_signature as exc:
+        raise BundleError("M7 Ed25519 manifest signature is invalid") from exc
+    if trusted_public_key is None:
+        trust_mode = "embedded_key_untrusted"
+        authenticity = "not_established_without_caller_supplied_trusted_key"
+    else:
+        trusted_key = _load_trusted_public_key(trusted_public_key)
+        if trusted_key != public_key:
+            raise BundleError("M7 signature does not match the caller-supplied trusted key")
+        trust_mode = "caller_supplied_trusted_key_matched"
+        authenticity = "trusted_key_and_signature_matched_custody_not_established"
+    return {
+        "signature_present": True,
+        "cryptographic_signature_valid": True,
+        "signer_key_id": key_id,
+        "trust_mode": trust_mode,
+        "external_authenticity": authenticity,
+        "external_custody": "not_established",
+        "release_authorization": "not_established",
+    }
+
+
+def _validate_private_bundle_directory(bundle: Path) -> tuple[Path, bool]:
     if bundle.is_symlink() or not bundle.is_dir():
         raise BundleError("bundle path must be a non-symlink directory")
     resolved = bundle.resolve(strict=True)
     if stat.S_IMODE(resolved.stat().st_mode) & 0o077:
         raise BundleError("bundle directory is not private")
     names = {entry.name for entry in resolved.iterdir()}
-    if names != BUNDLE_NAMES:
+    if names not in {BUNDLE_NAMES, SIGNED_BUNDLE_NAMES}:
         raise BundleError("bundle file set is incomplete or contains unexpected entries")
-    for name in BUNDLE_NAMES:
+    for name in names:
         path = resolved / name
         metadata = path.lstat()
         if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
             raise BundleError(f"bundle entry is not a regular file: {name}")
         if stat.S_IMODE(metadata.st_mode) & 0o077:
             raise BundleError(f"bundle artifact is not private: {name}")
-    return resolved
+    return resolved, SIGNATURE_NAME in names
 
 
 def _verified_commit_artifact(
@@ -1561,12 +1786,41 @@ def _verify_bundle_details(
     bundle: Path,
     *,
     expected_commit: str | None,
+    trusted_public_key: Path | None,
+    require_signature: bool,
 ) -> tuple[dict[str, Any], tuple[SourceFile, ...]]:
-    resolved = _validate_private_bundle_directory(bundle)
+    resolved, signature_present = _validate_private_bundle_directory(bundle)
+    if require_signature and not signature_present:
+        raise BundleError("M7 signature is required but the bundle is unsigned")
+    if trusted_public_key is not None and not signature_present:
+        raise BundleError("caller supplied a trusted key for an unsigned M7 bundle")
+    manifest_material = _read_regular(resolved / MANIFEST_NAME, maximum=MAX_JSON_BYTES)
     manifest = _parse_canonical_json(
-        _read_regular(resolved / MANIFEST_NAME, maximum=MAX_JSON_BYTES),
+        manifest_material,
         label="bundle manifest",
     )
+    if signature_present:
+        signature_value = _parse_canonical_json(
+            _read_regular(resolved / SIGNATURE_NAME, maximum=MAX_JSON_BYTES),
+            label="M7 manifest signature",
+        )
+        signature_report = _verify_signature_artifact(
+            signature_value,
+            manifest_material,
+            trusted_public_key=trusted_public_key,
+        )
+        signer_key_id = str(signature_report["signer_key_id"])
+    else:
+        signature_report = {
+            "signature_present": False,
+            "cryptographic_signature_valid": False,
+            "signer_key_id": None,
+            "trust_mode": "unsigned",
+            "external_authenticity": "not_established_unsigned",
+            "external_custody": "not_established",
+            "release_authorization": "not_established",
+        }
+        signer_key_id = None
     descriptors = _artifact_descriptors(resolved)
     artifact_claims = manifest.get("artifacts")
     if artifact_claims != descriptors:
@@ -1616,7 +1870,12 @@ def _verify_bundle_details(
     )
     if inventory != _evidence_inventory(file_map):
         raise BundleError("milestone evidence inventory is altered or overstates evidence")
-    expected_manifest = _manifest(revision, descriptors, file_map)
+    expected_manifest = _manifest(
+        revision,
+        descriptors,
+        file_map,
+        signer_key_id=signer_key_id,
+    )
     if manifest != expected_manifest:
         raise BundleError("bundle manifest is altered or overstates source/release claims")
     report = {
@@ -1634,7 +1893,8 @@ def _verify_bundle_details(
                 else "not_established_without_external_expected_commit"
             ),
         },
-        "artifact_count": len(ARTIFACT_NAMES),
+        "artifact_count": len(ARTIFACT_NAMES) + int(signature_present),
+        "attestation": signature_report,
         "release_state": "not_published_or_publicly_released",
         "protocol_state": "specified_but_not_executed_by_bundle",
         "independent_replication": "not_established",
@@ -1648,10 +1908,17 @@ def verify_bundle(
     bundle: Path,
     *,
     expected_commit: str | None = None,
+    trusted_public_key: Path | None = None,
+    require_signature: bool = False,
 ) -> dict[str, Any]:
-    """Verify a bundle without Git, network access, or third-party packages."""
+    """Verify without Git/network; signed mode requires ``cryptography``."""
 
-    report, _files = _verify_bundle_details(bundle, expected_commit=expected_commit)
+    report, _files = _verify_bundle_details(
+        bundle,
+        expected_commit=expected_commit,
+        trusted_public_key=trusted_public_key,
+        require_signature=require_signature,
+    )
     return report
 
 
@@ -1665,10 +1932,17 @@ def extract_bundle_source(
     output: Path,
     *,
     expected_commit: str | None = None,
+    trusted_public_key: Path | None = None,
+    require_signature: bool = False,
 ) -> dict[str, Any]:
     """Verify and safely extract regular source files into a new directory."""
 
-    report, files = _verify_bundle_details(bundle, expected_commit=expected_commit)
+    report, files = _verify_bundle_details(
+        bundle,
+        expected_commit=expected_commit,
+        trusted_public_key=trusted_public_key,
+        require_signature=require_signature,
+    )
     if output.exists() or output.is_symlink() or output.name in {"", ".", ".."}:
         raise BundleError("refusing to overwrite an existing extraction path")
     if not output.parent.is_dir() or output.parent.is_symlink():
@@ -1708,11 +1982,18 @@ def build_bundle(
     output: Path,
     *,
     commit_reference: str = "HEAD",
+    signing_private_key: Path | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic candidate from the current clean exact HEAD."""
 
     destination = _resolved_external_output(output)
     revision = _resolve_current_source(commit_reference)
+    if signing_private_key is None:
+        private_key = None
+        public_key = None
+        signer_key_id = None
+    else:
+        private_key, public_key, signer_key_id = _signing_identity(signing_private_key)
     files = _load_git_files(str(revision["commit"]), str(revision["object_format"]))
     if _tree_oid(files, str(revision["object_format"])) != revision["tree"]:
         raise BundleError("loaded source files do not reconstruct the Git tree")
@@ -1740,10 +2021,31 @@ def build_bundle(
         _write_json(staging / EVIDENCE_NAME, _evidence_inventory(file_map))
         _write_bytes(staging / VERIFIER_NAME, verifier)
         descriptors = _artifact_descriptors(staging)
-        manifest = _manifest(revision, descriptors, file_map)
-        _write_json(staging / MANIFEST_NAME, manifest)
+        manifest = _manifest(
+            revision,
+            descriptors,
+            file_map,
+            signer_key_id=signer_key_id,
+        )
+        manifest_material = _canonical_bytes(manifest) + b"\n"
+        _write_bytes(staging / MANIFEST_NAME, manifest_material)
+        if private_key is not None and public_key is not None and signer_key_id is not None:
+            _write_json(
+                staging / SIGNATURE_NAME,
+                _signature_artifact(
+                    manifest_material,
+                    private_key=private_key,
+                    public_key=public_key,
+                    key_id=signer_key_id,
+                ),
+            )
         _fsync_directory(staging)
-        _verify_bundle_details(staging, expected_commit=str(revision["commit"]))
+        _verify_bundle_details(
+            staging,
+            expected_commit=str(revision["commit"]),
+            trusted_public_key=None,
+            require_signature=signer_key_id is not None,
+        )
         if (
             _command_text("git", "rev-parse", "HEAD") != revision["commit"]
             or _run(
@@ -1754,12 +2056,20 @@ def build_bundle(
         _publish_directory_noreplace(staging, destination)
         published = True
         _fsync_directory(destination.parent)
-        report = verify_bundle(destination, expected_commit=str(revision["commit"]))
+        report = verify_bundle(
+            destination,
+            expected_commit=str(revision["commit"]),
+            require_signature=signer_key_id is not None,
+        )
+        bundle_names = SIGNED_BUNDLE_NAMES if signer_key_id is not None else BUNDLE_NAMES
+        bundle_descriptors = {
+            name: _descriptor(destination / name) for name in sorted(bundle_names)
+        }
         return {
             **report,
             "bundle_path": str(destination),
             "artifact_set_sha256": hashlib.sha256(
-                _canonical_bytes(descriptors)
+                _canonical_bytes(bundle_descriptors)
             ).hexdigest(),
         }
     finally:
@@ -1775,13 +2085,22 @@ def _parser() -> argparse.ArgumentParser:
     build = commands.add_parser("build", help="build from the current clean exact HEAD")
     build.add_argument("--output", type=Path, required=True)
     build.add_argument("--commit", default="HEAD")
+    build.add_argument(
+        "--signing-private-key",
+        type=Path,
+        help="external unencrypted Ed25519 PEM key; emits a detached local signature",
+    )
     verify = commands.add_parser("verify", help="verify a retained bundle offline")
     verify.add_argument("--bundle", type=Path, required=True)
     verify.add_argument("--expected-commit")
+    verify.add_argument("--trusted-public-key", type=Path)
+    verify.add_argument("--require-signature", action="store_true")
     extract = commands.add_parser("extract", help="verify and safely extract exact source")
     extract.add_argument("--bundle", type=Path, required=True)
     extract.add_argument("--output", type=Path, required=True)
     extract.add_argument("--expected-commit")
+    extract.add_argument("--trusted-public-key", type=Path)
+    extract.add_argument("--require-signature", action="store_true")
     return parser
 
 
@@ -1789,17 +2108,25 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
         if arguments.command == "build":
-            result = build_bundle(arguments.output, commit_reference=arguments.commit)
+            result = build_bundle(
+                arguments.output,
+                commit_reference=arguments.commit,
+                signing_private_key=arguments.signing_private_key,
+            )
         elif arguments.command == "verify":
             result = verify_bundle(
                 arguments.bundle,
                 expected_commit=arguments.expected_commit,
+                trusted_public_key=arguments.trusted_public_key,
+                require_signature=arguments.require_signature,
             )
         else:
             result = extract_bundle_source(
                 arguments.bundle,
                 arguments.output,
                 expected_commit=arguments.expected_commit,
+                trusted_public_key=arguments.trusted_public_key,
+                require_signature=arguments.require_signature,
             )
     except BundleError as exc:
         print(f"M7 replication bundle error: {exc}", file=sys.stderr)

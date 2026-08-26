@@ -1,0 +1,89 @@
+{
+  "build_system": {
+    "build_backend": "setuptools.build_meta",
+    "requires": [
+      "setuptools==80.9.0"
+    ]
+  },
+  "dependency_license_policy": {
+    "allowed_classifiers": [
+      "OSI Approved :: Apache Software License",
+      "OSI Approved :: BSD License",
+      "OSI Approved :: ISC License (ISCL)",
+      "OSI Approved :: MIT License",
+      "OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+    ],
+    "allowed_legacy_fields": [
+      "3-Clause BSD License",
+      "Apache 2.0",
+      "Apache-2.0",
+      "BSD",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "ISC License",
+      "MIT",
+      "MPL-2.0 AND MIT"
+    ],
+    "allowed_spdx_identifiers": [
+      "0BSD",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "CC0-1.0",
+      "ISC",
+      "MIT",
+      "MIT-0",
+      "MIT-CMU",
+      "MPL-2.0",
+      "PSF-2.0",
+      "Zlib"
+    ],
+    "evidence_boundary": "Package-provided metadata is an automated policy signal, not legal review or release authorization."
+  },
+  "project": {
+    "author": "Angelis Pseftis",
+    "license": "Apache-2.0"
+  },
+  "release_boundaries": {
+    "dependency_artifact_hashes": "not_yet_complete",
+    "external_release_authorization": "required_not_established_by_ci",
+    "independent_security_assessment": "not_established",
+    "production_readiness": "not_established"
+  },
+  "schema_version": "aegis-ot-release-security-policy-v1",
+  "workflow": {
+    "approved_external_actions": {
+      "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "actions/setup-java": "dd06d9cba3e5552c54d9f8ea23572deb30010f7c",
+      "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+      "aquasecurity/trivy-action": "ed142fd0673e97e23eac54620cfb913e5ce36c25",
+      "github/codeql-action/analyze": "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28",
+      "github/codeql-action/init": "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
+    },
+    "allowed_action_owners": [
+      "actions",
+      "aquasecurity",
+      "github"
+    ],
+    "required_steps": [
+      "test:Enforce branch coverage floor",
+      "release-security:Install exact declared environment",
+      "release-security:Repository security policy",
+      "release-security:Installed dependency license policy",
+      "release-security:Verify signed M7 provenance",
+      "release-security:Install hash-locked vulnerability scanner",
+      "release-security:Python dependency vulnerability audit",
+      "release-security:Secret and configuration scan",
+      "release-security:Build exact-declaration container",
+      "release-security:Container vulnerability scan",
+      "codeql:Initialize CodeQL static analysis",
+      "codeql:Complete CodeQL static analysis"
+    ],
+    "semantic_sha256": "b813d8960f9470e52e196265753547b69fb8019909cb54e5b9dea28a396749d9"
+  },
+  "security_tools": {
+    "input_path": "security/requirements.in",
+    "lock_path": "security/requirements.lock",
+    "pip_audit_version": "2.10.1"
+  }
+}
