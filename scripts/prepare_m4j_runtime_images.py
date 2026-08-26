@@ -483,7 +483,14 @@ def _validate_saved_runtime_archive(
 
 
 def _inspect(reference: str) -> dict[str, Any] | None:
-    completed = _run("image", "inspect", reference, check=False)
+    completed = _run(
+        "image",
+        "inspect",
+        "--platform",
+        TARGET_PLATFORM,
+        reference,
+        check=False,
+    )
     if completed.returncode != 0:
         return None
     try:
@@ -521,21 +528,26 @@ def prepare_runtime_images(output: Path, *, pull: bool) -> dict[str, Any]:
         for name, contract in RUNTIME_IMAGES.items():
             reference = contract["reference"]
             registry_binding = _acquire_registry_binding(reference)
+            if pull:
+                _run("pull", "--platform", TARGET_PLATFORM, reference)
             inspected = _inspect(reference)
             if inspected is None:
                 if not pull:
                     _fail(f"runtime image is absent and --pull was not authorized: {name}")
-                _run("pull", "--platform", TARGET_PLATFORM, reference)
-                inspected = _inspect(reference)
-                if inspected is None:  # pragma: no cover - inspect invariant after pull
-                    _fail(f"runtime image remained absent after pull: {name}")
+                _fail(f"runtime image remained absent after pull: {name}")
             distribution_tag = (
                 f"aegis-m4j-runtime/{name}:"
                 f"{reference.rsplit('sha256:', maxsplit=1)[1][:16]}"
             )
             _run("image", "tag", reference, distribution_tag)
             temporary_tags.append(distribution_tag)
-            tagged = _run("image", "inspect", distribution_tag)
+            tagged = _run(
+                "image",
+                "inspect",
+                "--platform",
+                TARGET_PLATFORM,
+                distribution_tag,
+            )
             tagged_document = _load_json(tagged.stdout, label="tagged Docker inspection")
             if (
                 not isinstance(tagged_document, list)
@@ -545,7 +557,15 @@ def prepare_runtime_images(output: Path, *, pull: bool) -> dict[str, Any]:
             ):
                 _fail(f"runtime image tag changed image identity: {name}")
             archive_path = destination / contract["archive"]
-            _run("image", "save", "--output", str(archive_path), distribution_tag)
+            _run(
+                "image",
+                "save",
+                "--platform",
+                TARGET_PLATFORM,
+                "--output",
+                str(archive_path),
+                distribution_tag,
+            )
             archive_path.chmod(0o600)
             archive_validator = _load_archive_validator()
             try:
@@ -615,7 +635,10 @@ def main() -> None:
     parser.add_argument(
         "--pull",
         action="store_true",
-        help="authorize authenticated registry pulls for exact missing digests",
+        help=(
+            "authorize authenticated registry pulls that refresh each exact digest "
+            "for linux/amd64"
+        ),
     )
     arguments = parser.parse_args()
     manifest = prepare_runtime_images(arguments.output, pull=arguments.pull)

@@ -1844,6 +1844,127 @@ def test_consumer_requires_out_of_band_trusted_builder_for_foreign_image(
         )
 
 
+def test_runtime_pull_refreshes_linux_amd64_before_inspecting_cached_image(
+    runtime_preparer: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_id = "sha256:" + "a" * 64
+    reference = "registry.example.invalid/runtime:1@sha256:" + "b" * 64
+    distribution_tag = "aegis-m4j-runtime/fixture:" + "b" * 16
+    registry_binding = {"registry_reference": reference}
+    archive_binding = {"config_sha256": "c" * 64}
+    calls: list[tuple[str, ...]] = []
+    pulled = False
+
+    monkeypatch.setenv("DOCKER_DEFAULT_PLATFORM", "linux/arm64")
+    monkeypatch.setattr(
+        runtime_preparer,
+        "RUNTIME_IMAGES",
+        {
+            "fixture": {
+                "reference": reference,
+                "archive": "fixture-image.tar",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_acquire_registry_binding",
+        lambda actual: registry_binding if actual == reference else pytest.fail(actual),
+    )
+
+    def fake_run(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        nonlocal pulled
+        calls.append(arguments)
+        if arguments[0] == "pull":
+            assert arguments == ("pull", "--platform", "linux/amd64", reference)
+            pulled = True
+            return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
+        if arguments[:2] == ("image", "tag"):
+            assert arguments == ("image", "tag", reference, distribution_tag)
+        elif arguments[:2] == ("image", "inspect"):
+            assert arguments == (
+                "image",
+                "inspect",
+                "--platform",
+                "linux/amd64",
+                distribution_tag,
+            )
+            return subprocess.CompletedProcess(
+                arguments,
+                0,
+                stdout=json.dumps([{"Id": image_id}]),
+                stderr="",
+            )
+        elif arguments[:2] == ("image", "save"):
+            assert arguments[:5] == (
+                "image",
+                "save",
+                "--platform",
+                "linux/amd64",
+                "--output",
+            )
+            assert arguments[-1] == distribution_tag
+            Path(arguments[5]).write_bytes(b"fixture-archive")
+        elif arguments[:2] == ("image", "rm"):
+            assert check is False
+            assert arguments == ("image", "rm", distribution_tag)
+        else:
+            pytest.fail(f"unexpected Docker command: {arguments}")
+        return subprocess.CompletedProcess(arguments, 0, stdout="", stderr="")
+
+    def inspect_after_pull(actual: str) -> dict[str, Any]:
+        assert actual == reference
+        assert pulled, "linux/amd64 must be pulled before inspecting an arm64 cache"
+        return {"image_id": image_id, "repo_digests": [reference]}
+
+    def canonicalize(
+        archive_path: Path,
+        **arguments: Any,
+    ) -> None:
+        assert archive_path.name == "fixture-image.tar"
+        assert arguments["expected_image_id"] == image_id
+        assert arguments["expected_platform"] == {
+            "requested": "linux/amd64",
+            "os": "linux",
+            "architecture": "amd64",
+            "variant": None,
+        }
+
+    monkeypatch.setattr(runtime_preparer, "_run", fake_run)
+    monkeypatch.setattr(runtime_preparer, "_inspect", inspect_after_pull)
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_load_archive_validator",
+        lambda: SimpleNamespace(_canonicalize_saved_image_archive=canonicalize),
+    )
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_file_evidence",
+        lambda path: {
+            "path": path.name,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "size_bytes": path.stat().st_size,
+        },
+    )
+    monkeypatch.setattr(
+        runtime_preparer,
+        "_validate_saved_runtime_archive",
+        lambda *args, **kwargs: archive_binding,
+    )
+
+    manifest = runtime_preparer.prepare_runtime_images(
+        tmp_path / "runtime-images",
+        pull=True,
+    )
+
+    assert calls[0] == ("pull", "--platform", "linux/amd64", reference)
+    assert calls[-1] == ("image", "rm", distribution_tag)
+    assert manifest["target_platform"] == "linux/amd64"
+    assert manifest["images"]["fixture"]["platform"] == "linux/amd64"
+
+
 def test_runtime_archive_is_cryptographically_bound_to_registry_manifest(
     runtime_preparer: Any,
     tmp_path: Path,
