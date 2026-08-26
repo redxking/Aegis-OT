@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" role="img" aria-labelledby="title description">
+  <title id="title">Authorized action transaction</title>
+  <desc id="description">Sequence view of the capability transaction from challenged pre-observation through authorization, candidate evaluation, permit verification, plant acknowledgment, post-observation, and terminal classification.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="1100" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Authorized action transaction</text>
+  <text x="64" y="83" class="page-subtitle">Observe first • authorize independently • simulate • dispatch once • verify effect</text>
+  <rect x="45" y="185" width="1510" height="170" rx="0" class="phase-band"/>
+  <text x="1535" y="207" class="phase-label" text-anchor="end">OBSERVE</text>
+  <rect x="45" y="360" width="1510" height="195" rx="0" class="phase-band-alt"/>
+  <text x="1535" y="382" class="phase-label" text-anchor="end">AUTHORIZE</text>
+  <rect x="45" y="560" width="1510" height="50" rx="0" class="phase-band"/>
+  <text x="1535" y="582" class="phase-label" text-anchor="end">SIMULATE</text>
+  <rect x="45" y="615" width="1510" height="185" rx="0" class="phase-band-alt"/>
+  <text x="1535" y="637" class="phase-label" text-anchor="end">DISPATCH</text>
+  <rect x="45" y="805" width="1510" height="135" rx="0" class="phase-band"/>
+  <text x="1535" y="827" class="phase-label" text-anchor="end">VERIFY + CLASSIFY</text>
+  <rect x="15" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="90" y="147" class="box-title" text-anchor="middle">Agent</text>
+  <line x1="90" y1="167" x2="90" y2="940" class="lifeline"/>
+  <rect x="225" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="300" y="147" class="box-title" text-anchor="middle">Gateway</text>
+  <line x1="300" y1="167" x2="300" y2="940" class="lifeline"/>
+  <rect x="425" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="500" y="147" class="box-title" text-anchor="middle">OPA</text>
+  <line x1="500" y1="167" x2="500" y2="940" class="lifeline"/>
+  <rect x="625" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="700" y="147" class="box-title" text-anchor="middle">Observer</text>
+  <line x1="700" y1="167" x2="700" y2="940" class="lifeline"/>
+  <rect x="835" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="910" y="147" class="box-title" text-anchor="middle">Candidate</text>
+  <line x1="910" y1="167" x2="910" y2="940" class="lifeline"/>
+  <rect x="1065" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="1140" y="147" class="box-title" text-anchor="middle">OT adapter</text>
+  <line x1="1140" y1="167" x2="1140" y2="940" class="lifeline"/>
+  <rect x="1325" y="115" width="150" height="52" rx="14" class="component"/>
+  <text x="1400" y="147" class="box-title" text-anchor="middle">Plant</text>
+  <line x1="1400" y1="167" x2="1400" y2="940" class="lifeline"/>
+  <circle cx="62" cy="200" r="17" fill="#1768a8"/>
+  <text x="62" y="205" class="step-number" text-anchor="middle">1</text>
+  <polyline points="90,200 300,200" class="flow"/>
+  <text x="195" y="179" class="line-label" text-anchor="middle">Request challenged pre-observation</text>
+  <circle cx="272" cy="245" r="17" fill="#1768a8"/>
+  <text x="272" y="250" class="step-number" text-anchor="middle">2</text>
+  <polyline points="300,245 700,245" class="flow"/>
+  <text x="500" y="224" class="line-label" text-anchor="middle">Request pre-capture</text>
+  <circle cx="672" cy="290" r="17" fill="#1768a8"/>
+  <text x="672" y="295" class="step-number" text-anchor="middle">3</text>
+  <polyline points="700,290 1400,290" class="flow"/>
+  <text x="1050" y="269" class="line-label" text-anchor="middle">Signed read-only capture</text>
+  <circle cx="272" cy="335" r="17" fill="#1768a8"/>
+  <text x="272" y="340" class="step-number" text-anchor="middle">4</text>
+  <polyline points="700,335 300,335" class="return-flow"/>
+  <text x="500" y="314" class="line-label" text-anchor="middle">Signed pre-observation</text>
+  <circle cx="62" cy="390" r="17" fill="#1768a8"/>
+  <text x="62" y="395" class="step-number" text-anchor="middle">5</text>
+  <polyline points="90,390 300,390" class="flow"/>
+  <text x="195" y="369" class="line-label" text-anchor="middle">Action + bound pre-observation</text>
+  <circle cx="272" cy="435" r="17" fill="#1768a8"/>
+  <text x="272" y="440" class="step-number" text-anchor="middle">6</text>
+  <polyline points="300,435 700,435" class="flow"/>
+  <text x="500" y="414" class="line-label" text-anchor="middle">Resolve + verify pre-observation</text>
+  <circle cx="272" cy="480" r="17" fill="#1768a8"/>
+  <text x="272" y="485" class="step-number" text-anchor="middle">7</text>
+  <polyline points="300,480 500,480" class="flow"/>
+  <text x="400" y="459" class="line-label" text-anchor="middle">OPA policy-permit query</text>
+  <circle cx="272" cy="535" r="17" fill="#1768a8"/>
+  <text x="272" y="540" class="step-number" text-anchor="middle">8</text>
+  <polyline points="300,535 910,535" class="flow"/>
+  <text x="605" y="514" class="line-label" text-anchor="middle">Request candidate evaluation</text>
+  <circle cx="882" cy="580" r="17" fill="#1768a8"/>
+  <text x="882" y="585" class="step-number" text-anchor="middle">9</text>
+  <polyline points="910,580 1400,580" class="flow"/>
+  <text x="1155" y="559" class="line-label" text-anchor="middle">Non-mutating bound simulation</text>
+  <circle cx="272" cy="645" r="17" fill="#1768a8"/>
+  <text x="272" y="650" class="step-number" text-anchor="middle">10</text>
+  <polyline points="300,645 1140,645" class="flow"/>
+  <text x="720" y="624" class="line-label" text-anchor="middle">Execute once with signed permit</text>
+  <circle cx="1112" cy="690" r="17" fill="#1768a8"/>
+  <text x="1112" y="695" class="step-number" text-anchor="middle">11</text>
+  <polyline points="1140,690 1400,690" class="flow"/>
+  <text x="1270" y="669" class="line-label" text-anchor="middle">Signed compare-and-set apply</text>
+  <circle cx="1112" cy="735" r="17" fill="#1768a8"/>
+  <text x="1112" y="740" class="step-number" text-anchor="middle">12</text>
+  <polyline points="1400,735 1140,735" class="return-flow"/>
+  <text x="1270" y="714" class="line-label" text-anchor="middle">Signed effect acknowledgment</text>
+  <circle cx="272" cy="780" r="17" fill="#1768a8"/>
+  <text x="272" y="785" class="step-number" text-anchor="middle">13</text>
+  <polyline points="1140,780 300,780" class="return-flow"/>
+  <text x="720" y="759" class="line-label" text-anchor="middle">Verified signed response</text>
+  <circle cx="272" cy="825" r="17" fill="#1768a8"/>
+  <text x="272" y="830" class="step-number" text-anchor="middle">14</text>
+  <polyline points="300,825 700,825" class="flow"/>
+  <text x="500" y="804" class="line-label" text-anchor="middle">Post-capture after valid applied ACK</text>
+  <circle cx="672" cy="870" r="17" fill="#1768a8"/>
+  <text x="672" y="875" class="step-number" text-anchor="middle">15</text>
+  <polyline points="700,870 1400,870" class="flow"/>
+  <text x="1050" y="849" class="line-label" text-anchor="middle">Signed read-only post-capture</text>
+  <circle cx="272" cy="915" r="17" fill="#1768a8"/>
+  <text x="272" y="920" class="step-number" text-anchor="middle">16</text>
+  <polyline points="700,915 300,915" class="return-flow"/>
+  <text x="500" y="894" class="line-label" text-anchor="middle">Bound post-observation + terminal status</text>
+  <rect x="235" y="970" width="1285" height="82" rx="10" class="active"/>
+  <text x="878" y="998" class="box-text" text-anchor="middle"><tspan x="878" dy="0">Policy denial or unsafe candidate → no dispatch • missing consequential evidence → unknown_effect • automatic_retry_count = 0</tspan><tspan x="878" dy="22">M4i prepare / commit / query remains active development and is not a current branch of this transaction</tspan></text>
+</svg>

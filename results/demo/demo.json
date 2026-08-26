@@ -1,6 +1,6 @@
 {
   "proposal": {
-    "proposal_id": "bb284344-35f8-4781-89c4-c7c3871c1c29",
+    "proposal_id": "d5522535-9186-47b4-8324-d094e5cf1db4",
     "actor_id": "agent:operator-1",
     "mission_id": "microgrid-containment",
     "resource": "feeder-1",
@@ -9,9 +9,9 @@
       "critical_load_impact_pct": 5.0
     },
     "observed_state_version": 1,
-    "observed_at": "2026-08-24T14:38:10.605853Z",
-    "submitted_at": "2026-08-24T14:38:10.612743Z",
-    "nonce": "demo-1787582290.605853",
+    "observed_at": "2026-08-24T21:14:37.722682Z",
+    "submitted_at": "2026-08-24T21:14:37.730960Z",
+    "nonce": "demo-1787606077.722682",
     "confidence": 0.95,
     "risk_score": 40.0,
     "delegation_chain": [
@@ -21,26 +21,26 @@
     "human_approval_id": null
   },
   "decision": {
-    "decision_id": "e57afded-880a-4fe9-a505-74b90cfdf8fb",
-    "proposal_id": "bb284344-35f8-4781-89c4-c7c3871c1c29",
+    "decision_id": "9f2db731-5c5f-4d46-8c04-cd25e40af25a",
+    "proposal_id": "d5522535-9186-47b4-8324-d094e5cf1db4",
     "outcome": "permit",
     "reasons": [
       "all_checks_passed"
     ],
-    "decided_at": "2026-08-24T14:38:10.613280Z",
+    "decided_at": "2026-08-24T21:14:37.731590Z",
     "policy_version": "local-contextual-v1",
     "safety_version": "surrogate-safety-v1",
     "state_version": 1,
-    "evidence_record_hash": "92023d60e5d77842c719f81a3b474ff61e358bd4ddb0c8c1ec7403699c3da5a2"
+    "evidence_record_hash": "eeadb132e12a9cbe0493509da8bba82c2792d1d9055363387f92c52fb2f4b6ac"
   },
   "execution": {
-    "proposal_id": "bb284344-35f8-4781-89c4-c7c3871c1c29",
-    "decision_id": "e57afded-880a-4fe9-a505-74b90cfdf8fb",
+    "proposal_id": "d5522535-9186-47b4-8324-d094e5cf1db4",
+    "decision_id": "9f2db731-5c5f-4d46-8c04-cd25e40af25a",
     "executed": true,
-    "acknowledged_at": "2026-08-24T14:38:10.613367Z",
+    "acknowledged_at": "2026-08-24T21:14:37.731675Z",
     "resulting_state": {
       "version": 2,
-      "observed_at": "2026-08-24T14:38:10.605853Z",
+      "observed_at": "2026-08-24T21:14:37.722682Z",
       "critical_load_served_pct": 95.0,
       "minimum_voltage_pu": 0.99,
       "maximum_voltage_pu": 1.01,

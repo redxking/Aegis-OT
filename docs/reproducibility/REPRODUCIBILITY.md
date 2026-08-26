@@ -1,5 +1,8 @@
 # Reproducibility Protocol
 
+See the maintained [evidence and verification views](../architecture/diagram-set.md#09--evidence-and-reproducibility)
+for the cross-milestone provenance, public-demo, setup, and claim boundaries.
+
 Every reported experiment must include a manifest with the Git commit, dirty-tree
 state, UTC timestamp, scenario catalog and hash, all master seeds, baselines,
 policy, kernel and oracle versions, source hashes, host information, raw-data
@@ -64,6 +67,7 @@ Run these commands from the repository root before recording an experiment:
 ```bash
 .venv/bin/python scripts/export_schemas.py --check
 .venv/bin/python scripts/build_public_demo.py --check
+.venv/bin/python scripts/build_system_diagrams.py --check
 .venv/bin/ruff check .
 .venv/bin/mypy src scripts/build_public_demo.py
 .venv/bin/python -m pytest \
@@ -75,14 +79,11 @@ AEGIS_TLA_JAR=/absolute/path/to/tla2tools-1.8.0.jar
   --output-dir /private/tmp/aegis-formal-check
 ```
 
-The isolated candidate tree produces 478 passing tests and 92.05 percent
-branch-aware coverage. That run used the committed retained-evidence files while
-leaving user-modified result files untouched in the primary working tree. Ruff,
-strict mypy, and schema-drift checks are clean locally. The previously verified
-bounded intended and weakened formal-model evidence is unchanged. These
-observations are local evidence only. They do not establish a remote CI result,
-container startup, deployed isolation, physical validity, or independent
-replication.
+Record exact test counts, coverage, tool versions, and source revision with the
+run being assessed rather than preserving a moving snapshot in this protocol.
+A clean local verification run is implementation evidence only. It does not
+establish a remote CI result, container startup, deployed isolation, physical
+validity, or independent replication.
 
 Schema checking covers `ActionProposal`; the M3 physical-state, physical
 command, candidate assessment, execution permit, acknowledgment,

@@ -1,5 +1,11 @@
 # System Context
 
+The current cross-milestone architecture, behavior, deployment, trust, and
+evidence views are maintained in the
+[systems-engineering diagram set](diagram-set.md). The detailed M4a material
+below remains the design record for that bounded capability slice; later
+Compose overlays do not convert it into a production or fielded system.
+
 ## Planes and responsibilities
 
 | Plane | Responsibility | Trust boundary |
@@ -14,7 +20,11 @@
 
 ## Decision states
 
-The initial executable implementation supports `permit`, `deny`, `require_approval`, and `quarantine`. `modify`, `defer`, `simulate`, and `revoke` remain modeled outcomes for later command-path integration.
+The current gateway emits `permit`, `deny`, or `require_approval`. The broader
+decision enum also contains `quarantine`, `modify`, `defer`, `simulate`, and
+`revoke`, but the gateway does not currently emit those outcomes. A required
+approval is represented only by the presence of an approval reference; the
+current implementation does not validate an approval authority or signature.
 
 ## Availability posture
 

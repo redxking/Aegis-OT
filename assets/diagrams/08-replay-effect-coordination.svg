@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">Replay resistance and effect coordination</title>
+  <desc id="description">Transport replay, semantic replay, and M4i effect coordination are distinct controls. The first two are integrated; M4i remains a component-tested protocol not wired into the current end-to-end runtime.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="900" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Replay resistance and effect coordination</text>
+  <text x="64" y="83" class="page-subtitle">Three layers address different duplicate and uncertainty hazards</text>
+  <rect x="55" y="170" width="420" height="180" rx="14" class="component"/>
+  <text x="265" y="204" class="box-title" text-anchor="middle">1 • Exact-envelope replay</text>
+  <text x="265" y="233" class="box-text" text-anchor="middle"><tspan x="265" dy="0">Signed request bytes</tspan><tspan x="265" dy="23">Nonce / freshness / audience</tspan><tspan x="265" dy="23">Persistent transport ledger</tspan></text>
+  <polyline points="265,350 265,430" class="flow"/>
+  <rect x="85" y="430" width="360" height="90" rx="14" class="terminal-neutral"/>
+  <text x="265" y="460" class="box-title" text-anchor="middle">Guarded result</text>
+  <text x="265" y="489" class="box-text" text-anchor="middle"><tspan x="265" dy="0">Duplicate envelope → reject</tspan></text>
+  <rect x="590" y="170" width="420" height="180" rx="14" class="primary"/>
+  <text x="800" y="204" class="box-title" text-anchor="middle">2 • Semantic replay</text>
+  <text x="800" y="233" class="box-text" text-anchor="middle"><tspan x="800" dy="0">Workload subject + action</tspan><tspan x="800" dy="23">Effect/correlation identity</tspan><tspan x="800" dy="23">Persistent semantic ledger</tspan></text>
+  <polyline points="800,350 800,430" class="flow"/>
+  <rect x="620" y="430" width="360" height="90" rx="14" class="terminal-neutral"/>
+  <text x="800" y="460" class="box-title" text-anchor="middle">Guarded result</text>
+  <text x="800" y="489" class="box-text" text-anchor="middle"><tspan x="800" dy="0">Same intended effect → reject</tspan></text>
+  <rect x="1125" y="170" width="420" height="180" rx="14" class="active"/>
+  <text x="1335" y="204" class="box-title" text-anchor="middle">3 • Effect coordination</text>
+  <text x="1335" y="233" class="box-text" text-anchor="middle"><tspan x="1335" dy="0">Signed prepare / commit / query</tspan><tspan x="1335" dy="23">Gateway + OT journals</tspan><tspan x="1335" dy="23">Recovery by reconciliation</tspan></text>
+  <polyline points="1335,350 1335,430" class="active-flow"/>
+  <rect x="1155" y="430" width="360" height="90" rx="14" class="terminal-neutral"/>
+  <text x="1335" y="460" class="box-title" text-anchor="middle">Guarded result</text>
+  <text x="1335" y="489" class="box-text" text-anchor="middle"><tspan x="1335" dy="0">Uncertain result → query; no blind retry</tspan></text>
+  <polyline points="475,260 590,260" class="optional-flow"/>
+  <polyline points="1010,260 1125,260" class="active-flow"/>
+  <rect x="211" y="540" width="108" height="28" rx="14" class="status-implemented"/>
+  <text x="265" y="559" class="status-text" text-anchor="middle">INTEGRATED</text>
+  <rect x="746" y="540" width="108" height="28" rx="14" class="status-implemented"/>
+  <text x="800" y="559" class="status-text" text-anchor="middle">INTEGRATED</text>
+  <rect x="1250" y="540" width="178" height="28" rx="14" class="status-active"/>
+  <text x="1339" y="559" class="status-text" text-anchor="middle">NOT WIRED END TO END</text>
+  <rect x="55" y="590" width="1430" height="235" rx="18" class="lane-amber"/>
+  <text x="79" y="622" class="lane-title" text-anchor="start">M4i protocol boundary • active development</text>
+  <rect x="105" y="650" width="300" height="95" rx="14" class="evidence"/>
+  <text x="255" y="684" class="box-title" text-anchor="middle">Gateway journal</text>
+  <text x="255" y="713" class="box-text" text-anchor="middle"><tspan x="255" dy="0">RECEIVED</tspan><tspan x="255" dy="23">→ DISPATCH_ARMED</tspan></text>
+  <rect x="640" y="630" width="320" height="130" rx="14" class="active"/>
+  <text x="800" y="664" class="box-title" text-anchor="middle">Signed coordination</text>
+  <text x="800" y="693" class="box-text" text-anchor="middle"><tspan x="800" dy="0">prepare</tspan><tspan x="800" dy="23">commit</tspan><tspan x="800" dy="23">query</tspan></text>
+  <rect x="1195" y="650" width="270" height="95" rx="14" class="evidence"/>
+  <text x="1330" y="684" class="box-title" text-anchor="middle">OT journal</text>
+  <text x="1330" y="713" class="box-text" text-anchor="middle"><tspan x="1330" dy="0">COMMIT_ACCEPTED</tspan><tspan x="1330" dy="23">effect outcome</tspan></text>
+  <polyline points="405,680 640,680" class="active-flow"/>
+  <text x="522" y="662" class="line-label" text-anchor="middle">prepare</text>
+  <polyline points="960,680 1195,680" class="active-flow"/>
+  <text x="1078" y="662" class="line-label" text-anchor="middle">commit / query</text>
+  <polyline points="1195,730 960,730" class="return-flow"/>
+  <text x="1078" y="754" class="line-label" text-anchor="middle">signed outcome</text>
+</svg>

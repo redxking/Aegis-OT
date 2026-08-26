@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">System context and external interfaces</title>
+  <desc id="description">The context view separates proposal sources, reviewers, trust administration, simulated OT, and retained research evidence from the Aegis-OT runtime-assurance boundary.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#fff"/>
+  <text x="64" y="54" class="page-title">System context and external interfaces</text>
+  <text x="64" y="83" class="page-subtitle">Who interacts with Aegis-OT, what crosses the boundary, and what remains outside scope</text>
+  <rect x="360" y="120" width="850" height="595" rx="18" class="lane-blue"/>
+  <text x="384" y="152" class="lane-title" text-anchor="start">Aegis-OT runtime-assurance boundary</text>
+  <rect x="450" y="170" width="670" height="110" rx="14" class="primary"/>
+  <text x="785" y="204" class="box-title" text-anchor="middle">Independent authorization</text>
+  <text x="785" y="233" class="box-text" text-anchor="middle"><tspan x="785" dy="0">authority • freshness • replay • OPA policy • modeled safety • approval reference</tspan></text>
+  <rect x="450" y="355" width="310" height="130" rx="14" class="evidence"/>
+  <text x="605" y="389" class="box-title" text-anchor="middle">Evidence services</text>
+  <text x="605" y="418" class="box-text" text-anchor="middle"><tspan x="605" dy="0">correlate</tspan><tspan x="605" dy="23">sign / hash</tspan><tspan x="605" dy="23">classify outcome</tspan></text>
+  <rect x="810" y="355" width="310" height="130" rx="14" class="component"/>
+  <text x="965" y="389" class="box-title" text-anchor="middle">Consequence services</text>
+  <text x="965" y="418" class="box-text" text-anchor="middle"><tspan x="965" dy="0">fresh observe</tspan><tspan x="965" dy="23">non-mutating simulate</tspan><tspan x="965" dy="23">dispatch at most once</tspan></text>
+  <rect x="450" y="560" width="670" height="95" rx="14" class="terminal-neutral"/>
+  <text x="785" y="594" class="box-title" text-anchor="middle">Fail-closed result</text>
+  <text x="785" y="623" class="box-text" text-anchor="middle"><tspan x="785" dy="0">permit • deny • require approval • known no effect • unknown effect</tspan></text>
+  <rect x="60" y="170" width="240" height="110" rx="14" class="outside"/>
+  <text x="180" y="204" class="box-title" text-anchor="middle">Bounded agent</text>
+  <text x="180" y="233" class="box-text" text-anchor="middle"><tspan x="180" dy="0">Proposes actions</tspan><tspan x="180" dy="23">No direct control authority</tspan></text>
+  <rect x="1290" y="170" width="240" height="110" rx="14" class="outside"/>
+  <text x="1410" y="204" class="box-title" text-anchor="middle">Trust administrator</text>
+  <text x="1410" y="233" class="box-text" text-anchor="middle"><tspan x="1410" dy="0">Policy • trust roots</tspan><tspan x="1410" dy="23">Credentials • registration</tspan></text>
+  <rect x="1290" y="355" width="240" height="130" rx="14" class="plant"/>
+  <text x="1410" y="389" class="box-title" text-anchor="middle">Simulated OT</text>
+  <text x="1410" y="418" class="box-text" text-anchor="middle"><tspan x="1410" dy="0">Authoritative lab state</tspan><tspan x="1410" dy="23">PyModbus / pandapower</tspan><tspan x="1410" dy="23">No production connection</tspan></text>
+  <rect x="60" y="790" width="240" height="100" rx="14" class="outside"/>
+  <text x="180" y="824" class="box-title" text-anchor="middle">Reviewer / operator</text>
+  <text x="180" y="853" class="box-text" text-anchor="middle"><tspan x="180" dy="0">Reviews packaged evidence</tspan><tspan x="180" dy="23">No direct runtime control</tspan></text>
+  <rect x="1290" y="790" width="240" height="100" rx="14" class="evidence"/>
+  <text x="1410" y="824" class="box-title" text-anchor="middle">Retained results</text>
+  <text x="1410" y="853" class="box-text" text-anchor="middle"><tspan x="1410" dy="0">Manifests • raw records</tspan><tspan x="1410" dy="23">hashes • signatures</tspan></text>
+  <polyline points="300,225 450,225" class="flow"/>
+  <text x="375" y="208" class="line-label" text-anchor="middle">ActionProposal</text>
+  <polyline points="1290,225 1120,225" class="optional-flow"/>
+  <text x="1205" y="208" class="line-label" text-anchor="middle">policy + trust</text>
+  <polyline points="970,280 970,355" class="flow"/>
+  <text x="1010" y="322" class="line-label" text-anchor="middle">authorize</text>
+  <polyline points="600,280 600,355" class="evidence-flow"/>
+  <text x="655" y="322" class="line-label" text-anchor="middle">decision record</text>
+  <polyline points="810,420 760,420" class="evidence-flow"/>
+  <text x="785" y="403" class="line-label" text-anchor="middle">events</text>
+  <polyline points="1120,400 1290,400" class="return-flow"/>
+  <text x="1205" y="383" class="line-label" text-anchor="middle">bounded command</text>
+  <polyline points="1290,450 1120,450" class="return-flow"/>
+  <text x="1205" y="475" class="line-label" text-anchor="middle">state + ACK</text>
+  <polyline points="605,485 605,560" class="evidence-flow"/>
+  <text x="655" y="530" class="line-label" text-anchor="middle">disposition</text>
+  <polyline points="1120,607 1235,607 1235,820 1290,820" class="evidence-flow"/>
+  <text x="1260" y="745" class="line-label" text-anchor="middle">retain</text>
+  <polyline points="1290,865 300,865" class="evidence-flow"/>
+  <text x="795" y="847" class="line-label" text-anchor="middle">read-only projection</text>
+  <text x="360" y="748" class="section-title" text-anchor="start">LEGEND</text>
+  <rect x="455" y="731" width="138" height="28" rx="14" class="status-outside"/>
+  <text x="524" y="750" class="status-text" text-anchor="middle">UNTRUSTED INPUT</text>
+  <rect x="645" y="731" width="108" height="28" rx="14" class="status-implemented"/>
+  <text x="699" y="750" class="status-text" text-anchor="middle">IMPLEMENTED</text>
+  <rect x="815" y="731" width="108" height="28" rx="14" class="status-optional"/>
+  <text x="869" y="750" class="status-text" text-anchor="middle">OPTIONAL</text>
+  <rect x="955" y="731" width="154" height="28" rx="14" class="status-retained"/>
+  <text x="1032" y="750" class="status-text" text-anchor="middle">RETAINED EVIDENCE</text>
+  <text x="1510" y="950" class="small-text" text-anchor="end">Physical PLCs • HIL • multi-host deployment • field operation are outside the current boundary</text>
+</svg>

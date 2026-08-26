@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">Identity and transport trust lifecycle</title>
+  <desc id="description">The identity view separates application-level workload credentials from optional SPIRE-issued X.509-SVIDs. It also shows which links remain HTTP and the non-immediate revocation boundary.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="900" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Identity and transport trust lifecycle</text>
+  <text x="64" y="83" class="page-subtitle">Application credentials and SPIRE mTLS are complementary controls with different boundaries</text>
+  <rect x="45" y="120" width="725" height="650" rx="18" class="lane-blue"/>
+  <text x="69" y="152" class="lane-title" text-anchor="start">Application workload identity • M4g</text>
+  <rect x="80" y="190" width="260" height="100" rx="14" class="policy"/>
+  <text x="210" y="224" class="box-title" text-anchor="middle">Offline authority</text>
+  <text x="210" y="253" class="box-text" text-anchor="middle"><tspan x="210" dy="0">Root signs credentials</tspan><tspan x="210" dy="23">Trust bundle distributed</tspan></text>
+  <rect x="445" y="165" width="275" height="130" rx="14" class="component"/>
+  <text x="582" y="199" class="box-title" text-anchor="middle">identity-init</text>
+  <text x="582" y="228" class="box-text" text-anchor="middle"><tspan x="582" dy="0">Creates agent, gateway,</tspan><tspan x="582" dy="23">and OT credentials</tspan><tspan x="582" dy="23">Mounts bundle read-only</tspan></text>
+  <polyline points="340,240 445,240" class="flow"/>
+  <text x="392" y="222" class="line-label" text-anchor="middle">signing key</text>
+  <text x="68" y="325" class="phase-label" text-anchor="start">PROVISIONING</text>
+  <line x1="65" y1="340" x2="750" y2="340" class="divider"/>
+  <text x="68" y="365" class="phase-label" text-anchor="start">RUNTIME</text>
+  <rect x="120" y="375" width="245" height="75" rx="14" class="component"/>
+  <text x="242" y="404" class="box-title" text-anchor="middle">Agent probe</text>
+  <text x="242" y="433" class="box-text" text-anchor="middle"><tspan x="242" dy="0">credential + private key</tspan></text>
+  <rect x="120" y="495" width="245" height="75" rx="14" class="component"/>
+  <text x="242" y="524" class="box-title" text-anchor="middle">Segmented gateway</text>
+  <text x="242" y="553" class="box-text" text-anchor="middle"><tspan x="242" dy="0">credential + private key</tspan></text>
+  <rect x="120" y="615" width="245" height="75" rx="14" class="component"/>
+  <text x="242" y="644" class="box-title" text-anchor="middle">OT adapter</text>
+  <text x="242" y="673" class="box-text" text-anchor="middle"><tspan x="242" dy="0">credential + private key</tspan></text>
+  <line x1="500" y1="295" x2="500" y2="330" class="bus"/>
+  <line x1="80" y1="330" x2="500" y2="330" class="bus"/>
+  <line x1="80" y1="330" x2="80" y2="652" class="bus"/>
+  <text x="290" y="319" class="line-label" text-anchor="middle">read-only credential files</text>
+  <polyline points="80,412 120,412" class="flow"/>
+  <polyline points="80,532 120,532" class="flow"/>
+  <polyline points="80,652 120,652" class="flow"/>
+  <rect x="465" y="420" width="235" height="135" rx="14" class="primary"/>
+  <text x="582" y="454" class="box-title" text-anchor="middle">Signed envelopes</text>
+  <text x="582" y="483" class="box-text" text-anchor="middle"><tspan x="582" dy="0">agent → gateway proposal</tspan><tspan x="582" dy="23">gateway → OT dispatch</tspan><tspan x="582" dy="23">subject • audience • freshness</tspan></text>
+  <rect x="465" y="625" width="235" height="85" rx="14" class="evidence"/>
+  <text x="582" y="659" class="box-title" text-anchor="middle">Workload replay</text>
+  <text x="582" y="688" class="box-text" text-anchor="middle"><tspan x="582" dy="0">persistent ledger</tspan></text>
+  <polyline points="365,412 465,462" class="flow"/>
+  <text x="412" y="424" class="line-label" text-anchor="middle">sign proposal</text>
+  <polyline points="365,532 465,502" class="flow"/>
+  <text x="415" y="480" class="line-label" text-anchor="middle">sign dispatch</text>
+  <polyline points="465,522 415,522 415,652 365,652" class="return-flow"/>
+  <text x="390" y="635" class="line-label" text-anchor="middle">verify</text>
+  <polyline points="582,555 582,625" class="evidence-flow"/>
+  <rect x="825" y="120" width="730" height="650" rx="18" class="lane-amber"/>
+  <text x="849" y="152" class="lane-title" text-anchor="start">SPIRE transport identity • optional overlay</text>
+  <rect x="865" y="170" width="260" height="100" rx="14" class="policy"/>
+  <text x="995" y="204" class="box-title" text-anchor="middle">SPIRE server</text>
+  <text x="995" y="233" class="box-text" text-anchor="middle"><tspan x="995" dy="0">Registration entries</tspan><tspan x="995" dy="23">Trust domain authority</tspan></text>
+  <rect x="1230" y="170" width="260" height="100" rx="14" class="component"/>
+  <text x="1360" y="204" class="box-title" text-anchor="middle">SPIRE agent</text>
+  <text x="1360" y="233" class="box-text" text-anchor="middle"><tspan x="1360" dy="0">Node attestation</tspan><tspan x="1360" dy="23">Workload API socket</tspan></text>
+  <polyline points="1125,220 1230,220" class="optional-flow"/>
+  <text x="1177" y="204" class="line-label" text-anchor="middle">issue</text>
+  <rect x="900" y="355" width="550" height="105" rx="14" class="optional"/>
+  <text x="1175" y="389" class="box-title" text-anchor="middle">Consequence-path workloads</text>
+  <text x="1175" y="418" class="box-text" text-anchor="middle"><tspan x="1175" dy="0">gateway • observer • candidate • OT adapter • plant</tspan><tspan x="1175" dy="23">X.509-SVID + peer SPIFFE-ID allowlists</tspan></text>
+  <polyline points="1360,270 1360,315 1175,315 1175,355" class="optional-flow"/>
+  <text x="1265" y="305" class="line-label" text-anchor="middle">Workload API</text>
+  <rect x="900" y="520" width="550" height="85" rx="14" class="terminal-good"/>
+  <text x="1175" y="554" class="box-title" text-anchor="middle">Internal mTLS links</text>
+  <text x="1175" y="583" class="box-text" text-anchor="middle"><tspan x="1175" dy="0">Gateway ↔ consequence services ↔ plant</tspan></text>
+  <polyline points="1175,460 1175,520" class="optional-flow"/>
+  <rect x="875" y="650" width="600" height="82" rx="12" class="active"/>
+  <text x="1175" y="678" class="box-text" text-anchor="middle"><tspan x="1175" dy="0">Deleting a registration stops fresh issuance;</tspan><tspan x="1175" dy="22">it does not immediately revoke an already-issued certificate.</tspan></text>
+  <text x="800" y="820" class="small-text" text-anchor="middle">Agent → gateway and host → gateway remain HTTP; application-level credentials protect the agent proposal path.</text>
+</svg>

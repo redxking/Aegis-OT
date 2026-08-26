@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Public demo: build-time evidence, read-only runtime</title>
+  <desc id="description">The public-demo path validates retained M2 and M3 evidence during the build, packages one typed JSON object, and exposes only allowlisted read-only resources at runtime. The mutable control app is separate.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Public demo: build-time evidence, read-only runtime</text>
+  <text x="64" y="83" class="page-subtitle">The browser sees a validated packaged projection; it never reads mutable experiment directories</text>
+  <rect x="45" y="115" width="1510" height="405" rx="18" class="lane-blue"/>
+  <text x="69" y="147" class="lane-title" text-anchor="start">BUILD / CI</text>
+  <rect x="75" y="185" width="285" height="150" rx="14" class="evidence"/>
+  <text x="217" y="219" class="box-title" text-anchor="middle">Retained inputs</text>
+  <text x="217" y="248" class="box-text" text-anchor="middle"><tspan x="217" dy="0">M2 manifest + trials</tspan><tspan x="217" dy="23">M3 primary package</tspan><tspan x="217" dy="23">M3 reproduction package</tspan><tspan x="217" dy="23">historical Git objects</tspan></text>
+  <rect x="450" y="165" width="500" height="200" rx="14" class="policy"/>
+  <text x="700" y="199" class="box-title" text-anchor="middle">build_public_demo.py</text>
+  <text x="700" y="228" class="box-text" text-anchor="middle"><tspan x="700" dy="0">recompute M2 statistics + hash</tspan><tspan x="700" dy="23">run both complete M3 verifiers</tspan><tspan x="700" dy="23">check source + retention Git bindings</tspan><tspan x="700" dy="23">compare registered M3 equivalence</tspan><tspan x="700" dy="23">validate strict PublicDemoEvidence model</tspan></text>
+  <rect x="1050" y="195" width="420" height="130" rx="14" class="primary"/>
+  <text x="1260" y="229" class="box-title" text-anchor="middle">Packaged output</text>
+  <text x="1260" y="258" class="box-text" text-anchor="middle"><tspan x="1260" dy="0">src/aegis_ot/web_demo/evidence.json</tspan><tspan x="1260" dy="23">only evidence object read at runtime</tspan></text>
+  <polyline points="360,260 450,260" class="evidence-flow"/>
+  <text x="405" y="242" class="line-label" text-anchor="middle">validate</text>
+  <polyline points="950,260 1050,260" class="evidence-flow"/>
+  <text x="1000" y="242" class="line-label" text-anchor="middle">write</text>
+  <rect x="75" y="395" width="1395" height="85" rx="12" class="optional"/>
+  <text x="772" y="428" class="body-text-large" text-anchor="middle"><tspan x="772" dy="0">M2 is recomputed • both M3 packages are verified • source and retention bindings are checked</tspan><tspan x="772" dy="25">Primary and reproduction must satisfy the registered equivalence contract</tspan></text>
+  <line x1="45" y1="560" x2="650" y2="560" class="divider"/>
+  <line x1="950" y1="560" x2="1555" y2="560" class="divider"/>
+  <text x="800" y="566" class="line-label" text-anchor="middle">BUILD / RUNTIME BOUNDARY</text>
+  <rect x="45" y="590" width="1030" height="300" rx="18" class="lane-green"/>
+  <text x="69" y="622" class="lane-title" text-anchor="start">CONTAINER RUNTIME • demo network • 127.0.0.1:8080</text>
+  <rect x="90" y="640" width="260" height="175" rx="14" class="evidence"/>
+  <text x="220" y="674" class="box-title" text-anchor="middle">Packaged resources</text>
+  <text x="220" y="703" class="box-text" text-anchor="middle"><tspan x="220" dy="0">evidence.json</tspan><tspan x="220" dy="23">index.html</tspan><tspan x="220" dy="23">app.css</tspan><tspan x="220" dy="23">app.js</tspan></text>
+  <rect x="430" y="640" width="300" height="175" rx="14" class="terminal-good"/>
+  <text x="580" y="674" class="box-title" text-anchor="middle">aegis_ot.api:public_app</text>
+  <text x="580" y="703" class="box-text" text-anchor="middle"><tspan x="580" dy="0">strict typed load + cache</tspan><tspan x="580" dy="23">GET /health</tspan><tspan x="580" dy="23">GET /v1/demo/evidence</tspan><tspan x="580" dy="23">GET /demo + static assets</tspan><tspan x="580" dy="23">docs / redoc disabled</tspan></text>
+  <rect x="815" y="660" width="210" height="135" rx="14" class="outside"/>
+  <text x="920" y="694" class="box-title" text-anchor="middle">Browser</text>
+  <text x="920" y="723" class="box-text" text-anchor="middle"><tspan x="920" dy="0">DOM text rendering</tspan><tspan x="920" dy="23">bounded fetch retry</tspan><tspan x="920" dy="23">no innerHTML</tspan></text>
+  <polyline points="350,727 430,727" class="evidence-flow"/>
+  <polyline points="730,727 815,727" class="return-flow"/>
+  <text x="772" y="710" class="line-label" text-anchor="middle">GET only</text>
+  <rect x="1120" y="590" width="435" height="300" rx="18" class="lane-amber"/>
+  <text x="1144" y="622" class="lane-title" text-anchor="start">EXCLUDED CONTROL SURFACE</text>
+  <rect x="1170" y="665" width="335" height="125" rx="14" class="active"/>
+  <text x="1337" y="699" class="box-title" text-anchor="middle">control_app • separate process</text>
+  <text x="1337" y="728" class="box-text" text-anchor="middle"><tspan x="1337" dy="0">POST /v1/decisions</tspan><tspan x="1337" dy="23">GET /v1/state</tspan><tspan x="1337" dy="23">loopback :8085 when launched</tspan></text>
+  <text x="1337" y="830" class="line-label" text-anchor="middle">No connector to public_app</text>
+  <text x="800" y="940" class="small-text" text-anchor="middle">No results/ mount • no device socket • no experiment rerun • no control command • presentation is not operational validation</text>
+</svg>

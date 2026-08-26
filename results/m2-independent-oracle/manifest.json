@@ -1,8 +1,8 @@
 {
-  "experiment_id": "8d61b4b6-b22a-4677-9932-5855870c11d4",
-  "created_at_utc": "2026-08-24T15:46:43.400327+00:00",
-  "git_commit": "cd20986ac31eb224d6678875e63f8e8a907d1b76",
-  "working_tree_dirty": false,
+  "experiment_id": "da9e0289-1fde-402e-a0d4-5acf8b890176",
+  "created_at_utc": "2026-08-24T21:14:44.167614+00:00",
+  "git_commit": "c70828f6df01df76041ddb0f19971a22bf835c49",
+  "working_tree_dirty": true,
   "scenario_version": "synthetic-microgrid-v2",
   "scenario_catalog": "config/scenarios-v2.json",
   "scenario_catalog_sha256": "65dd9abb52a8c9fb9be0544af2d25e18fdb3f5a882747cbc3c44c3fdf688989b",
@@ -58,7 +58,7 @@
   "source_sha256": {
     "src/aegis_ot/experiment.py": "6d12e13811fbbe4bacf7fac271062235b97f704a23cc1df5bae5b31a5ec5bd31",
     "src/aegis_ot/oracle.py": "d88840170954ffe6f6f787a5c4f5fbbd6d5aa8409889559a31d609bc35f6f547",
-    "src/aegis_ot/safety.py": "5c7178babe4790332ff9a8f42c3280bdbff7347d9232e95b84aaf1da0b1a4268"
+    "src/aegis_ot/safety.py": "a6f0ea0ef22a41f9fed9ca70af93197f14bb31c1b10629aa533809ae98747157"
   },
   "host": {
     "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
@@ -67,7 +67,7 @@
     "logical_cpu_count": 10
   },
   "raw_data": "trials.jsonl",
-  "raw_sha256": "7426b3ae83aa790f7416262fc7b7a3331704d2632d10e8134921e7fb92cdcb22",
+  "raw_sha256": "f66efef5b58fe6da65fbeae6169204bf07ea25c1ea06019e933023311e4f7292",
   "deterministic_outcome_sha256": "b5ad54a6984f659f961975adaf386eade41f733307c289ea7c3ecaa11c6b5b90",
   "known_limitations": [
     "human-reviewed synthetic scenario truth, not field measurements",
@@ -108,7 +108,7 @@
         "upper": 0.19006655196644626,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.44397463796296294,
+      "mean_decision_latency_ms": 0.44273115925925927,
       "kernel_oracle_disagreements": 270
     },
     "B1_IDENTITY": {
@@ -141,7 +141,7 @@
         "upper": 0.2766802854614872,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.4475507287037037,
+      "mean_decision_latency_ms": 0.4397354953703704,
       "kernel_oracle_disagreements": 270
     },
     "B2_STATIC_POLICY": {
@@ -174,7 +174,7 @@
         "upper": 0.4463141788636255,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.4527891287037037,
+      "mean_decision_latency_ms": 0.44112902685185185,
       "kernel_oracle_disagreements": 270
     },
     "B3_ASSURED": {
@@ -207,7 +207,7 @@
         "upper": 0.7749081356745275,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.9351867018518518,
+      "mean_decision_latency_ms": 0.951176387962963,
       "kernel_oracle_disagreements": 270
     },
     "B4_CONTEXTUAL_ABAC": {
@@ -240,7 +240,7 @@
         "upper": 0.5297670101535206,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.43543735185185184,
+      "mean_decision_latency_ms": 0.44113286574074073,
       "kernel_oracle_disagreements": 270
     },
     "B5_RISK_AWARE": {
@@ -273,7 +273,7 @@
         "upper": 0.4463141788636255,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.4362929398148148,
+      "mean_decision_latency_ms": 0.43957075462962963,
       "kernel_oracle_disagreements": 270
     },
     "B6_SAFETY_NO_DELEGATION": {
@@ -306,7 +306,7 @@
         "upper": 0.6941467725319598,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.4351780027777778,
+      "mean_decision_latency_ms": 0.43736519444444444,
       "kernel_oracle_disagreements": 270
     },
     "B7_DELEGATION_NO_FRESHNESS": {
@@ -339,7 +339,7 @@
         "upper": 0.6941467725319598,
         "denominator": 1080
       },
-      "mean_decision_latency_ms": 0.4341270657407407,
+      "mean_decision_latency_ms": 0.441866025,
       "kernel_oracle_disagreements": 270
     }
   }

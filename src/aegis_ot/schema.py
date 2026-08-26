@@ -25,11 +25,7 @@ def action_proposal_schema() -> dict[str, Any]:
         properties = {
             name: {
                 "type": "number",
-                **(
-                    {"minimum": 0.0, "maximum": 100.0}
-                    if name in PERCENTAGE_PARAMETERS
-                    else {}
-                ),
+                **({"minimum": 0.0, "maximum": 100.0} if name in PERCENTAGE_PARAMETERS else {}),
             }
             for name in sorted(parameter_names)
         }

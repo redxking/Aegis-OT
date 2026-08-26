@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">Evidence, provenance, and public-demo flow</title>
+  <desc id="description">The evidence flow distinguishes source and experiment execution from offline verification, retained artifacts, build-time public-demo packaging, and runtime presentation.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="900" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Evidence, provenance, and public-demo flow</text>
+  <text x="64" y="83" class="page-subtitle">Experiment artifacts are built and verified before the read-only runtime serves a packaged projection</text>
+  <rect x="45" y="120" width="1510" height="355" rx="18" class="lane-blue"/>
+  <text x="69" y="152" class="lane-title" text-anchor="start">Experiment and retention boundary</text>
+  <rect x="75" y="205" width="205" height="120" rx="14" class="component"/>
+  <text x="177" y="239" class="box-title" text-anchor="middle">Clean source state</text>
+  <text x="177" y="268" class="box-text" text-anchor="middle"><tspan x="177" dy="0">Revision + dirty state</tspan><tspan x="177" dy="23">Config + seeds</tspan><tspan x="177" dy="23">Pinned dependencies</tspan></text>
+  <rect x="345" y="205" width="205" height="120" rx="14" class="primary"/>
+  <text x="447" y="239" class="box-title" text-anchor="middle">Experiment runner</text>
+  <text x="447" y="268" class="box-text" text-anchor="middle"><tspan x="447" dy="0">Formal / synthetic</tspan><tspan x="447" dy="23">fault / adversarial</tspan><tspan x="447" dy="23">primary + reproduction</tspan></text>
+  <rect x="615" y="185" width="230" height="160" rx="14" class="evidence"/>
+  <text x="730" y="219" class="box-title" text-anchor="middle">Raw artifacts</text>
+  <text x="730" y="248" class="box-text" text-anchor="middle"><tspan x="730" dy="0">Trials / traces</tspan><tspan x="730" dy="23">Summary reports</tspan><tspan x="730" dy="23">Manifests</tspan><tspan x="730" dy="23">Hashes / signatures</tspan></text>
+  <rect x="910" y="205" width="225" height="120" rx="14" class="policy"/>
+  <text x="1022" y="239" class="box-title" text-anchor="middle">Offline verification</text>
+  <text x="1022" y="268" class="box-text" text-anchor="middle"><tspan x="1022" dy="0">Package integrity</tspan><tspan x="1022" dy="23">Acceptance criteria</tspan><tspan x="1022" dy="23">Source binding</tspan></text>
+  <rect x="1200" y="205" width="280" height="120" rx="14" class="terminal-good"/>
+  <text x="1340" y="239" class="box-title" text-anchor="middle">Retained evidence</text>
+  <text x="1340" y="268" class="box-text" text-anchor="middle"><tspan x="1340" dy="0">Immutable directory per run</tspan><tspan x="1340" dy="23">Primary + local reproduction</tspan><tspan x="1340" dy="23">External trust anchors</tspan></text>
+  <polyline points="280,265 345,265" class="evidence-flow"/>
+  <polyline points="550,265 615,265" class="evidence-flow"/>
+  <polyline points="845,265 910,265" class="evidence-flow"/>
+  <polyline points="1135,265 1200,265" class="evidence-flow"/>
+  <rect x="75" y="365" width="1405" height="82" rx="12" class="optional"/>
+  <text x="777" y="397" class="body-text-large" text-anchor="middle"><tspan x="777" dy="0">Evidence strength varies by milestone.</tspan><tspan x="777" dy="24">Absence of a retained campaign is not validation evidence.</tspan></text>
+  <rect x="45" y="520" width="1510" height="275" rx="18" class="lane-green"/>
+  <text x="69" y="552" class="lane-title" text-anchor="start">Build-time package → runtime read-only projection</text>
+  <rect x="100" y="595" width="300" height="110" rx="14" class="evidence"/>
+  <text x="250" y="629" class="box-title" text-anchor="middle">M2 + M3 retained inputs</text>
+  <text x="250" y="658" class="box-text" text-anchor="middle"><tspan x="250" dy="0">Raw / manifests / packages</tspan><tspan x="250" dy="23">Git object checks</tspan></text>
+  <rect x="500" y="575" width="320" height="150" rx="14" class="policy"/>
+  <text x="660" y="609" class="box-title" text-anchor="middle">build_public_demo.py</text>
+  <text x="660" y="638" class="box-text" text-anchor="middle"><tspan x="660" dy="0">Recomputes and validates M2</tspan><tspan x="660" dy="23">Verifies both M3 packages</tspan><tspan x="660" dy="23">Checks equivalence + source blobs</tspan><tspan x="660" dy="23">Writes packaged projection</tspan></text>
+  <rect x="920" y="595" width="250" height="110" rx="14" class="primary"/>
+  <text x="1045" y="629" class="box-title" text-anchor="middle">evidence.json</text>
+  <text x="1045" y="658" class="box-text" text-anchor="middle"><tspan x="1045" dy="0">Stored under web_demo</tspan><tspan x="1045" dy="23">Copied into image</tspan></text>
+  <rect x="1270" y="595" width="220" height="110" rx="14" class="terminal-good"/>
+  <text x="1380" y="629" class="box-title" text-anchor="middle">Public demo</text>
+  <text x="1380" y="658" class="box-text" text-anchor="middle"><tspan x="1380" dy="0">Loads packaged JSON</tspan><tspan x="1380" dy="23">GET-only evidence API</tspan></text>
+  <polyline points="400,650 500,650" class="evidence-flow"/>
+  <polyline points="820,650 920,650" class="evidence-flow"/>
+  <polyline points="1170,650 1270,650" class="evidence-flow"/>
+  <text x="660" y="765" class="line-label" text-anchor="middle">BUILD TIME</text>
+  <text x="1375" y="765" class="line-label" text-anchor="middle">RUNTIME</text>
+  <line x1="1215" y1="550" x2="1215" y2="625" class="divider"/>
+  <line x1="1215" y1="675" x2="1215" y2="760" class="divider"/>
+  <text x="1515" y="840" class="small-text" text-anchor="end">The runtime does not read mutable results/ directories.</text>
+</svg>

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Implementation and evidence verification gates</title>
+  <desc id="description">The verification workflow distinguishes generated-artifact drift, static checks, runtime tests, formal model checks, local Compose resolution, retained experiment acceptance, and external validation.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Implementation and evidence verification gates</text>
+  <text x="64" y="83" class="page-subtitle">Passing one gate does not imply acceptance at the next evidence level</text>
+  <rect x="60" y="145" width="260" height="85" rx="14" class="primary"/>
+  <text x="190" y="175" class="box-title" text-anchor="middle">Candidate source state</text>
+  <text x="190" y="204" class="box-text" text-anchor="middle"><tspan x="190" dy="0">full-history checkout where required</tspan></text>
+  <line x1="190" y1="230" x2="190" y2="270" class="bus"/>
+  <line x1="190" y1="270" x2="1460" y2="270" class="bus"/>
+  <rect x="60" y="315" width="285" height="145" rx="14" class="component"/>
+  <text x="202" y="349" class="box-title" text-anchor="middle">Generated artifacts</text>
+  <text x="202" y="378" class="box-text" text-anchor="middle"><tspan x="202" dy="0">schema export --check</tspan><tspan x="202" dy="23">public demo --check</tspan><tspan x="202" dy="23">diagram set --check</tspan></text>
+  <polyline points="202,270 202,315" class="flow"/>
+  <rect x="390" y="315" width="285" height="145" rx="14" class="component"/>
+  <text x="532" y="349" class="box-title" text-anchor="middle">Static analysis</text>
+  <text x="532" y="378" class="box-text" text-anchor="middle"><tspan x="532" dy="0">Ruff</tspan><tspan x="532" dy="23">format check</tspan><tspan x="532" dy="23">strict mypy</tspan></text>
+  <polyline points="532,270 532,315" class="flow"/>
+  <rect x="720" y="315" width="285" height="145" rx="14" class="component"/>
+  <text x="862" y="349" class="box-title" text-anchor="middle">Runtime tests</text>
+  <text x="862" y="378" class="box-text" text-anchor="middle"><tspan x="862" dy="0">unit • property • contract</tspan><tspan x="862" dy="23">integration • verifier • Compose</tspan><tspan x="862" dy="23">branch coverage ≥ 90%</tspan></text>
+  <polyline points="862,270 862,315" class="flow"/>
+  <rect x="1050" y="315" width="285" height="145" rx="14" class="component"/>
+  <text x="1192" y="349" class="box-title" text-anchor="middle">Formal checks</text>
+  <text x="1192" y="378" class="box-text" text-anchor="middle"><tspan x="1192" dy="0">intended TLA+ model</tspan><tspan x="1192" dy="23">16 registered weakened cases</tspan><tspan x="1192" dy="23">tool + model hashes retained</tspan></text>
+  <polyline points="1192,270 1192,315" class="flow"/>
+  <rect x="1370" y="315" width="180" height="145" rx="14" class="optional"/>
+  <text x="1460" y="349" class="box-title" text-anchor="middle">Local topology</text>
+  <text x="1460" y="378" class="box-text" text-anchor="middle"><tspan x="1460" dy="0">Compose config</tspan><tspan x="1460" dy="23">base smoke</tspan><tspan x="1460" dy="23">explicit overlays</tspan></text>
+  <polyline points="1460,270 1460,315" class="optional-flow"/>
+  <line x1="200" y1="505" x2="1460" y2="505" class="connector"/>
+  <line x1="202" y1="460" x2="202" y2="505" class="connector"/>
+  <line x1="532" y1="460" x2="532" y2="505" class="connector"/>
+  <line x1="862" y1="460" x2="862" y2="505" class="connector"/>
+  <line x1="1192" y1="460" x2="1192" y2="505" class="connector"/>
+  <line x1="1460" y1="460" x2="1460" y2="505" class="connector"/>
+  <polyline points="830,505 830,575" class="return-flow"/>
+  <rect x="610" y="575" width="440" height="85" rx="14" class="terminal-good"/>
+  <text x="830" y="606" class="box-title" text-anchor="middle">Locally verified implementation state</text>
+  <text x="830" y="635" class="box-text" text-anchor="middle"><tspan x="830" dy="0">all applicable gates pass together</tspan></text>
+  <polyline points="830,660 830,720" class="evidence-flow"/>
+  <rect x="520" y="720" width="620" height="95" rx="14" class="evidence"/>
+  <text x="830" y="754" class="box-title" text-anchor="middle">Retained experiment entry gate</text>
+  <text x="830" y="783" class="box-text" text-anchor="middle"><tspan x="830" dy="0">clean source • unique output • registered configuration</tspan><tspan x="830" dy="23">runner-specific acceptance + offline verification</tspan></text>
+  <polyline points="830,815 830,870" class="evidence-flow"/>
+  <rect x="580" y="870" width="500" height="70" rx="14" class="terminal-neutral"/>
+  <text x="830" y="913" class="box-title" text-anchor="middle">Accepted local retained result</text>
+  <rect x="60" y="715" width="350" height="225" rx="14" class="optional"/>
+  <text x="85" y="750" class="section-title" text-anchor="start">CI OBSERVATION</text>
+  <text x="85" y="785" class="box-text" text-anchor="start"><tspan x="85" dy="0">Test job: Python 3.11–3.14</tspan><tspan x="85" dy="25">Formal job: Python 3.13 + Java 21</tspan><tspan x="85" dy="25">Pinned TLC 1.8.0 + checksum</tspan><tspan x="85" dy="25">CI status must be observed separately</tspan></text>
+  <rect x="1190" y="715" width="350" height="225" rx="14" class="active"/>
+  <text x="1215" y="750" class="section-title" text-anchor="start">CLAIM BOUNDARY</text>
+  <text x="1215" y="785" class="box-text" text-anchor="start"><tspan x="1215" dy="0">Compose resolution ≠ startup</tspan><tspan x="1215" dy="25">Passing tests ≠ accepted experiment</tspan><tspan x="1215" dy="25">Local result ≠ observed CI acceptance</tspan><tspan x="1215" dy="25">CI ≠ independent validation</tspan><tspan x="1215" dy="25">Retained evidence ≠ operational readiness</tspan></text>
+</svg>

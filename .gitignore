@@ -24,3 +24,6 @@ formal/states/
 .vagrant/
 *.vdi
 *.pcap
+assets/aegis-ot-article-cover.png
+research/Aegis-OT_Article.docx
+scripts/build_aegis_ot_article.py

@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">Developer setup and verification workflow</title>
+  <desc id="description">The setup workflow separates environment preparation, static and unit checks, Compose validation, bounded experiments, offline verification, and evidence retention.</desc>
+  <metadata>Author: Angelis Pseftis</metadata>
+  <defs>
+    <style>.page-title{font:700 36px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#13283f}
+      .page-subtitle{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#516479}
+      .lane-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#21364e}
+      .section-title{font:700 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-title{font:700 18px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#172d45}
+      .box-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .box-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .body-text{font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#455970}
+      .body-text-large{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#40566f}
+      .small-text{font:500 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#5a6c80}
+      .line-label{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#41556c;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+      .step-number{font:700 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#fff}
+      .status-text{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#26394f}
+      .lane{fill:#f8fafc;stroke:#9bacc0;stroke-width:2;stroke-dasharray:9 7}
+      .lane-blue{fill:#f4f8fd;stroke:#89a6c5;stroke-width:2}
+      .lane-green{fill:#f2faf6;stroke:#82b69c;stroke-width:2}
+      .lane-amber{fill:#fffaf0;stroke:#c89543;stroke-width:2}
+      .component{fill:#fff;stroke:#2b5d92;stroke-width:2.5}
+      .primary{fill:#e8f2ff;stroke:#1768a8;stroke-width:3}
+      .policy{fill:#f2edff;stroke:#7050a5;stroke-width:2.5}
+      .plant{fill:#e9f7ef;stroke:#27835c;stroke-width:2.5}
+      .evidence{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .optional{fill:#fff8e9;stroke:#b56c14;stroke-width:2;stroke-dasharray:8 6}
+      .active{fill:#fff2f2;stroke:#ad4949;stroke-width:2;stroke-dasharray:8 6}
+      .outside{fill:#f7f7f8;stroke:#929aa4;stroke-width:2;stroke-dasharray:7 6}
+      .terminal-good{fill:#e8f7ef;stroke:#27835c;stroke-width:2.5}
+      .terminal-bad{fill:#fff0f0;stroke:#ad4949;stroke-width:2.5}
+      .terminal-neutral{fill:#f3f5f7;stroke:#687b91;stroke-width:2.5}
+      .flow{fill:none;stroke:#2b5d92;stroke-width:3;marker-end:url(#arrow-blue)}
+      .return-flow{fill:none;stroke:#27835c;stroke-width:3;marker-end:url(#arrow-green)}
+      .optional-flow{fill:none;stroke:#b56c14;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-amber)}
+      .active-flow{fill:none;stroke:#ad4949;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .evidence-flow{fill:none;stroke:#687b91;stroke-width:3;marker-end:url(#arrow-gray)}
+      .connector{stroke:#93a4b7;stroke-width:2;fill:none}
+      .bus{stroke:#2b5d92;stroke-width:3;fill:none}
+      .lifeline{stroke:#9bacc0;stroke-width:2;stroke-dasharray:7 6}
+      .divider{stroke:#d7dee7;stroke-width:2}
+      .status-implemented{fill:#e8f7ef;stroke:#27835c;stroke-width:1.5}
+      .status-retained{fill:#e8f2ff;stroke:#1768a8;stroke-width:1.5}
+      .status-optional{fill:#fff8e9;stroke:#b56c14;stroke-width:1.5}
+      .status-active{fill:#fff2f2;stroke:#ad4949;stroke-width:1.5}
+      .status-outside{fill:#f3f5f7;stroke:#929aa4;stroke-width:1.5}
+      .phase-band{fill:#f8fafc;stroke:none}
+      .phase-band-alt{fill:#eef5fb;stroke:none}
+      .phase-label{font:700 12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#687b91;letter-spacing:1px}</style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#2b5d92"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#27835c"/></marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#b56c14"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#ad4949"/></marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#687b91"/></marker>
+  </defs>
+  <rect width="1600" height="900" fill="#fff"/>
+  <text x="64" y="54" class="page-title">Developer setup and verification workflow</text>
+  <text x="64" y="83" class="page-subtitle">A reproducible path from clean checkout to locally verified evidence</text>
+  <circle cx="150" cy="165" r="28" fill="#1768a8"/>
+  <text x="150" y="172" class="step-number" text-anchor="middle">1</text>
+  <rect x="65" y="220" width="200" height="160" rx="14" class="component"/>
+  <text x="165" y="254" class="box-title" text-anchor="middle">Prepare</text>
+  <text x="165" y="283" class="box-text" text-anchor="middle"><tspan x="165" dy="0">Clean checkout</tspan><tspan x="165" dy="23">Python 3.11+</tspan><tspan x="165" dy="23">Create .venv</tspan></text>
+  <circle cx="410" cy="165" r="28" fill="#1768a8"/>
+  <text x="410" y="172" class="step-number" text-anchor="middle">2</text>
+  <rect x="325" y="220" width="200" height="160" rx="14" class="component"/>
+  <text x="425" y="254" class="box-title" text-anchor="middle">Install</text>
+  <text x="425" y="283" class="box-text" text-anchor="middle"><tspan x="425" dy="0">pip install -e &#x27;.[dev]&#x27;</tspan><tspan x="425" dy="23">Optional simulation extra</tspan><tspan x="425" dy="23">No generated evidence yet</tspan></text>
+  <circle cx="670" cy="165" r="28" fill="#1768a8"/>
+  <text x="670" y="172" class="step-number" text-anchor="middle">3</text>
+  <rect x="585" y="220" width="200" height="160" rx="14" class="primary"/>
+  <text x="685" y="254" class="box-title" text-anchor="middle">Local checks</text>
+  <text x="685" y="283" class="box-text" text-anchor="middle"><tspan x="685" dy="0">ruff + formatting</tspan><tspan x="685" dy="23">mypy</tspan><tspan x="685" dy="23">pytest</tspan></text>
+  <circle cx="930" cy="165" r="28" fill="#1768a8"/>
+  <text x="930" y="172" class="step-number" text-anchor="middle">4</text>
+  <rect x="845" y="220" width="200" height="160" rx="14" class="policy"/>
+  <text x="945" y="254" class="box-title" text-anchor="middle">Topology checks</text>
+  <text x="945" y="283" class="box-text" text-anchor="middle"><tspan x="945" dy="0">Compose config</tspan><tspan x="945" dy="23">Base smoke</tspan><tspan x="945" dy="23">Explicit overlay runner</tspan></text>
+  <circle cx="1190" cy="165" r="28" fill="#1768a8"/>
+  <text x="1190" y="172" class="step-number" text-anchor="middle">5</text>
+  <rect x="1105" y="220" width="200" height="160" rx="14" class="optional"/>
+  <text x="1205" y="254" class="box-title" text-anchor="middle">Experiment</text>
+  <text x="1205" y="283" class="box-text" text-anchor="middle"><tspan x="1205" dy="0">New output directory</tspan><tspan x="1205" dy="23">Fixed config + seeds</tspan><tspan x="1205" dy="23">Record source state</tspan></text>
+  <circle cx="1450" cy="165" r="28" fill="#1768a8"/>
+  <text x="1450" y="172" class="step-number" text-anchor="middle">6</text>
+  <rect x="1365" y="220" width="200" height="160" rx="14" class="terminal-good"/>
+  <text x="1465" y="254" class="box-title" text-anchor="middle">Verify + retain</text>
+  <text x="1465" y="283" class="box-text" text-anchor="middle"><tspan x="1465" dy="0">Offline verifier</tspan><tspan x="1465" dy="23">Acceptance criteria</tspan><tspan x="1465" dy="23">Preserve trust anchor</tspan></text>
+  <polyline points="265,300 325,300" class="flow"/>
+  <polyline points="525,300 585,300" class="flow"/>
+  <polyline points="785,300 845,300" class="flow"/>
+  <polyline points="1045,300 1105,300" class="flow"/>
+  <polyline points="1305,300 1365,300" class="flow"/>
+  <rect x="65" y="455" width="1450" height="250" rx="18" class="lane-blue"/>
+  <text x="89" y="487" class="lane-title" text-anchor="start">Decision gates</text>
+  <rect x="100" y="520" width="230" height="115" rx="14" class="evidence"/>
+  <text x="215" y="554" class="box-title" text-anchor="middle">Source gate</text>
+  <text x="215" y="583" class="box-text" text-anchor="middle"><tspan x="215" dy="0">Expected revision</tspan><tspan x="215" dy="23">Dirty state explicit</tspan></text>
+  <rect x="390" y="520" width="230" height="115" rx="14" class="evidence"/>
+  <text x="505" y="554" class="box-title" text-anchor="middle">Quality gate</text>
+  <text x="505" y="583" class="box-text" text-anchor="middle"><tspan x="505" dy="0">Checks pass</tspan><tspan x="505" dy="23">No unexplained skips</tspan></text>
+  <rect x="680" y="520" width="230" height="115" rx="14" class="evidence"/>
+  <text x="795" y="554" class="box-title" text-anchor="middle">Boundary gate</text>
+  <text x="795" y="583" class="box-text" text-anchor="middle"><tspan x="795" dy="0">Correct overlay order</tspan><tspan x="795" dy="23">Loopback / internal nets</tspan></text>
+  <rect x="970" y="520" width="230" height="115" rx="14" class="evidence"/>
+  <text x="1085" y="554" class="box-title" text-anchor="middle">Evidence gate</text>
+  <text x="1085" y="583" class="box-text" text-anchor="middle"><tspan x="1085" dy="0">Artifact complete</tspan><tspan x="1085" dy="23">Hashes / signatures valid</tspan></text>
+  <rect x="1260" y="520" width="230" height="115" rx="14" class="evidence"/>
+  <text x="1375" y="554" class="box-title" text-anchor="middle">Claim gate</text>
+  <text x="1375" y="583" class="box-text" text-anchor="middle"><tspan x="1375" dy="0">Local result only</tspan><tspan x="1375" dy="23">No deployment claim</tspan></text>
+  <polyline points="330,577 390,577" class="evidence-flow"/>
+  <polyline points="620,577 680,577" class="evidence-flow"/>
+  <polyline points="910,577 970,577" class="evidence-flow"/>
+  <polyline points="1200,577 1260,577" class="evidence-flow"/>
+  <rect x="165" y="745" width="1270" height="92" rx="12" class="active"/>
+  <text x="800" y="778" class="body-text" text-anchor="middle"><tspan x="800" dy="0">Use a new evidence directory. Some early M2/M3 writers can overwrite existing outputs.</tspan><tspan x="800" dy="25">Later retained runners enforce stronger non-overwrite and clean-source rules.</tspan></text>
+</svg>

@@ -19,15 +19,9 @@ class Operation(StrEnum):
 
 
 OPERATION_PARAMETERS: dict[Operation, frozenset[str]] = {
-    Operation.ISOLATE_ASSET: frozenset(
-        {"critical_load_impact_pct", "line_loading_delta_pct"}
-    ),
-    Operation.RESTORE_ASSET: frozenset(
-        {"critical_load_restore_pct", "line_loading_delta_pct"}
-    ),
-    Operation.SHED_LOAD: frozenset(
-        {"critical_load_impact_pct", "line_loading_relief_pct"}
-    ),
+    Operation.ISOLATE_ASSET: frozenset({"critical_load_impact_pct", "line_loading_delta_pct"}),
+    Operation.RESTORE_ASSET: frozenset({"critical_load_restore_pct", "line_loading_delta_pct"}),
+    Operation.SHED_LOAD: frozenset({"critical_load_impact_pct", "line_loading_relief_pct"}),
     Operation.DISPATCH_BATTERY: frozenset(
         {"mw", "minimum_voltage_delta_pu", "maximum_voltage_delta_pu"}
     ),
