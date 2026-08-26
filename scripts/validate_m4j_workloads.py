@@ -1371,6 +1371,7 @@ def _validate_bundle(
             "source_revision_build_argument",
             "target_platform",
             "tag_policy",
+            "buildkit_default_provenance",
             "docker_build_secret_mount_count",
             "docker_build_secret_mount_scope",
         ),
@@ -1492,6 +1493,8 @@ def _validate_bundle(
             "variant": None,
         }
         or build_contract.get("docker_build_secret_mount_count") != 0
+        or build_contract.get("buildkit_default_provenance")
+        != "disabled_replaced_by_signed_aegis_attestation"
         or build_contract.get("tag_policy")
         != "untagged_load_saved_by_immutable_image_id"
     ):

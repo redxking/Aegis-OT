@@ -2357,6 +2357,7 @@ def _build_and_save_image(
             "buildx",
             "build",
             "--load",
+            "--provenance=false",
             "--platform",
             requested_platform,
             "--pull",
@@ -2779,6 +2780,9 @@ def _build_contract(
         "source_revision_build_argument": revision["commit"],
         "target_platform": target,
         "tag_policy": "untagged_load_saved_by_immutable_image_id",
+        "buildkit_default_provenance": (
+            "disabled_replaced_by_signed_aegis_attestation"
+        ),
         "docker_build_secret_mount_count": 0,
         "docker_build_secret_mount_scope": (
             "No --secret mount arguments are supplied by this builder; the "

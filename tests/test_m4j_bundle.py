@@ -1514,6 +1514,7 @@ def test_mocked_build_constructs_once_saves_by_id_and_atomically_publishes(
     assert len(build_calls) == 1
     assert len(save_calls) == 1
     assert save_calls[0][-1] == fake.image_id
+    assert build_calls[0].count("--provenance=false") == 1
     assert "--secret" not in build_calls[0]
     assert "--tag" not in build_calls[0]
     assert "--label" in build_calls[0]
@@ -1523,6 +1524,9 @@ def test_mocked_build_constructs_once_saves_by_id_and_atomically_publishes(
     assert manifest["application_image"]["tag"] is None
     assert manifest["build_contract"]["tag_policy"] == (
         "untagged_load_saved_by_immutable_image_id"
+    )
+    assert manifest["build_contract"]["buildkit_default_provenance"] == (
+        "disabled_replaced_by_signed_aegis_attestation"
     )
     assert manifest["application_image"]["archive_binding"]["config_sha256"] == (
         fake.image_id.removeprefix("sha256:")
