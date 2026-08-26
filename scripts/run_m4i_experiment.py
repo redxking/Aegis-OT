@@ -969,6 +969,37 @@ def _control_network(container: str, project_name: str) -> str:
     return expected
 
 
+def _assert_relay_gateway_route(
+    prefix: tuple[str, ...],
+    *,
+    project_name: str,
+    relay_name: str,
+) -> None:
+    container = _service_container(prefix, "segmented-gateway")
+    values = json.loads(m4d._run("docker", "inspect", container).stdout)
+    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], dict):
+        raise m4d.ExperimentError("M4i gateway container inspection was malformed")
+    configuration = _mapping(values[0].get("Config"))
+    environment = configuration.get("Env")
+    labels = _mapping(configuration.get("Labels"))
+    expected_route = f"AEGIS_OT_URL=http://{relay_name}:8083"
+    if (
+        not isinstance(environment, list)
+        or environment.count(expected_route) != 1
+        or any(
+            isinstance(value, str)
+            and value.startswith("AEGIS_OT_URL=")
+            and value != expected_route
+            for value in environment
+        )
+        or labels.get("com.docker.compose.project") != project_name
+        or labels.get("com.docker.compose.service") != "segmented-gateway"
+    ):
+        raise m4d.ExperimentError(
+            "M4i gateway was not recreated on the exact scoped relay route"
+        )
+
+
 def _start_relay(
     *,
     prefix: tuple[str, ...],
@@ -977,13 +1008,8 @@ def _start_relay(
     directory: Path,
 ) -> dict[str, str]:
     entries = tuple(directory.iterdir())
-    if (
-        len(entries) != 1
-        or entries[0].name != "arm.json"
-        or entries[0].is_symlink()
-        or stat.S_IMODE(entries[0].stat().st_mode) != 0o600
-    ):
-        raise m4d.ExperimentError("M4i relay directory was not exactly armed")
+    if entries or directory.is_symlink():
+        raise m4d.ExperimentError("M4i relay directory was not exactly empty")
     directory.chmod(0o700)
     m4d._run(*prefix, "stop", "segmented-gateway")
     ot_container = _service_container(prefix, "ot-adapter")
@@ -1044,6 +1070,11 @@ def _start_relay(
             "segmented-gateway",
         )
         m4g._await_gateway()
+        _assert_relay_gateway_route(
+            prefix,
+            project_name=project_name,
+            relay_name=relay_name,
+        )
         return {
             "relay_name": relay_name,
             "network": network,
@@ -1903,11 +1934,6 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 ),
             }
 
-            prepared = _run_agent_exchange(prefix, mode="prepare_action")
-            lost_action_sha256 = prepared.get("action_sha256")
-            if not isinstance(lost_action_sha256, str):
-                raise m4d.ExperimentError("M4i prepared action digest was unavailable")
-            _arm_relay(relay_directory, lost_action_sha256)
             relay_active = _start_relay(
                 prefix=prefix,
                 project_name=project_name,
@@ -1915,6 +1941,13 @@ def _campaign(project_name: str, commit: str) -> dict[str, Any]:
                 directory=relay_directory,
             )
             try:
+                prepared = _run_agent_exchange(prefix, mode="prepare_action")
+                lost_action_sha256 = prepared.get("action_sha256")
+                if not isinstance(lost_action_sha256, str):
+                    raise m4d.ExperimentError(
+                        "M4i prepared action digest was unavailable"
+                    )
+                _arm_relay(relay_directory, lost_action_sha256)
                 lost_result = _run_agent_exchange(
                     prefix,
                     mode="submit_action",

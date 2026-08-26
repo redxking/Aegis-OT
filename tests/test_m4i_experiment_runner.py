@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
@@ -331,19 +332,14 @@ def test_scoped_relay_uses_explicit_gateway_route_without_alias_swap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runner._atomic_private_json(
-        tmp_path / "arm.json",
-        {
-            "schema_version": "m4i-scoped-relay-arm-v1",
-            "expected_action_sha256": "a" * 64,
-        },
-    )
     calls: list[tuple[str, ...]] = []
 
     def run(*args: str, **_: Any) -> SimpleNamespace:
         calls.append(args)
         if args[-3:] == ("ps", "-q", "ot-adapter"):
             return SimpleNamespace(returncode=0, stdout="ot-container\n", stderr="")
+        if args[-3:] == ("ps", "-q", "segmented-gateway"):
+            return SimpleNamespace(returncode=0, stdout="gateway-container\n", stderr="")
         if args == ("docker", "inspect", "ot-container"):
             return SimpleNamespace(
                 returncode=0,
@@ -352,6 +348,26 @@ def test_scoped_relay_uses_explicit_gateway_route_without_alias_swap(
                         {
                             "NetworkSettings": {
                                 "Networks": {"m4i-test_control_dmz": {}}
+                            }
+                        }
+                    ]
+                ),
+                stderr="",
+            )
+        if args == ("docker", "inspect", "gateway-container"):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=runner.json.dumps(
+                    [
+                        {
+                            "Config": {
+                                "Env": [
+                                    "AEGIS_OT_URL=http://m4i-test-m4i-commit-relay:8083"
+                                ],
+                                "Labels": {
+                                    "com.docker.compose.project": "m4i-test",
+                                    "com.docker.compose.service": "segmented-gateway",
+                                },
                             }
                         }
                     ]
@@ -385,6 +401,8 @@ def test_scoped_relay_uses_explicit_gateway_route_without_alias_swap(
     assert "--network-alias" not in flat
     assert "AEGIS_M4I_RELAY_TARGET_HOST=ot-adapter" in flat
     assert any(str(override_path) in call and "up" in call for call in calls)
+    runner._arm_relay(tmp_path, "a" * 64)
+    assert (tmp_path / "arm.json").is_file()
 
     teardown = runner._stop_relay(prefix=prefix, relay=relay)
 
@@ -393,6 +411,18 @@ def test_scoped_relay_uses_explicit_gateway_route_without_alias_swap(
         "gateway_direct_ot_route_restored_before_reconciliation": True,
     }
     assert not override_path.exists()
+
+
+def test_lost_response_observation_is_created_after_relay_rebind(runner: Any) -> None:
+    source = inspect.getsource(runner._campaign)
+    relay_start = source.index("relay_active = _start_relay(")
+    prepare = source.index(
+        'prepared = _run_agent_exchange(prefix, mode="prepare_action")'
+    )
+    arm = source.index("_arm_relay(relay_directory, lost_action_sha256)")
+    submit = source.index('mode="submit_action"')
+
+    assert relay_start < prepare < arm < submit
 
 
 def test_artifact_restore_attaches_stdin_and_reports_written_digest(
