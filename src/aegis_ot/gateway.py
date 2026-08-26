@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from .delegation import DelegationValidator
 from .evidence import EvidenceChain
@@ -13,6 +14,9 @@ from .physical_models import canonical_digest
 from .policy import PolicyEngine
 from .replay import ReplayLedger
 from .safety import SafetyKernel
+
+if TYPE_CHECKING:
+    from .m5_degraded_publication import PublishedDegradedOperationGate
 
 
 class AegisGateway:
@@ -25,7 +29,9 @@ class AegisGateway:
         replay: ReplayLedger,
         evidence: EvidenceChain,
         maximum_state_age: timedelta = timedelta(seconds=5),
-        degraded_operation: DegradedOperationGate | None = None,
+        degraded_operation: (
+            DegradedOperationGate | PublishedDegradedOperationGate | None
+        ) = None,
     ) -> None:
         self.identity = identity
         self.delegation = delegation

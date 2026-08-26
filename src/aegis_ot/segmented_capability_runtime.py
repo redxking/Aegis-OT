@@ -96,6 +96,15 @@ from .m5_degraded import (
     FileDegradedOperationStateStore,
     FileDegradedSnapshotSource,
 )
+from .m5_degraded_publication import (
+    FileDegradedConsumerStateStore,
+    FileDegradedPublicationSource,
+    FileDegradedReversalSource,
+    FileStableDegradedAuthorizationSource,
+    PublishedDegradedOperationGate,
+    load_authority_public_key,
+    load_publisher_credential,
+)
 from .models import Decision
 from .pandapower_plant import PandapowerCigreMVPlant, PhysicalSimulationError
 from .physical_control import (
@@ -2152,7 +2161,9 @@ class CapabilityGatewayRuntime:
         agent_workload_subject: str | None = None,
         coordination_required: bool = False,
         coordination_journal: DurableGatewayCoordinationJournal | None = None,
-        degraded_operation: DegradedOperationGate | None = None,
+        degraded_operation: (
+            DegradedOperationGate | PublishedDegradedOperationGate | None
+        ) = None,
         clock: Clock = utc_now,
     ) -> None:
         if (agent_workload_verifier is None) != (agent_workload_subject is None):
@@ -2504,6 +2515,16 @@ class CapabilityGatewayRuntime:
             # must not hide a missing, corrupt, rolled-back, or revoked
             # consequence-path credential.
             plc.preflight_identity()
+        degraded_readiness: dict[str, Any] | None = None
+        if isinstance(self.degraded_operation, PublishedDegradedOperationGate):
+            try:
+                degraded_readiness = self.degraded_operation.readiness(
+                    now=self.clock()
+                )
+            except Exception as exc:
+                raise CapabilityRuntimeUnavailable(
+                    "required M5 signed publication is unavailable"
+                ) from exc
         coordination_records = 0
         coordination_pending = 0
         if self.coordination_required:
@@ -2539,6 +2560,19 @@ class CapabilityGatewayRuntime:
             "coordination_journal_records": coordination_records,
             "coordination_pending_effects": coordination_pending,
             "coordination_startup_recovery": "not-attempted",
+            "m5_signed_publication_mode": (
+                "required"
+                if isinstance(
+                    self.degraded_operation,
+                    PublishedDegradedOperationGate,
+                )
+                else (
+                    "legacy"
+                    if isinstance(self.degraded_operation, DegradedOperationGate)
+                    else "disabled"
+                )
+            ),
+            "m5_degraded_readiness": degraded_readiness,
             "plant_boot_epoch": self.discovery.plant.boot_epoch,
             "observer_boot_epoch": self.discovery.observer.boot_epoch,
             "candidate_boot_epoch": self.discovery.candidate.boot_epoch,
@@ -2571,7 +2605,7 @@ def _expected_environment(name: str) -> str:
     return value
 
 
-def _configured_m5_degraded_gate() -> DegradedOperationGate | None:
+def _configured_legacy_m5_degraded_gate() -> DegradedOperationGate | None:
     settings = {
         "authority_id": os.getenv("AEGIS_M5_DEGRADED_AUTHORITY_ID"),
         "authority_key": os.getenv(
@@ -2615,6 +2649,96 @@ def _configured_m5_degraded_gate() -> DegradedOperationGate | None:
     except Exception as exc:
         raise CapabilityRuntimeUnavailable(
             "M5 degraded operation configuration is invalid"
+        ) from exc
+    return gate
+
+
+def _configured_m5_degraded_gate() -> (
+    DegradedOperationGate | PublishedDegradedOperationGate | None
+):
+    mode_name = "AEGIS_M5_SIGNED_PUBLICATION_MODE"
+    mode_value = os.getenv(mode_name)
+    legacy_names = (
+        "AEGIS_M5_DEGRADED_AUTHORITY_ID",
+        "AEGIS_M5_DEGRADED_AUTHORITY_PUBLIC_KEY_FILE",
+        "AEGIS_M5_DEGRADED_SNAPSHOT_FILE",
+        "AEGIS_M5_DEGRADED_AUTHORIZATION_FILE",
+        "AEGIS_M5_DEGRADED_STATE_FILE",
+    )
+    signed_names = (
+        "AEGIS_M5_ROOT_PUBLIC_KEY_FILE",
+        "AEGIS_M5_PUBLISHER_CREDENTIAL_FILE",
+        "AEGIS_M5_STABLE_AUTHORIZATION_FILE",
+        "AEGIS_M5_PUBLICATION_FILE",
+        "AEGIS_M5_CONSUMER_STATE_FILE",
+        "AEGIS_M5_REVERSAL_FILE",
+    )
+    legacy_configured = any(os.getenv(name) for name in legacy_names)
+    signed_configured = any(os.getenv(name) for name in signed_names)
+    if mode_value is None:
+        if signed_configured:
+            raise CapabilityRuntimeUnavailable(
+                f"required runtime setting is missing: {mode_name}"
+            )
+        return _configured_legacy_m5_degraded_gate()
+
+    mode = mode_value.strip().lower()
+    if mode not in {"disabled", "required"}:
+        raise CapabilityRuntimeUnavailable(
+            "M5 signed publication mode must be disabled or required"
+        )
+    if mode == "disabled":
+        if legacy_configured or signed_configured:
+            raise CapabilityRuntimeUnavailable(
+                "disabled M5 signed publication cannot retain M5 configuration"
+            )
+        return None
+    if legacy_configured:
+        raise CapabilityRuntimeUnavailable(
+            "M5 legacy and signed publication configuration cannot be mixed"
+        )
+
+    values = {name: os.getenv(name) for name in signed_names}
+    missing = tuple(name for name, value in values.items() if not value)
+    if missing:
+        raise CapabilityRuntimeUnavailable(
+            "M5 signed publication configuration is incomplete: "
+            + ",".join(missing)
+        )
+    paths = {name: Path(value) for name, value in values.items() if value is not None}
+    if any(not path.is_absolute() for path in paths.values()):
+        raise CapabilityRuntimeUnavailable(
+            "M5 signed publication file paths must be absolute"
+        )
+    try:
+        authority_public_key = load_authority_public_key(
+            paths["AEGIS_M5_ROOT_PUBLIC_KEY_FILE"]
+        )
+        credential = load_publisher_credential(
+            paths["AEGIS_M5_PUBLISHER_CREDENTIAL_FILE"]
+        )
+        stable_authorization = FileStableDegradedAuthorizationSource(
+            paths["AEGIS_M5_STABLE_AUTHORIZATION_FILE"]
+        )()
+        gate = PublishedDegradedOperationGate(
+            authority_id=credential.authority_id,
+            authority_public_key=authority_public_key,
+            publisher_credential=credential,
+            stable_authorization=stable_authorization,
+            publication_source=FileDegradedPublicationSource(
+                paths["AEGIS_M5_PUBLICATION_FILE"]
+            ),
+            state_store=FileDegradedConsumerStateStore(
+                paths["AEGIS_M5_CONSUMER_STATE_FILE"]
+            ),
+            reversal_source=FileDegradedReversalSource(
+                paths["AEGIS_M5_REVERSAL_FILE"]
+            ),
+        )
+        gate.readiness()
+    except Exception as exc:
+        raise CapabilityRuntimeUnavailable(
+            "M5 signed publication configuration is invalid"
         ) from exc
     return gate
 

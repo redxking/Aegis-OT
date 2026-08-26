@@ -1,0 +1,187 @@
+x-m5-publisher-paths: &m5-publisher-paths
+  AEGIS_M5_PUBLICATION_FILE: /var/lib/aegis-ot/m5-publication/publication.json
+  AEGIS_M5_PUBLISHER_STATE_FILE: /var/lib/aegis-ot/m5-publisher-state/state.json
+
+x-m5-consumer-paths: &m5-consumer-paths
+  AEGIS_M5_PUBLICATION_FILE: /var/lib/aegis-ot/m5-publication/publication.json
+  AEGIS_M5_CONSUMER_STATE_FILE: /var/lib/aegis-ot/m5-consumer-state/state.json
+  AEGIS_M5_REVERSAL_FILE: /var/lib/aegis-ot/m5-reversal-inbox/reversal.json
+
+x-m5-trusted-inputs: &m5-trusted-inputs
+  AEGIS_M5_ROOT_PUBLIC_KEY_FILE: /var/lib/aegis-ot/m5-gateway-inputs/operator-authority.public
+  AEGIS_M5_PUBLISHER_CREDENTIAL_FILE: /var/lib/aegis-ot/m5-gateway-inputs/publisher-credential.json
+  AEGIS_M5_STABLE_AUTHORIZATION_FILE: /var/lib/aegis-ot/m5-gateway-inputs/stable-authorization.json
+
+services:
+  m5-degraded-init:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m5_degraded_init]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    restart: "no"
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      <<: [*m5-publisher-paths, *m5-consumer-paths]
+      AEGIS_M5_RUNTIME_UID: "65532"
+      AEGIS_M5_RUNTIME_GID: "65532"
+      AEGIS_M5_PUBLISHER_INPUT_DIRECTORY: /var/lib/aegis-ot/m5-publisher-inputs
+      AEGIS_M5_GATEWAY_INPUT_DIRECTORY: /var/lib/aegis-ot/m5-gateway-inputs
+      AEGIS_M5_STATUS_INPUT_FILE: /var/lib/aegis-ot/m5-status-input/status-input.json
+      AEGIS_M5_ROOT_PUBLIC_KEY_SOURCE_FILE: /run/secrets/m5_root_public
+      AEGIS_M5_PUBLISHER_CREDENTIAL_SOURCE_FILE: /run/secrets/m5_publisher_credential
+      AEGIS_M5_PUBLISHER_PRIVATE_KEY_SOURCE_FILE: /run/secrets/m5_publisher_private
+      AEGIS_M5_STABLE_AUTHORIZATION_SOURCE_FILE: /run/secrets/m5_stable_authorization
+      AEGIS_M5_STATUS_INPUT_SOURCE_FILE: /run/secrets/m5_status_input
+    secrets:
+      - m5_root_public
+      - m5_publisher_credential
+      - m5_publisher_private
+      - m5_stable_authorization
+      - m5_status_input
+    volumes:
+      - m5_publication:/var/lib/aegis-ot/m5-publication
+      - m5_publisher_state:/var/lib/aegis-ot/m5-publisher-state
+      - m5_consumer_state:/var/lib/aegis-ot/m5-consumer-state
+      - m5_reversal_inbox:/var/lib/aegis-ot/m5-reversal-inbox
+      - m5_publisher_inputs:/var/lib/aegis-ot/m5-publisher-inputs
+      - m5_gateway_inputs:/var/lib/aegis-ot/m5-gateway-inputs
+      - m5_status_input:/var/lib/aegis-ot/m5-status-input
+
+  m5-degraded-publisher:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m5_degraded_publication, run]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      <<: *m5-publisher-paths
+      AEGIS_M5_ROOT_PUBLIC_KEY_FILE: /var/lib/aegis-ot/m5-publisher-inputs/operator-authority.public
+      AEGIS_M5_PUBLISHER_CREDENTIAL_FILE: /var/lib/aegis-ot/m5-publisher-inputs/publisher-credential.json
+      AEGIS_M5_STABLE_AUTHORIZATION_FILE: /var/lib/aegis-ot/m5-publisher-inputs/stable-authorization.json
+      AEGIS_M5_PUBLISHER_PRIVATE_KEY_FILE: /var/lib/aegis-ot/m5-publisher-inputs/publisher.private
+      AEGIS_M5_STATUS_INPUT_FILE: /var/lib/aegis-ot/m5-status-input/status-input.json
+      AEGIS_M5_PUBLISH_INTERVAL_SECONDS: "${AEGIS_M5_PUBLISH_INTERVAL_SECONDS:-1}"
+    volumes:
+      - m5_publication:/var/lib/aegis-ot/m5-publication
+      - m5_publisher_state:/var/lib/aegis-ot/m5-publisher-state
+      - m5_publisher_inputs:/var/lib/aegis-ot/m5-publisher-inputs:ro
+      - m5_status_input:/var/lib/aegis-ot/m5-status-input:ro
+    depends_on:
+      m5-degraded-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -m, aegis_ot.m5_degraded_publication, check]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+  m5-status-injector:
+    profiles: [m5-maintenance]
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m5_degraded_init, inject-status]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    restart: "no"
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      AEGIS_M5_STATUS_INPUT_SOURCE_FILE: /run/secrets/m5_status_input
+      AEGIS_M5_STATUS_INPUT_FILE: /var/lib/aegis-ot/m5-status-input/status-input.json
+    secrets:
+      - m5_status_input
+    volumes:
+      - m5_status_input:/var/lib/aegis-ot/m5-status-input
+    depends_on:
+      m5-degraded-init:
+        condition: service_completed_successfully
+
+  m5-reversal-injector:
+    profiles: [m5-maintenance]
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: "${PYTHON_IMAGE:-python:3.13.7-slim@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673b8cda8f8dcacef689}"
+        AEGIS_INSTALL_TARGET: ".[simulation]"
+        AEGIS_SOURCE_REVISION: "${AEGIS_SOURCE_REVISION:-unknown}"
+    command: [python, -m, aegis_ot.m5_degraded_init, inject-reversal]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    restart: "no"
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      AEGIS_M5_REVERSAL_SOURCE_FILE: /run/secrets/m5_reversal_input
+      AEGIS_M5_REVERSAL_FILE: /var/lib/aegis-ot/m5-reversal-inbox/reversal.json
+    secrets:
+      - m5_reversal_input
+    volumes:
+      - m5_reversal_inbox:/var/lib/aegis-ot/m5-reversal-inbox
+    depends_on:
+      m5-degraded-init:
+        condition: service_completed_successfully
+
+  segmented-gateway:
+    environment:
+      <<: [*m5-consumer-paths, *m5-trusted-inputs]
+      AEGIS_M5_SIGNED_PUBLICATION_MODE: required
+    volumes:
+      - m5_publication:/var/lib/aegis-ot/m5-publication:ro
+      - m5_consumer_state:/var/lib/aegis-ot/m5-consumer-state
+      - m5_reversal_inbox:/var/lib/aegis-ot/m5-reversal-inbox:ro
+      - m5_gateway_inputs:/var/lib/aegis-ot/m5-gateway-inputs:ro
+    depends_on:
+      m5-degraded-init:
+        condition: service_completed_successfully
+      m5-degraded-publisher:
+        condition: service_healthy
+
+secrets:
+  m5_root_public:
+    file: ${AEGIS_M5_ROOT_PUBLIC_KEY_FILE:?set to the offline root public key file}
+  m5_publisher_credential:
+    file: ${AEGIS_M5_PUBLISHER_CREDENTIAL_FILE:?set to the root-signed publisher credential}
+  m5_publisher_private:
+    file: ${AEGIS_M5_PUBLISHER_PRIVATE_KEY_FILE:?set to the online publisher leaf private key}
+  m5_stable_authorization:
+    file: ${AEGIS_M5_STABLE_AUTHORIZATION_FILE:?set to the root-signed stable authorization}
+  m5_status_input:
+    file: ${AEGIS_M5_STATUS_INPUT_FILE:?set to the current degraded-runtime status snapshot}
+  m5_reversal_input:
+    file: ${AEGIS_M5_REVERSAL_INPUT_FILE:-./artifacts/m5-degraded/reversal/degraded-reversal.json}
+
+volumes:
+  m5_publication: {}
+  m5_publisher_state: {}
+  m5_consumer_state: {}
+  m5_reversal_inbox: {}
+  m5_publisher_inputs: {}
+  m5_gateway_inputs: {}
+  m5_status_input: {}
