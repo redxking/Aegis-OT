@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any, Generic, Literal, Never, TypeVar
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -2983,8 +2984,10 @@ def _build_gateway_runtime() -> CapabilityGatewayRuntime:
         }
     )
     authorization = build_local_lab()
+    opa_url = os.getenv("AEGIS_OPA_URL", "http://opa:8181")
     authorization.gateway.policy = OpaBackedPolicy(
-        os.getenv("AEGIS_OPA_URL", "http://opa:8181")
+        opa_url,
+        exchange=exchange if urlsplit(opa_url).scheme == "https" else None,
     )
     authorization.gateway.safety = SafetyKernel(
         SafetyLimits(minimum_voltage_pu=0.90, maximum_voltage_pu=1.10),

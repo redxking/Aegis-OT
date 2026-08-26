@@ -108,6 +108,7 @@ def test_role_placement_is_closed_and_host_specific() -> None:
                 "spire-server",
                 "spire-bootstrap",
                 "spire-agent",
+                "policy-relay",
                 "opa",
                 "observer",
                 "candidate",
@@ -173,7 +174,8 @@ def test_listeners_bind_only_to_their_exact_topology_or_local_endpoints() -> Non
         if value["scope"] == "application"
     } == {
         "segmented-gateway-api": ("192.168.58.13", 8081),
-        "opa-api": ("192.168.59.11", 8181),
+        "policy-relay-api": ("192.168.59.11", 8181),
+        "opa-loopback": ("127.0.0.1", 8182),
         "observer-api": ("192.168.59.11", 8082),
         "candidate-api": ("192.168.59.11", 8085),
         "ot-adapter-api": ("192.168.59.14", 8083),
@@ -213,7 +215,8 @@ def test_peer_edges_deny_agent_bypass_and_bind_spire_enrollment() -> None:
     assert all(
         edge["destination_listener"] == "spire-server-enrollment" for edge in enrollment_edges
     )
-    assert deployment["roles"]["trust"]["workloads"][-3:] == [
+    assert deployment["roles"]["trust"]["workloads"][-4:] == [
+        "policy-relay",
         "opa",
         "observer",
         "candidate",
@@ -223,15 +226,33 @@ def test_peer_edges_deny_agent_bypass_and_bind_spire_enrollment() -> None:
         "spire-agent",
     ]
     assert deployment["roles"]["ot"]["workloads"] == ["ot-adapter", "spire-agent"]
-    assert next(edge for edge in edges if edge["id"] == "segmented-gateway-to-opa") == {
-        "id": "segmented-gateway-to-opa",
+    assert next(
+        edge for edge in edges if edge["id"] == "segmented-gateway-to-policy-relay"
+    ) == {
+        "id": "segmented-gateway-to-policy-relay",
         "source_role": "gateway",
         "source_service": "segmented-gateway",
-        "destination_listener": "opa-api",
+        "destination_listener": "policy-relay-api",
         "network": "control_dmz",
         "protocol": "https",
         "authentication": "spiffe_mtls",
     }
+    assert next(edge for edge in edges if edge["id"] == "policy-relay-to-opa") == {
+        "id": "policy-relay-to-opa",
+        "source_role": "trust",
+        "source_service": "policy-relay",
+        "destination_listener": "opa-loopback",
+        "network": "local",
+        "protocol": "http",
+        "authentication": "local_loopback",
+    }
+    assert listeners["opa-loopback"]["bind_address"] == "127.0.0.1"
+    assert not [
+        edge
+        for edge in edges
+        if edge["source_service"] == "opa"
+        and edge["destination_listener"] == "trust-spire-workload-api"
+    ]
     assert not [
         edge
         for edge in edges

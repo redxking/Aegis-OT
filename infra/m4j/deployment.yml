@@ -26,7 +26,7 @@ roles:
     infrastructure_services: [sshd]
   trust:
     hostname: aegis-trust
-    workloads: [spire-server, spire-bootstrap, spire-agent, opa, observer, candidate]
+    workloads: [spire-server, spire-bootstrap, spire-agent, policy-relay, opa, observer, candidate]
     infrastructure_services: [sshd]
   agents:
     hostname: aegis-agents
@@ -158,14 +158,22 @@ listeners:
     bind_address: 192.168.58.13
     transport: tcp
     port: 8081
-  opa-api:
+  policy-relay-api:
     role: trust
-    service: opa
+    service: policy-relay
     scope: application
     network: control_dmz
     bind_address: 192.168.59.11
     transport: tcp
     port: 8181
+  opa-loopback:
+    role: trust
+    service: opa
+    scope: application
+    network: local
+    bind_address: 127.0.0.1
+    transport: tcp
+    port: 8182
   observer-api:
     role: trust
     service: observer
@@ -307,9 +315,9 @@ peer_edges:
     network: local
     protocol: spire_workload_api
     authentication: unix_peer_credentials
-  - id: opa-to-local-spire-agent
+  - id: policy-relay-to-local-spire-agent
     source_role: trust
-    source_service: opa
+    source_service: policy-relay
     destination_listener: trust-spire-workload-api
     network: local
     protocol: spire_workload_api
@@ -349,13 +357,20 @@ peer_edges:
     network: agent_lane
     protocol: http
     authentication: signed_workload_capability
-  - id: segmented-gateway-to-opa
+  - id: segmented-gateway-to-policy-relay
     source_role: gateway
     source_service: segmented-gateway
-    destination_listener: opa-api
+    destination_listener: policy-relay-api
     network: control_dmz
     protocol: https
     authentication: spiffe_mtls
+  - id: policy-relay-to-opa
+    source_role: trust
+    source_service: policy-relay
+    destination_listener: opa-loopback
+    network: local
+    protocol: http
+    authentication: local_loopback
   - id: segmented-gateway-to-observer
     source_role: gateway
     source_service: segmented-gateway

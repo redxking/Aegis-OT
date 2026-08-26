@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import socket
 from collections import OrderedDict
@@ -23,7 +24,7 @@ from uuid import uuid4
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .crypto import sign_bytes, verify_bytes
 from .factory import LocalLab, build_local_lab
@@ -37,6 +38,11 @@ from .models import (
     SystemState,
 )
 from .policy import ContextualPolicy, PolicyResult
+from .segmented_capability_transport import (
+    MAX_JSON_BYTES,
+    CapabilityTransportError,
+    HttpExchange,
+)
 from .transport_replay import DurableTransportReplayLedger, TransportReplayLedgerError
 
 
@@ -80,35 +86,136 @@ def request_json(
     return parsed
 
 
+class _OpaDecisionResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    result: bool
+
+
+def _unique_opa_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ServiceExchangeError("policy response contains a duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _reject_opa_constant(value: str) -> None:
+    raise ServiceExchangeError(f"policy response contains forbidden constant {value}")
+
+
+def _parse_opa_exchange_response(
+    *,
+    status_code: int,
+    content_type: str,
+    body: bytes,
+) -> bool:
+    if status_code != 200:
+        raise ServiceExchangeError("policy service did not return HTTP 200")
+    if content_type.split(";", maxsplit=1)[0].strip().lower() != "application/json":
+        raise ServiceExchangeError("policy response Content-Type must be application/json")
+    if len(body) > MAX_JSON_BYTES:
+        raise ServiceExchangeError("policy response exceeded the size limit")
+    if body.startswith(b"\xef\xbb\xbf"):
+        raise ServiceExchangeError("policy response UTF-8 BOM is forbidden")
+    try:
+        value = json.loads(
+            body.decode("utf-8"),
+            object_pairs_hook=_unique_opa_object,
+            parse_constant=_reject_opa_constant,
+        )
+        response = _OpaDecisionResponse.model_validate(value, strict=True)
+    except ServiceExchangeError:
+        raise
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValidationError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ServiceExchangeError("policy response is not an exact decision object") from exc
+    return response.result
+
+
 class OpaBackedPolicy:
     """Apply local contextual rules and require OPA agreement for permits."""
 
     version = "contextual-v1+opa-aegis-v1"
 
-    def __init__(self, opa_url: str, local: ContextualPolicy | None = None) -> None:
-        self.opa_url = opa_url.rstrip("/")
+    def __init__(
+        self,
+        opa_url: str,
+        local: ContextualPolicy | None = None,
+        *,
+        exchange: HttpExchange | None = None,
+        timeout_seconds: float = 3.0,
+    ) -> None:
+        normalized = opa_url.rstrip("/")
+        parsed = urlsplit(normalized)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("OPA URL must be an HTTP(S) origin without credentials")
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("OPA timeout must be positive and finite")
+        self.opa_url = normalized
         self.local = local or ContextualPolicy()
+        self.exchange = exchange
+        self.timeout_seconds = timeout_seconds
 
     def evaluate(self, proposal: ActionProposal, state: SystemState) -> PolicyResult:
         local_result = self.local.evaluate(proposal, state)
         if local_result.reasons:
             return local_result
+        payload = {
+            "input": {
+                "proposal": {
+                    "confidence": proposal.confidence,
+                    "risk_score": proposal.risk_score,
+                }
+            }
+        }
         try:
-            response = request_json(
-                "POST",
-                f"{self.opa_url}/v1/data/aegis/authz/policy_permit",
-                {
-                    "input": {
-                        "proposal": {
-                            "confidence": proposal.confidence,
-                            "risk_score": proposal.risk_score,
-                        }
-                    }
-                },
-            )
-        except ServiceExchangeError:
+            if self.exchange is None:
+                permitted = request_json(
+                    "POST",
+                    f"{self.opa_url}/v1/data/aegis/authz/policy_permit",
+                    payload,
+                    timeout_seconds=self.timeout_seconds,
+                ).get("result") is True
+            else:
+                body = json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode("utf-8")
+                response = self.exchange(
+                    method="POST",
+                    url=f"{self.opa_url}/v1/data/aegis/authz/policy_permit",
+                    body=body,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    timeout_seconds=self.timeout_seconds,
+                )
+                permitted = _parse_opa_exchange_response(
+                    status_code=response.status_code,
+                    content_type=response.content_type,
+                    body=response.body,
+                )
+        except (CapabilityTransportError, ServiceExchangeError, ValueError):
             return PolicyResult(permitted=False, reasons=("policy_service_unavailable",))
-        if response.get("result") is not True:
+        if not permitted:
             return PolicyResult(permitted=False, reasons=("external_policy_denied",))
         return PolicyResult(permitted=True, reasons=())
 
